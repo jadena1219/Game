@@ -5,6 +5,7 @@ import { drawSprite, pickFrame } from './sprite.js';
 import { Input } from './input.js';
 import { rollChoices, applyCard } from './abilities.js';
 import { Assets } from './assets.js';
+import { biomeForLevel } from './biomes.js';
 
 const BOSS_NAMES = { miniboss: 'The Dark Knight', boss: 'The Demon Lord' };
 
@@ -73,36 +74,94 @@ export class Game {
 
     const margin = 26;
     this.bounds = { minX: margin, minY: 86, maxX: this.vw - margin, maxY: this.vh - margin };
-    this._buildBackground();
+    this._applyBiome(this.level || 1);
   }
 
-  _buildBackground() {
-    // Pre-render a dark fantasy stone arena to an offscreen canvas.
+  // Switch to the biome for `level`: bake its background + static props, and
+  // record the live (animated) brazier light positions.
+  _applyBiome(level) {
+    const biome = biomeForLevel(level);
+    this.biome = biome;
+    this.braziers = [];
+    this.atmos = this.atmos || [];
+
     const c = document.createElement('canvas');
     c.width = this.vw; c.height = this.vh;
     const g = c.getContext('2d');
+    // ground gradient
     const grd = g.createLinearGradient(0, 0, 0, this.vh);
-    grd.addColorStop(0, '#241a30');
-    grd.addColorStop(1, '#140e1d');
+    grd.addColorStop(0, biome.ground[0]); grd.addColorStop(1, biome.ground[1]);
     g.fillStyle = grd; g.fillRect(0, 0, this.vw, this.vh);
+    // scattered detail
+    if (biome.detail) biome.detail(g, this.vw, this.vh);
 
-    // deterministic stone speckles + flagstone seams
-    let seed = 1337;
-    const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
-    g.fillStyle = 'rgba(255,255,255,0.025)';
-    for (let i = 0; i < 900; i++) g.fillRect(rnd() * this.vw, rnd() * this.vh, 2, 2);
-    g.strokeStyle = 'rgba(0,0,0,0.18)'; g.lineWidth = 2;
-    const tile = 64;
-    for (let x = tile; x < this.vw; x += tile) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, this.vh); g.stroke(); }
-    for (let y = tile; y < this.vh; y += tile) { g.beginPath(); g.moveTo(0, y); g.lineTo(this.vw, y); g.stroke(); }
+    // bake static props; collect brazier positions for live flames/light
+    for (const p of biome.props) {
+      const px = p.x * this.vw, py = p.y * this.vh;
+      if (p.t === 'brazier') { this._bakeBrazierPost(g, px, py); this.braziers.push({ x: px, y: py, lava: !!p.lava }); }
+      else if (p.t === 'banner') this._bakeBanner(g, px, py, p.c || '#c0392b');
+      else if (p.t === 'pillar') this._bakePillar(g, px, py);
+      else if (p.t === 'tree') this._bakeTree(g, px, py);
+      else if (p.t === 'statue') this._bakeStatue(g, px, py);
+    }
 
-    // vignette
-    const v = g.createRadialGradient(this.vw / 2, this.vh / 2, this.vh * 0.3,
-      this.vw / 2, this.vh / 2, this.vh * 0.75);
+    // framing border + vignette
+    const bw = 70;
+    const bgrd = g.createLinearGradient(0, 0, 0, bw);
+    bgrd.addColorStop(0, biome.border); bgrd.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = bgrd; g.fillRect(0, 0, this.vw, bw);
+    const bgrd2 = g.createLinearGradient(0, this.vh, 0, this.vh - bw);
+    bgrd2.addColorStop(0, biome.border); bgrd2.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = bgrd2; g.fillRect(0, this.vh - bw, this.vw, bw);
+    const lgrd = g.createLinearGradient(0, 0, bw, 0);
+    lgrd.addColorStop(0, biome.border); lgrd.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = lgrd; g.fillRect(0, 0, bw, this.vh);
+    const rgrd = g.createLinearGradient(this.vw, 0, this.vw - bw, 0);
+    rgrd.addColorStop(0, biome.border); rgrd.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = rgrd; g.fillRect(this.vw - bw, 0, bw, this.vh);
+    const v = g.createRadialGradient(this.vw / 2, this.vh / 2, this.vh * 0.32,
+      this.vw / 2, this.vh / 2, this.vh * 0.78);
     v.addColorStop(0, 'rgba(0,0,0,0)');
-    v.addColorStop(1, 'rgba(0,0,0,0.55)');
+    v.addColorStop(1, 'rgba(0,0,0,0.5)');
     g.fillStyle = v; g.fillRect(0, 0, this.vw, this.vh);
     this.bg = c;
+  }
+
+  _bakeBrazierPost(g, x, y) {
+    g.fillStyle = '#3a3340'; g.fillRect(x - 4, y, 8, 26);          // stand
+    g.fillStyle = '#2a2530'; g.fillRect(x - 4, y, 2, 26);
+    g.fillStyle = '#6b5a3a'; g.fillRect(x - 9, y - 6, 18, 8);      // bowl
+    g.fillStyle = '#4a3d28'; g.fillRect(x - 9, y, 18, 2);
+  }
+  _bakeBanner(g, x, y, col) {
+    g.fillStyle = '#5a4a2a'; g.fillRect(x - 16, y - 6, 32, 3);     // pole top
+    g.fillStyle = col; g.fillRect(x - 13, y - 4, 26, 46);
+    g.fillStyle = 'rgba(255,255,255,0.12)'; g.fillRect(x - 13, y - 4, 5, 46);
+    g.fillStyle = 'rgba(0,0,0,0.18)'; g.fillRect(x + 8, y - 4, 5, 46);
+    g.fillStyle = '#e9c84a'; g.fillRect(x - 3, y + 12, 6, 6);      // emblem
+    g.beginPath(); g.moveTo(x - 13, y + 42); g.lineTo(x, y + 50); g.lineTo(x + 13, y + 42); g.closePath();
+    g.fillStyle = col; g.fill();
+  }
+  _bakePillar(g, x, y) {
+    g.fillStyle = '#b9b2c0'; g.fillRect(x - 11, y - 34, 22, 40);
+    g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(x - 11, y - 34, 5, 40);
+    g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(x + 6, y - 34, 5, 40);
+    g.fillStyle = '#cfc8d6'; g.fillRect(x - 14, y - 38, 28, 6); g.fillRect(x - 14, y + 4, 28, 7);
+  }
+  _bakeTree(g, x, y) {
+    g.fillStyle = '#4a3320'; g.fillRect(x - 5, y - 6, 10, 34);     // trunk
+    g.fillStyle = '#3a2818'; g.fillRect(x - 5, y - 6, 3, 34);
+    for (const [dx, dy, r, c] of [[0, -40, 34, '#2f6b34'], [-18, -26, 24, '#367a3c'], [18, -28, 22, '#2a5e30'], [0, -54, 24, '#3e8a44']]) {
+      g.fillStyle = c; g.beginPath(); g.arc(x + dx, y + dy, r, 0, Math.PI * 2); g.fill();
+    }
+    g.fillStyle = 'rgba(255,255,255,0.08)'; g.beginPath(); g.arc(x - 8, y - 48, 12, 0, Math.PI * 2); g.fill();
+  }
+  _bakeStatue(g, x, y) {
+    g.fillStyle = '#9a93a6'; g.fillRect(x - 14, y + 30, 28, 8);    // base
+    g.fillStyle = '#b4adc0'; g.fillRect(x - 8, y - 6, 16, 38);     // body
+    g.fillStyle = '#c7c0d2'; g.beginPath(); g.arc(x, y - 12, 8, 0, Math.PI * 2); g.fill(); // head
+    g.fillStyle = '#cfc8d6'; g.fillRect(x - 12, y + 4, 24, 5);     // arms
+    g.fillStyle = 'rgba(0,0,0,0.2)'; g.fillRect(x + 4, y - 6, 4, 38);
   }
 
   // ---------- flow ----------
@@ -132,6 +191,8 @@ export class Game {
     this.enemies = []; this.projectiles = []; this.allyProjectiles = []; this.effects = [];
     this.spawnTimer = 0;
     this._buildQueue(level);
+    // swap to this level's biome (only rebuilds art when the biome changes)
+    if (!this.biome || !this.biome.levels.includes(level)) this._applyBiome(level);
     this.state = 'playing';
     this.ui.showScreen(null);
 
@@ -139,11 +200,12 @@ export class Game {
     this.countdown = 3.6;
     const bossType = (LEVELS[level - 1].boss && 'boss') || (LEVELS[level - 1].miniboss && 'miniboss');
     if (bossType) {
-      this.intro = { kind: 'boss', text: BOSS_NAMES[bossType], sub: `LEVEL ${level}`, t: 0, dur: 2.4 };
+      this.intro = { kind: 'boss', text: BOSS_NAMES[bossType], sub: `LEVEL ${level} · ${this.biome.name}`, t: 0, dur: 2.4 };
       this.countdown = 4.2;
       this.shake = Math.max(this.shake, 8);
     } else {
-      this.intro = { kind: 'level', text: `LEVEL ${level}`, sub: level === 1 ? 'The stand begins' : '', t: 0, dur: 1.8 };
+      this.intro = { kind: 'level', text: `LEVEL ${level}`,
+        sub: `Act ${this.biome.act} · ${this.biome.name}`, t: 0, dur: 2.0 };
     }
   }
 
@@ -440,8 +502,8 @@ export class Game {
       if (this.hpGhost < this.hpDisplay) this.hpGhost = this.hpDisplay;
       else this.hpGhost += (this.hpDisplay - this.hpGhost) * Math.min(1, dt * 4);
     }
-    // floating embers (title, victory, and a few during play)
-    const want = (this.state === 'title' || this.state === 'victory') ? 60 : 14;
+    // floating embers (used for death fx, title & victory celebration)
+    const want = (this.state === 'title' || this.state === 'victory') ? 60 : 0;
     if (this.embers.length < want && Math.random() < 0.6) {
       this.embers.push({ x: Math.random() * this.vw, y: this.vh + 8,
         vx: (Math.random() - 0.5) * 14, vy: -(18 + Math.random() * 34),
@@ -453,6 +515,8 @@ export class Game {
       e.vy += 4 * dt; e.flick = 0.5 + 0.5 * Math.sin(this.titleT * 8 + e.x);
     }
     this.embers = this.embers.filter((e) => e.life < e.dur && e.y > -20);
+
+    this._updateAtmos(dt);
 
     // slash-wipe transition
     if (this.transition) {
@@ -473,6 +537,42 @@ export class Game {
         this.ui.showRewards(this.level, r.choices, this.player, r.heal);
       }
     }
+  }
+
+  // Biome weather particles (pollen / leaves / embers / snow).
+  _updateAtmos(dt) {
+    const b = this.biome;
+    if (!b || this.state === 'title' || this.state === 'victory') {
+      // let any leftover atmos drift out on menus
+      for (const a of this.atmos) { a.life += dt; a.x += a.vx * dt; a.y += a.vy * dt; }
+      this.atmos = this.atmos.filter((a) => a.life < a.dur);
+      return;
+    }
+    const cap = 70;
+    if (this.atmos.length < cap && Math.random() < 0.8) {
+      const type = b.particle, col = b.pcol[(Math.random() * b.pcol.length) | 0];
+      if (type === 'leaves' || type === 'snow') {
+        this.atmos.push({ type, x: Math.random() * this.vw, y: -10, col,
+          vx: (Math.random() - 0.5) * 24, vy: (type === 'snow' ? 24 : 40) + Math.random() * 30,
+          r: type === 'snow' ? 1.5 + Math.random() * 1.5 : 2 + Math.random() * 2,
+          spin: Math.random() * 6, life: 0, dur: 6 });
+      } else if (type === 'embers') {
+        this.atmos.push({ type, x: Math.random() * this.vw, y: this.vh + 8, col,
+          vx: (Math.random() - 0.5) * 16, vy: -(20 + Math.random() * 36),
+          r: 1 + Math.random() * 2, life: 0, dur: 4 + Math.random() * 3 });
+      } else { // pollen / motes
+        this.atmos.push({ type: 'pollen', x: Math.random() * this.vw, y: Math.random() * this.vh, col,
+          vx: (Math.random() - 0.5) * 10, vy: -(4 + Math.random() * 10),
+          r: 1 + Math.random() * 1.6, life: 0, dur: 5 + Math.random() * 4 });
+      }
+    }
+    for (const a of this.atmos) {
+      a.life += dt;
+      a.x += (a.vx + Math.sin((this.titleT + a.y) * 1.5) * 8) * dt;
+      a.y += a.vy * dt;
+      a.flick = a.type === 'pollen' || a.type === 'embers' ? 0.5 + 0.5 * Math.sin(this.titleT * 6 + a.x) : 1;
+    }
+    this.atmos = this.atmos.filter((a) => a.life < a.dur && a.y < this.vh + 20 && a.y > -20);
   }
 
   _updateDying(dt) {
@@ -581,10 +681,14 @@ export class Game {
       ctx.translate((Math.random() - 0.5) * this.shake, (Math.random() - 0.5) * this.shake);
     }
     if (this.bg) ctx.drawImage(this.bg, 0, 0);
+    this._drawBrazierFlames(ctx);   // animated flames on the baked posts
 
     if (this.state === 'title') {
       this._drawTitleScene(ctx);
       ctx.restore();
+      this._drawLights(ctx);
+      this._drawAtmos(ctx);
+      this._drawGrade(ctx);
       this._drawEmbers(ctx);
       this._drawTransition(ctx);
       return;
@@ -611,6 +715,9 @@ export class Game {
 
     ctx.restore();
 
+    this._drawLights(ctx);         // additive warm glow from braziers, spells, the hero
+    this._drawAtmos(ctx);          // biome weather particles
+    this._drawGrade(ctx);          // biome colour grade
     this._drawEmbers(ctx);
     this._drawDeathOverlay(ctx);   // desaturate + "YOU FELL" during dying/gameover lead-in
 
@@ -645,6 +752,75 @@ export class Game {
     this._drawHUD(ctx);
     if (this.state === 'playing') this.input.draw(ctx);
     this._drawTransition(ctx);     // slash-wipe on the very top
+  }
+
+  // ---- Phase 3: atmosphere draw helpers ----
+  _drawBrazierFlames(ctx) {
+    if (!this.braziers) return;
+    for (const bz of this.braziers) {
+      const f = this.titleT * 12 + bz.x;
+      const h = 12 + Math.sin(f) * 3 + Math.sin(f * 2.3) * 2;
+      // flame body
+      ctx.save();
+      const cy = bz.y - 4;
+      const g1 = ctx.createRadialGradient(bz.x, cy - h * 0.3, 1, bz.x, cy, h);
+      if (bz.lava) { g1.addColorStop(0, '#fff2b0'); g1.addColorStop(0.5, '#ff5a1e'); g1.addColorStop(1, 'rgba(150,20,0,0)'); }
+      else { g1.addColorStop(0, '#fff2c0'); g1.addColorStop(0.55, '#ff9a2a'); g1.addColorStop(1, 'rgba(200,80,0,0)'); }
+      ctx.fillStyle = g1;
+      ctx.beginPath();
+      ctx.moveTo(bz.x - 6, cy + 2);
+      ctx.quadraticCurveTo(bz.x - 5, cy - h * 0.6, bz.x, cy - h);
+      ctx.quadraticCurveTo(bz.x + 5, cy - h * 0.6, bz.x + 6, cy + 2);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  _drawLights(ctx) {
+    // additive warm glow — braziers, the hero's blade, and live projectiles
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const glow = (x, y, r, col, a) => {
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.globalAlpha = a; ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    };
+    if (this.braziers) {
+      for (const bz of this.braziers) {
+        const fl = 0.8 + 0.2 * Math.sin(this.titleT * 11 + bz.x);
+        glow(bz.x, bz.y - 6, 120, bz.lava ? '#ff7a2a' : '#ffb24a', 0.5 * fl);
+      }
+    }
+    if (this.state !== 'title' && this.player) glow(this.player.x, this.player.y - 14, 70, '#bfe9ff', 0.18);
+    for (const pr of this.projectiles) glow(pr.x, pr.y, 36, pr.boss ? '#ff7a2a' : '#b06bff', 0.5);
+    for (const fb of this.allyProjectiles) glow(fb.x, fb.y, 40, '#ff8a3a', 0.6);
+    ctx.restore();
+  }
+
+  _drawAtmos(ctx) {
+    if (!this.atmos || !this.atmos.length) return;
+    ctx.save();
+    for (const a of this.atmos) {
+      const fade = a.life < 0.4 ? a.life / 0.4 : (a.life > a.dur - 0.6 ? (a.dur - a.life) / 0.6 : 1);
+      ctx.globalAlpha = Math.max(0, Math.min(1, fade)) * (a.flick ?? 1) * 0.9;
+      ctx.fillStyle = a.col;
+      if (a.type === 'leaves') {
+        ctx.save(); ctx.translate(a.x, a.y); ctx.rotate(a.spin + this.titleT * 2);
+        ctx.fillRect(-a.r, -a.r * 0.5, a.r * 2, a.r); ctx.restore();
+      } else {
+        ctx.beginPath(); ctx.arc(a.x, a.y, a.r, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  _drawGrade(ctx) {
+    if (!this.biome) return;
+    ctx.save();
+    ctx.fillStyle = this.biome.grade;
+    ctx.fillRect(0, 0, this.vw, this.vh);
+    ctx.restore();
   }
 
   // ---- Phase 2 draw helpers ----

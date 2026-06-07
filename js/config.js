@@ -5,7 +5,7 @@ export const CONFIG = {
 
   player: {
     maxHP: 100,             // FIXED max HP — never grows
-    speed: 178,             // px/s
+    speed: 200,             // px/s
     radius: 14,
     // Sword swing
     swordReach: 78,         // px from player centre

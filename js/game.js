@@ -48,10 +48,8 @@ export class Game {
     // --- Phase 3b: open world ---
     this.cam = { x: 0, y: 0 };  // top-left of the view in world space (locked to player)
     this.world = { w: 2600, h: 2600 };
-    this.scenery = [];          // roaming world props (trees, statues, braziers...)
     this.pickups = [];          // walk-over gold / health
     this.gold = 0;
-    this.groundPattern = null;  // tiling biome ground
 
     this.bg = null;
     this._resize();
@@ -80,72 +78,85 @@ export class Game {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.input.layout(this.vw, this.vh);
 
-    // a big bounded arena, several screens across
-    this.world = { w: Math.max(2600, this.vw * 3.4), h: Math.max(2600, this.vh * 3.4) };
-    const m = 70;
+    // a contained arena ~1.5x the screen — room to roam, walls in view
+    this.world = { w: Math.round(this.vw * 1.5), h: Math.round(this.vh * 1.5) };
+    const m = 56;
     this.bounds = { minX: m, minY: m, maxX: this.world.w - m, maxY: this.world.h - m };
     this._applyBiome(this.level || 1);
   }
 
-  // Switch to the biome for `level`: build the tiling ground + scatter the
-  // roaming world scenery (trees, statues, braziers...).
+  // Switch to the biome for `level`: bake the whole arena (ground + scattered
+  // NATURE + intentionally-framed structures + walls) to one canvas we blit.
   _applyBiome(level) {
     const biome = biomeForLevel(level);
     this.biome = biome;
     this.atmos = this.atmos || [];
-    this._buildGroundTile(biome);
-    this._scatterScenery(biome);
-  }
-
-  _buildGroundTile(biome) {
-    const TS = 256;
-    const c = document.createElement('canvas'); c.width = TS; c.height = TS;
+    const W = this.world.w, H = this.world.h;
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
     const g = c.getContext('2d');
-    // flat base (blend of the two ground colours so the tile seams are invisible)
-    const a = this._hex(biome.ground[0]), b = this._hex(biome.ground[1]);
-    const base = `rgb(${(a[0] + b[0]) >> 1},${(a[1] + b[1]) >> 1},${(a[2] + b[2]) >> 1})`;
-    g.fillStyle = base; g.fillRect(0, 0, TS, TS);
-    let seed = 99;
-    const R = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
-    // subtle wrapping speckle so it tiles seamlessly
-    for (let i = 0; i < 900; i++) {
-      const x = R() * TS, y = R() * TS, s = 1 + (R() * 2 | 0);
-      g.fillStyle = R() < 0.5 ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.08)';
-      g.fillRect(x, y, s, s);
+
+    // ground gradient
+    const grd = g.createLinearGradient(0, 0, 0, H);
+    grd.addColorStop(0, biome.ground[0]); grd.addColorStop(1, biome.ground[1]);
+    g.fillStyle = grd; g.fillRect(0, 0, W, H);
+    // scattered NATURE (flowers, grass, leaves, cracks) — looks good scattered
+    if (biome.detail) biome.detail(g, W, H);
+
+    // intentional structures, framed along the arena — never random clutter
+    this.braziers = [];
+    const lava = biome.id === 'throne';
+    // a brazier in each corner for light + framing
+    const ci = 64;
+    for (const [bx, by] of [[ci, ci], [W - ci, ci], [ci, H - ci], [W - ci, H - ci]]) {
+      this._bakeBrazierPost(g, bx, by); this.braziers.push({ x: bx, y: by, lava });
     }
-    if (biome.id === 'throne') {
-      for (let i = 0; i < 40; i++) { g.fillStyle = 'rgba(255,110,30,0.10)'; g.fillRect(R() * TS, R() * TS, 2, 2); }
-    }
-    this.groundPattern = this.ctx.createPattern(c, 'repeat');
+    this._bakeBiomeDecor(g, biome, W, H);
+    this._bakeWalls(g, biome, W, H);
+
+    // vignette
+    const v = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.28, W / 2, H / 2, Math.max(W, H) * 0.62);
+    v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.42)');
+    g.fillStyle = v; g.fillRect(0, 0, W, H);
+    this.bg = c;
     this.voidColor = '#070510';
   }
 
-  _scatterScenery(biome) {
-    this.scenery = [];
-    const W = this.world.w, H = this.world.h;
-    let seed = (biome.id.charCodeAt(0) * 7919) >>> 0;
-    const R = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
-    const pick = (set) => { const r = R(); let acc = 0; for (const s of set) { acc += s[1]; if (r <= acc) return s; } return set[set.length - 1]; };
-    // [type, weight, flat?]
-    const SETS = {
-      gardens: [['flower', 0.42, 1], ['rock', 0.18, 1], ['bush', 0.18], ['pillar', 0.08], ['brazier', 0.08], ['banner', 0.06]],
-      forest: [['mushroom', 0.34, 1], ['tree', 0.34], ['bush', 0.2], ['log', 0.08, 1], ['brazier', 0.04]],
-      citadel: [['rubble', 0.34, 1], ['pillar', 0.24], ['brazier', 0.16], ['banner', 0.1], ['statue', 0.06], ['rock', 0.1, 1]],
-      throne: [['lavarock', 0.4, 1], ['skull', 0.26, 1], ['brazier', 0.16], ['rock', 0.12, 1], ['statue', 0.06]],
-    };
-    const set = SETS[biome.id] || SETS.gardens;
-    const count = Math.min(360, Math.floor((W * H) / 24000));
-    const cx = W / 2, cy = H / 2;
-    for (let i = 0; i < count; i++) {
-      const x = 50 + R() * (W - 100), y = 50 + R() * (H - 100);
-      if (Math.hypot(x - cx, y - cy) < 230) continue;   // keep the spawn area clear
-      const s = pick(set);
-      this.scenery.push({ type: s[0], x, y, flat: !!s[2], lava: s[0] === 'brazier' && biome.id === 'throne', seed: R() });
+  // Biome-specific framed decoration (placed deliberately, not scattered).
+  _bakeBiomeDecor(g, biome, W, H) {
+    if (biome.id === 'gardens') {
+      this._bakeBanner(g, W * 0.32, 40, '#c0392b'); this._bakeBanner(g, W * 0.68, 40, '#2c6fb0');
+      this._bakePillar(g, 40, H * 0.5); this._bakePillar(g, W - 40, H * 0.5);
+    } else if (biome.id === 'forest') {
+      // a treeline hugging the walls
+      for (let i = 0; i < 7; i++) { this._bakeTree(g, 30 + (W - 60) * i / 6, 34); this._bakeTree(g, 30 + (W - 60) * i / 6, H - 22); }
+      for (let i = 1; i < 5; i++) { this._bakeTree(g, 26, 60 + (H - 120) * i / 5); this._bakeTree(g, W - 26, 60 + (H - 120) * i / 5); }
+    } else if (biome.id === 'citadel') {
+      this._bakeStatue(g, W * 0.5, 46);
+      this._bakeBanner(g, W * 0.28, 40, '#caa54a'); this._bakeBanner(g, W * 0.72, 40, '#caa54a');
+      this._bakePillar(g, 42, H * 0.32); this._bakePillar(g, 42, H * 0.68);
+      this._bakePillar(g, W - 42, H * 0.32); this._bakePillar(g, W - 42, H * 0.68);
+    } else if (biome.id === 'throne') {
+      this._bakeStatue(g, W * 0.32, 46); this._bakeStatue(g, W * 0.68, 46);
     }
-    this.braziers = this.scenery.filter((s) => s.type === 'brazier');
   }
 
-  _hex(h) { h = h.replace('#', ''); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
+  // A wall band hugging the arena rim, styled per biome.
+  _bakeWalls(g, biome, W, H) {
+    const t = 26;
+    const wall = { gardens: '#2f5d2a', forest: '#1c3a1e', citadel: '#4a4456', throne: '#1a0d14' }[biome.id] || '#333';
+    const cap = { gardens: '#3e7a36', forest: '#27502a', citadel: '#615a72', throne: '#2a1420' }[biome.id] || '#555';
+    g.fillStyle = wall;
+    g.fillRect(0, 0, W, t); g.fillRect(0, H - t, W, t); g.fillRect(0, 0, t, H); g.fillRect(W - t, 0, t, H);
+    g.fillStyle = cap;
+    g.fillRect(0, t - 5, W, 5); g.fillRect(0, H - t, W, 5); g.fillRect(t - 5, 0, 5, H); g.fillRect(W - t, 0, 5, H);
+    // inner shadow so the floor reads as sunken
+    g.fillStyle = 'rgba(0,0,0,0.22)';
+    g.fillRect(t, t, W - 2 * t, 6); g.fillRect(t, t, 6, H - 2 * t);
+    if (biome.id === 'throne') { // lava trim
+      g.fillStyle = 'rgba(255,110,30,0.5)';
+      g.fillRect(t, t, W - 2 * t, 2); g.fillRect(t, H - t - 2, W - 2 * t, 2);
+    }
+  }
 
   _bakeBrazierPost(g, x, y) {
     g.fillStyle = '#3a3340'; g.fillRect(x - 4, y, 8, 26);          // stand
@@ -182,84 +193,6 @@ export class Game {
     g.fillStyle = '#c7c0d2'; g.beginPath(); g.arc(x, y - 12, 8, 0, Math.PI * 2); g.fill(); // head
     g.fillStyle = '#cfc8d6'; g.fillRect(x - 12, y + 4, 24, 5);     // arms
     g.fillStyle = 'rgba(0,0,0,0.2)'; g.fillRect(x + 4, y - 6, 4, 38);
-  }
-
-  // Draw a roaming scenery prop at its world position (camera transform applied).
-  _drawScenery(ctx, s) {
-    const x = s.x, y = s.y;
-    // soft contact shadow
-    ctx.save(); ctx.globalAlpha = 0.22; ctx.fillStyle = '#000';
-    ctx.beginPath(); ctx.ellipse(x, y + 2, s.flat ? 6 : 13, s.flat ? 3 : 5, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-    switch (s.type) {
-      case 'pillar': this._bakePillar(ctx, x, y); break;
-      case 'banner': this._bakeBanner(ctx, x, y, s.seed < 0.5 ? '#c0392b' : '#2c6fb0'); break;
-      case 'tree': this._bakeTree(ctx, x, y); break;
-      case 'statue': this._bakeStatue(ctx, x, y); break;
-      case 'brazier': this._bakeBrazierPost(ctx, x, y); break;
-      case 'flower': {
-        const cols = ['#ff6f7a', '#ffd24a', '#ffffff', '#c58bff'];
-        ctx.fillStyle = '#3c7a38'; ctx.fillRect(x, y - 4, 1, 4);
-        const c = cols[(s.seed * 4) | 0];
-        ctx.fillStyle = c; ctx.fillRect(x - 2, y - 6, 2, 2); ctx.fillRect(x + 1, y - 6, 2, 2);
-        ctx.fillRect(x - 1, y - 8, 2, 2); ctx.fillStyle = '#ffe9a0'; ctx.fillRect(x - 1, y - 6, 1, 1);
-        break;
-      }
-      case 'bush': {
-        ctx.fillStyle = '#2f6b34';
-        for (const [dx, dy, r] of [[0, -6, 9], [-7, -3, 7], [7, -3, 7]]) { ctx.beginPath(); ctx.arc(x + dx, y + dy, r, 0, Math.PI * 2); ctx.fill(); }
-        ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.beginPath(); ctx.arc(x - 4, y - 8, 4, 0, Math.PI * 2); ctx.fill();
-        break;
-      }
-      case 'rock': {
-        ctx.fillStyle = '#7a7488'; ctx.beginPath(); ctx.ellipse(x, y - 4, 9, 7, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = 'rgba(255,255,255,0.14)'; ctx.beginPath(); ctx.ellipse(x - 3, y - 6, 4, 3, 0, 0, Math.PI * 2); ctx.fill();
-        break;
-      }
-      case 'mushroom': {
-        ctx.fillStyle = '#e8e2d0'; ctx.fillRect(x - 1, y - 5, 3, 5);
-        ctx.fillStyle = '#7fe8ff'; ctx.beginPath(); ctx.arc(x, y - 5, 4, Math.PI, 0); ctx.fill();
-        break;
-      }
-      case 'log': {
-        ctx.fillStyle = '#5a3d22'; ctx.fillRect(x - 12, y - 4, 24, 7);
-        ctx.fillStyle = '#7a5230'; ctx.beginPath(); ctx.arc(x - 12, y - 1, 4, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#3a2818'; ctx.beginPath(); ctx.arc(x - 12, y - 1, 1.5, 0, Math.PI * 2); ctx.fill();
-        break;
-      }
-      case 'rubble': {
-        ctx.fillStyle = '#6a6478';
-        ctx.fillRect(x - 6, y - 3, 5, 4); ctx.fillRect(x + 1, y - 5, 4, 6); ctx.fillRect(x - 2, y - 1, 4, 3);
-        break;
-      }
-      case 'lavarock': {
-        ctx.fillStyle = '#241018'; ctx.beginPath(); ctx.ellipse(x, y - 3, 9, 7, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = 'rgba(255,110,30,0.8)'; ctx.fillRect(x - 4, y - 4, 8, 1); ctx.fillRect(x - 1, y - 6, 2, 5);
-        break;
-      }
-      case 'skull': {
-        ctx.fillStyle = '#d8d2c0'; ctx.beginPath(); ctx.arc(x, y - 3, 5, 0, Math.PI * 2); ctx.fill();
-        ctx.fillRect(x - 3, y - 1, 6, 3);
-        ctx.fillStyle = '#201018'; ctx.fillRect(x - 3, y - 4, 2, 2); ctx.fillRect(x + 1, y - 4, 2, 2);
-        break;
-      }
-    }
-  }
-
-  // Glowing magical barrier at the world edges (only the visible edges drawn).
-  _drawBoundary(ctx) {
-    const W = this.world.w, H = this.world.h;
-    const x0 = this.cam.x, x1 = this.cam.x + this.vw, y0 = this.cam.y, y1 = this.cam.y + this.vh;
-    const pulse = 0.6 + 0.4 * Math.sin(this.titleT * 3);
-    ctx.save();
-    ctx.lineWidth = 5; ctx.strokeStyle = `rgba(150,210,255,${0.55 * pulse})`;
-    ctx.shadowColor = '#9fd8ff'; ctx.shadowBlur = 18; ctx.lineCap = 'round';
-    const seg = (ax, ay, bx, by) => { ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke(); };
-    if (x0 <= 12) seg(0, Math.max(0, y0), 0, Math.min(H, y1));
-    if (x1 >= W - 12) seg(W, Math.max(0, y0), W, Math.min(H, y1));
-    if (y0 <= 12) seg(Math.max(0, x0), 0, Math.min(W, x1), 0);
-    if (y1 >= H - 12) seg(Math.max(0, x0), H, Math.min(W, x1), H);
-    ctx.restore();
   }
 
   _drawPickup(ctx, pk) {
@@ -496,26 +429,30 @@ export class Game {
     this.totalForLevel = q.length;
   }
 
-  // Spawn just beyond the camera view, biased toward where the player is moving
-  // (so as you advance you run INTO foes that were "already there").
+  // Spawn just off-camera, biased toward where the player is moving, so foes
+  // walk into frame "as if they were already there".
   _spawnPos() {
-    const p = this.player;
-    const ring = Math.max(this.vw, this.vh) * 0.5 + 60 + Math.random() * 160;
-    let baseAng;
-    const moving = Math.hypot(p.fx, p.fy) > 0.01 && p.moving;
-    if (moving) {
-      baseAng = Math.atan2(p.fy, p.fx);
-      // 70% ahead (tight cone), 30% anywhere around
-      baseAng += (Math.random() < 0.7) ? (Math.random() - 0.5) * 1.4 : Math.random() * Math.PI * 2;
-    } else {
-      baseAng = Math.random() * Math.PI * 2;
+    const p = this.player, b = this.bounds;
+    const moving = p.moving && Math.hypot(p.fx, p.fy) > 0.01;
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    let best = null;
+    for (let tries = 0; tries < 12; tries++) {
+      let x, y;
+      if (moving && Math.random() < 0.72) {
+        const ang = Math.atan2(p.fy, p.fx) + (Math.random() - 0.5) * 1.2;
+        const dist = Math.max(this.vw, this.vh) * 0.42 + 40 + Math.random() * 110;
+        x = clamp(p.x + Math.cos(ang) * dist, b.minX, b.maxX);
+        y = clamp(p.y + Math.sin(ang) * dist, b.minY, b.maxY);
+      } else {
+        x = b.minX + Math.random() * (b.maxX - b.minX);
+        y = b.minY + Math.random() * (b.maxY - b.minY);
+      }
+      best = [x, y];
+      // prefer points that are currently off-screen (so they march in)
+      const sx = x - this.cam.x, sy = y - this.cam.y;
+      if (sx < -8 || sx > this.vw + 8 || sy < -8 || sy > this.vh + 8) break;
     }
-    const b = this.bounds;
-    let x = p.x + Math.cos(baseAng) * ring;
-    let y = p.y + Math.sin(baseAng) * ring;
-    x = Math.max(b.minX, Math.min(b.maxX, x));
-    y = Math.max(b.minY, Math.min(b.maxY, y));
-    return [x, y];
+    return best;
   }
 
   _spawn(dt) {
@@ -581,15 +518,19 @@ export class Game {
     }
   }
 
-  // Camera locked dead-centre on the hero; the title/menus frame the world centre.
-  _updateCamera() {
+  // Gentle camera that follows the hero but stays clamped inside the walls.
+  _updateCamera(dt) {
+    let tx, ty;
     if (this.state === 'title' || !this.player) {
-      this.cam.x = this.world.w / 2 - this.vw / 2;
-      this.cam.y = this.world.h / 2 - this.vh / 2;
-      return;
+      tx = this.world.w / 2 - this.vw / 2; ty = this.world.h / 2 - this.vh / 2;
+    } else {
+      tx = this.player.x - this.vw / 2; ty = this.player.y - this.vh / 2;
     }
-    this.cam.x = this.player.x - this.vw / 2;
-    this.cam.y = this.player.y - this.vh / 2;
+    tx = Math.max(0, Math.min(this.world.w - this.vw, tx));
+    ty = Math.max(0, Math.min(this.world.h - this.vh, ty));
+    const k = Math.min(1, (dt || 0.016) * 9);   // light smoothing
+    this.cam.x += (tx - this.cam.x) * k;
+    this.cam.y += (ty - this.cam.y) * k;
   }
 
   // ---------- update ----------
@@ -598,7 +539,7 @@ export class Game {
     if (this.shake > 0) this.shake = Math.max(0, this.shake - dt * 24);
     if (this.flashScreen > 0) this.flashScreen -= dt;
 
-    this._updateCamera();
+    this._updateCamera(dt);
     this._updateAmbient(dt);     // embers, transition, intro, sweep, hp bar — run in every state
 
     // hold the world while the slash-wipe covers the screen
@@ -730,8 +671,8 @@ export class Game {
       this.atmos = this.atmos.filter((a) => a.life < a.dur);
       return;
     }
-    const cap = 70;
-    if (this.atmos.length < cap && Math.random() < 0.8) {
+    const cap = this.biome.particle === 'pollen' ? 18 : 14;   // sparse & gentle (no confetti)
+    if (this.atmos.length < cap && Math.random() < 0.22) {
       const type = b.particle, col = b.pcol[(Math.random() * b.pcol.length) | 0];
       if (type === 'leaves' || type === 'snow') {
         this.atmos.push({ type, x: Math.random() * this.vw, y: -10, col,
@@ -865,7 +806,7 @@ export class Game {
     if (this.shake > 0) {
       ctx.translate((Math.random() - 0.5) * this.shake, (Math.random() - 0.5) * this.shake);
     }
-    // void beyond the world boundary
+    // void beyond the arena (only visible if shake nudges past the wall)
     ctx.fillStyle = this.voidColor || '#070510';
     ctx.fillRect(-30, -30, this.vw + 60, this.vh + 60);
 
@@ -873,22 +814,8 @@ export class Game {
     ctx.save();
     ctx.translate(-camx, -camy);
 
-    // scrolling biome ground, clipped to the world rect
-    const gx0 = Math.max(0, camx), gy0 = Math.max(0, camy);
-    const gx1 = Math.min(this.world.w, camx + this.vw), gy1 = Math.min(this.world.h, camy + this.vh);
-    if (this.groundPattern && gx1 > gx0 && gy1 > gy0) {
-      ctx.fillStyle = this.groundPattern;
-      ctx.fillRect(gx0, gy0, gx1 - gx0, gy1 - gy0);
-    }
-    this._drawBoundary(ctx);
-
-    // flat ground decals first, then depth-sorted tall props + entities
-    const view = { x0: camx - 60, y0: camy - 80, x1: camx + this.vw + 60, y1: camy + this.vh + 80 };
-    const tall = [];
-    for (const s of this.scenery) {
-      if (s.x < view.x0 || s.x > view.x1 || s.y < view.y0 || s.y > view.y1) continue;
-      if (s.flat) this._drawScenery(ctx, s); else tall.push(s);
-    }
+    // baked arena (ground + nature + framed structures + walls) — one blit
+    if (this.bg) ctx.drawImage(this.bg, 0, 0);
     this._drawBrazierFlames(ctx);
     for (const pk of this.pickups) this._drawPickup(ctx, pk);
 
@@ -898,14 +825,13 @@ export class Game {
 
     if (title) this._drawTitleScene(ctx);
 
-    // depth-sort tall scenery + enemies + hero by feet-y
-    const drawList = [...tall, ...this.enemies];
+    // depth-sort enemies + hero by feet-y
+    const drawList = [...this.enemies];
     if (!title && this.player) drawList.push(this.player);
     drawList.sort((a, b) => a.y - b.y);
     for (const ent of drawList) {
       if (ent === this.player) this._drawPlayer(ctx);
-      else if (ent.type !== undefined && ent.sprite) this._drawEnemy(ctx, ent);
-      else this._drawScenery(ctx, ent);
+      else this._drawEnemy(ctx, ent);
     }
 
     for (const pr of this.projectiles) this._drawProjectile(ctx, pr);

@@ -45,6 +45,14 @@ export class Game {
     this.titleT = 0;           // title-scene animation clock
     this.wipeEl = document.getElementById('wipe');
 
+    // --- Phase 3b: open world ---
+    this.cam = { x: 0, y: 0 };  // top-left of the view in world space (locked to player)
+    this.world = { w: 2600, h: 2600 };
+    this.scenery = [];          // roaming world props (trees, statues, braziers...)
+    this.pickups = [];          // walk-over gold / health
+    this.gold = 0;
+    this.groundPattern = null;  // tiling biome ground
+
     this.bg = null;
     this._resize();
     window.addEventListener('resize', () => this._resize());
@@ -72,60 +80,72 @@ export class Game {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.input.layout(this.vw, this.vh);
 
-    const margin = 26;
-    this.bounds = { minX: margin, minY: 86, maxX: this.vw - margin, maxY: this.vh - margin };
+    // a big bounded arena, several screens across
+    this.world = { w: Math.max(2600, this.vw * 3.4), h: Math.max(2600, this.vh * 3.4) };
+    const m = 70;
+    this.bounds = { minX: m, minY: m, maxX: this.world.w - m, maxY: this.world.h - m };
     this._applyBiome(this.level || 1);
   }
 
-  // Switch to the biome for `level`: bake its background + static props, and
-  // record the live (animated) brazier light positions.
+  // Switch to the biome for `level`: build the tiling ground + scatter the
+  // roaming world scenery (trees, statues, braziers...).
   _applyBiome(level) {
     const biome = biomeForLevel(level);
     this.biome = biome;
-    this.braziers = [];
     this.atmos = this.atmos || [];
-
-    const c = document.createElement('canvas');
-    c.width = this.vw; c.height = this.vh;
-    const g = c.getContext('2d');
-    // ground gradient
-    const grd = g.createLinearGradient(0, 0, 0, this.vh);
-    grd.addColorStop(0, biome.ground[0]); grd.addColorStop(1, biome.ground[1]);
-    g.fillStyle = grd; g.fillRect(0, 0, this.vw, this.vh);
-    // scattered detail
-    if (biome.detail) biome.detail(g, this.vw, this.vh);
-
-    // bake static props; collect brazier positions for live flames/light
-    for (const p of biome.props) {
-      const px = p.x * this.vw, py = p.y * this.vh;
-      if (p.t === 'brazier') { this._bakeBrazierPost(g, px, py); this.braziers.push({ x: px, y: py, lava: !!p.lava }); }
-      else if (p.t === 'banner') this._bakeBanner(g, px, py, p.c || '#c0392b');
-      else if (p.t === 'pillar') this._bakePillar(g, px, py);
-      else if (p.t === 'tree') this._bakeTree(g, px, py);
-      else if (p.t === 'statue') this._bakeStatue(g, px, py);
-    }
-
-    // framing border + vignette
-    const bw = 70;
-    const bgrd = g.createLinearGradient(0, 0, 0, bw);
-    bgrd.addColorStop(0, biome.border); bgrd.addColorStop(1, 'rgba(0,0,0,0)');
-    g.fillStyle = bgrd; g.fillRect(0, 0, this.vw, bw);
-    const bgrd2 = g.createLinearGradient(0, this.vh, 0, this.vh - bw);
-    bgrd2.addColorStop(0, biome.border); bgrd2.addColorStop(1, 'rgba(0,0,0,0)');
-    g.fillStyle = bgrd2; g.fillRect(0, this.vh - bw, this.vw, bw);
-    const lgrd = g.createLinearGradient(0, 0, bw, 0);
-    lgrd.addColorStop(0, biome.border); lgrd.addColorStop(1, 'rgba(0,0,0,0)');
-    g.fillStyle = lgrd; g.fillRect(0, 0, bw, this.vh);
-    const rgrd = g.createLinearGradient(this.vw, 0, this.vw - bw, 0);
-    rgrd.addColorStop(0, biome.border); rgrd.addColorStop(1, 'rgba(0,0,0,0)');
-    g.fillStyle = rgrd; g.fillRect(this.vw - bw, 0, bw, this.vh);
-    const v = g.createRadialGradient(this.vw / 2, this.vh / 2, this.vh * 0.32,
-      this.vw / 2, this.vh / 2, this.vh * 0.78);
-    v.addColorStop(0, 'rgba(0,0,0,0)');
-    v.addColorStop(1, 'rgba(0,0,0,0.5)');
-    g.fillStyle = v; g.fillRect(0, 0, this.vw, this.vh);
-    this.bg = c;
+    this._buildGroundTile(biome);
+    this._scatterScenery(biome);
   }
+
+  _buildGroundTile(biome) {
+    const TS = 256;
+    const c = document.createElement('canvas'); c.width = TS; c.height = TS;
+    const g = c.getContext('2d');
+    // flat base (blend of the two ground colours so the tile seams are invisible)
+    const a = this._hex(biome.ground[0]), b = this._hex(biome.ground[1]);
+    const base = `rgb(${(a[0] + b[0]) >> 1},${(a[1] + b[1]) >> 1},${(a[2] + b[2]) >> 1})`;
+    g.fillStyle = base; g.fillRect(0, 0, TS, TS);
+    let seed = 99;
+    const R = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+    // subtle wrapping speckle so it tiles seamlessly
+    for (let i = 0; i < 900; i++) {
+      const x = R() * TS, y = R() * TS, s = 1 + (R() * 2 | 0);
+      g.fillStyle = R() < 0.5 ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.08)';
+      g.fillRect(x, y, s, s);
+    }
+    if (biome.id === 'throne') {
+      for (let i = 0; i < 40; i++) { g.fillStyle = 'rgba(255,110,30,0.10)'; g.fillRect(R() * TS, R() * TS, 2, 2); }
+    }
+    this.groundPattern = this.ctx.createPattern(c, 'repeat');
+    this.voidColor = '#070510';
+  }
+
+  _scatterScenery(biome) {
+    this.scenery = [];
+    const W = this.world.w, H = this.world.h;
+    let seed = (biome.id.charCodeAt(0) * 7919) >>> 0;
+    const R = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+    const pick = (set) => { const r = R(); let acc = 0; for (const s of set) { acc += s[1]; if (r <= acc) return s; } return set[set.length - 1]; };
+    // [type, weight, flat?]
+    const SETS = {
+      gardens: [['flower', 0.42, 1], ['rock', 0.18, 1], ['bush', 0.18], ['pillar', 0.08], ['brazier', 0.08], ['banner', 0.06]],
+      forest: [['mushroom', 0.34, 1], ['tree', 0.34], ['bush', 0.2], ['log', 0.08, 1], ['brazier', 0.04]],
+      citadel: [['rubble', 0.34, 1], ['pillar', 0.24], ['brazier', 0.16], ['banner', 0.1], ['statue', 0.06], ['rock', 0.1, 1]],
+      throne: [['lavarock', 0.4, 1], ['skull', 0.26, 1], ['brazier', 0.16], ['rock', 0.12, 1], ['statue', 0.06]],
+    };
+    const set = SETS[biome.id] || SETS.gardens;
+    const count = Math.min(360, Math.floor((W * H) / 24000));
+    const cx = W / 2, cy = H / 2;
+    for (let i = 0; i < count; i++) {
+      const x = 50 + R() * (W - 100), y = 50 + R() * (H - 100);
+      if (Math.hypot(x - cx, y - cy) < 230) continue;   // keep the spawn area clear
+      const s = pick(set);
+      this.scenery.push({ type: s[0], x, y, flat: !!s[2], lava: s[0] === 'brazier' && biome.id === 'throne', seed: R() });
+    }
+    this.braziers = this.scenery.filter((s) => s.type === 'brazier');
+  }
+
+  _hex(h) { h = h.replace('#', ''); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
 
   _bakeBrazierPost(g, x, y) {
     g.fillStyle = '#3a3340'; g.fillRect(x - 4, y, 8, 26);          // stand
@@ -164,12 +184,110 @@ export class Game {
     g.fillStyle = 'rgba(0,0,0,0.2)'; g.fillRect(x + 4, y - 6, 4, 38);
   }
 
+  // Draw a roaming scenery prop at its world position (camera transform applied).
+  _drawScenery(ctx, s) {
+    const x = s.x, y = s.y;
+    // soft contact shadow
+    ctx.save(); ctx.globalAlpha = 0.22; ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.ellipse(x, y + 2, s.flat ? 6 : 13, s.flat ? 3 : 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    switch (s.type) {
+      case 'pillar': this._bakePillar(ctx, x, y); break;
+      case 'banner': this._bakeBanner(ctx, x, y, s.seed < 0.5 ? '#c0392b' : '#2c6fb0'); break;
+      case 'tree': this._bakeTree(ctx, x, y); break;
+      case 'statue': this._bakeStatue(ctx, x, y); break;
+      case 'brazier': this._bakeBrazierPost(ctx, x, y); break;
+      case 'flower': {
+        const cols = ['#ff6f7a', '#ffd24a', '#ffffff', '#c58bff'];
+        ctx.fillStyle = '#3c7a38'; ctx.fillRect(x, y - 4, 1, 4);
+        const c = cols[(s.seed * 4) | 0];
+        ctx.fillStyle = c; ctx.fillRect(x - 2, y - 6, 2, 2); ctx.fillRect(x + 1, y - 6, 2, 2);
+        ctx.fillRect(x - 1, y - 8, 2, 2); ctx.fillStyle = '#ffe9a0'; ctx.fillRect(x - 1, y - 6, 1, 1);
+        break;
+      }
+      case 'bush': {
+        ctx.fillStyle = '#2f6b34';
+        for (const [dx, dy, r] of [[0, -6, 9], [-7, -3, 7], [7, -3, 7]]) { ctx.beginPath(); ctx.arc(x + dx, y + dy, r, 0, Math.PI * 2); ctx.fill(); }
+        ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.beginPath(); ctx.arc(x - 4, y - 8, 4, 0, Math.PI * 2); ctx.fill();
+        break;
+      }
+      case 'rock': {
+        ctx.fillStyle = '#7a7488'; ctx.beginPath(); ctx.ellipse(x, y - 4, 9, 7, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.14)'; ctx.beginPath(); ctx.ellipse(x - 3, y - 6, 4, 3, 0, 0, Math.PI * 2); ctx.fill();
+        break;
+      }
+      case 'mushroom': {
+        ctx.fillStyle = '#e8e2d0'; ctx.fillRect(x - 1, y - 5, 3, 5);
+        ctx.fillStyle = '#7fe8ff'; ctx.beginPath(); ctx.arc(x, y - 5, 4, Math.PI, 0); ctx.fill();
+        break;
+      }
+      case 'log': {
+        ctx.fillStyle = '#5a3d22'; ctx.fillRect(x - 12, y - 4, 24, 7);
+        ctx.fillStyle = '#7a5230'; ctx.beginPath(); ctx.arc(x - 12, y - 1, 4, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#3a2818'; ctx.beginPath(); ctx.arc(x - 12, y - 1, 1.5, 0, Math.PI * 2); ctx.fill();
+        break;
+      }
+      case 'rubble': {
+        ctx.fillStyle = '#6a6478';
+        ctx.fillRect(x - 6, y - 3, 5, 4); ctx.fillRect(x + 1, y - 5, 4, 6); ctx.fillRect(x - 2, y - 1, 4, 3);
+        break;
+      }
+      case 'lavarock': {
+        ctx.fillStyle = '#241018'; ctx.beginPath(); ctx.ellipse(x, y - 3, 9, 7, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(255,110,30,0.8)'; ctx.fillRect(x - 4, y - 4, 8, 1); ctx.fillRect(x - 1, y - 6, 2, 5);
+        break;
+      }
+      case 'skull': {
+        ctx.fillStyle = '#d8d2c0'; ctx.beginPath(); ctx.arc(x, y - 3, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillRect(x - 3, y - 1, 6, 3);
+        ctx.fillStyle = '#201018'; ctx.fillRect(x - 3, y - 4, 2, 2); ctx.fillRect(x + 1, y - 4, 2, 2);
+        break;
+      }
+    }
+  }
+
+  // Glowing magical barrier at the world edges (only the visible edges drawn).
+  _drawBoundary(ctx) {
+    const W = this.world.w, H = this.world.h;
+    const x0 = this.cam.x, x1 = this.cam.x + this.vw, y0 = this.cam.y, y1 = this.cam.y + this.vh;
+    const pulse = 0.6 + 0.4 * Math.sin(this.titleT * 3);
+    ctx.save();
+    ctx.lineWidth = 5; ctx.strokeStyle = `rgba(150,210,255,${0.55 * pulse})`;
+    ctx.shadowColor = '#9fd8ff'; ctx.shadowBlur = 18; ctx.lineCap = 'round';
+    const seg = (ax, ay, bx, by) => { ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke(); };
+    if (x0 <= 12) seg(0, Math.max(0, y0), 0, Math.min(H, y1));
+    if (x1 >= W - 12) seg(W, Math.max(0, y0), W, Math.min(H, y1));
+    if (y0 <= 12) seg(Math.max(0, x0), 0, Math.min(W, x1), 0);
+    if (y1 >= H - 12) seg(Math.max(0, x0), H, Math.min(W, x1), H);
+    ctx.restore();
+  }
+
+  _drawPickup(ctx, pk) {
+    const x = pk.x, y = pk.y + Math.sin((this.titleT + pk.x * 0.05) * 4) * 2;
+    ctx.save();
+    if (pk.type === 'gold') {
+      const g = ctx.createRadialGradient(x, y, 0, x, y, 11);
+      g.addColorStop(0, 'rgba(255,220,90,0.5)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 11, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#caa52a'; ctx.beginPath(); ctx.arc(x, y, 4.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffe27a'; ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fff7d0'; ctx.fillRect(x - 2, y - 2, 1, 2);
+    } else { // health
+      const g = ctx.createRadialGradient(x, y, 0, x, y, 13);
+      g.addColorStop(0, 'rgba(90,200,96,0.5)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 13, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#5ec860'; ctx.fillRect(x - 2, y - 6, 4, 12); ctx.fillRect(x - 6, y - 2, 12, 4);
+      ctx.fillStyle = '#b8ffc6'; ctx.fillRect(x - 2, y - 6, 1.5, 12);
+    }
+    ctx.restore();
+  }
+
   // ---------- flow ----------
   // A fresh run resets all progression (death sends you back to Level 1).
   start() {
     this._slashWipe(() => {
-      this.player = new Player(this.vw / 2, this.vh / 2);
-      this.kills = 0; this.level = 1;
+      this.player = new Player(this.world.w / 2, this.world.h / 2);
+      this.kills = 0; this.level = 1; this.gold = 0;
       this.hpDisplay = this.hpGhost = this.player.maxHP;
       this.timeScale = 1; this.dying = 0;
       this._startLevel(1, true);
@@ -180,15 +298,16 @@ export class Game {
 
   _startLevel(level, fullHeal) {
     this.level = level;
-    if (!this.player) this.player = new Player(this.vw / 2, this.vh / 2);
-    this.player.x = this.vw / 2; this.player.y = this.vh / 2;
+    if (!this.player) this.player = new Player(this.world.w / 2, this.world.h / 2);
+    this.player.x = this.world.w / 2; this.player.y = this.world.h / 2;
     if (fullHeal) { this.player.hp = this.player.maxHP; }
     this.player.dead = false; this.player.invuln = 0.6;
-    this.player.fury = this.player.fury; // (persists across levels)
     // stagger ability cooldowns so they don't all fire at once on level start
     this.player.abilities.forEach((a, i) => { a.cd = 0.4 + i * 0.14; });
 
     this.enemies = []; this.projectiles = []; this.allyProjectiles = []; this.effects = [];
+    this.pickups = [];
+    this.cam.x = this.player.x - this.vw / 2; this.cam.y = this.player.y - this.vh / 2;
     this.spawnTimer = 0;
     this._buildQueue(level);
     // swap to this level's biome (only rebuilds art when the biome changes)
@@ -259,6 +378,45 @@ export class Game {
     if (e.boss) this.hitStop = Math.max(this.hitStop, 0.14);
     else if (e.type === 'tank') this.hitStop = Math.max(this.hitStop, 0.06);
     this._spawnDeathFx(e);
+    this._dropLoot(e);
+  }
+
+  _dropLoot(e) {
+    const drop = (type, value) => this.pickups.push({ type, value, x: e.x + (Math.random() - 0.5) * 14,
+      y: e.y + (Math.random() - 0.5) * 14, vx: (Math.random() - 0.5) * 80, vy: -(40 + Math.random() * 60),
+      t: 0, dead: false });
+    // gold: most enemies drop a little; bosses/tanks drop a lot
+    const coins = e.boss ? 10 : (e.type === 'tank' ? 3 : (Math.random() < 0.7 ? 1 : 0));
+    for (let i = 0; i < coins; i++) drop('gold', e.boss ? 5 : 1);
+    // health: rare from trash, guaranteed-ish from elites/bosses
+    if (e.boss || (e.type === 'tank' && Math.random() < 0.5) || Math.random() < 0.05) {
+      drop('health', e.boss ? 30 : 12);
+    }
+  }
+
+  _updatePickups(sdt) {
+    const p = this.player;
+    const magnet = 95, grab = p.r + 12;
+    for (const pk of this.pickups) {
+      if (pk.dead) continue;
+      pk.t += sdt;
+      // little pop on spawn, then settle
+      pk.x += pk.vx * sdt; pk.y += pk.vy * sdt;
+      pk.vx *= 0.88; pk.vy *= 0.88;
+      const dx = p.x - pk.x, dy = p.y - pk.y, d = Math.hypot(dx, dy);
+      if (d < magnet) { const s = (1 - d / magnet) * 420; pk.x += (dx / (d || 1)) * s * sdt; pk.y += (dy / (d || 1)) * s * sdt; }
+      if (d < grab) { this._collect(pk); pk.dead = true; }
+    }
+    this.pickups = this.pickups.filter((pk) => !pk.dead);
+  }
+
+  _collect(pk) {
+    if (pk.type === 'gold') { this.gold += pk.value; }
+    else if (pk.type === 'health') {
+      this.player.hp = Math.min(this.player.maxHP, this.player.hp + pk.value);
+      this.effects.push({ kind: 'dmg', x: this.player.x, y: this.player.y - 30, text: '+' + pk.value,
+        vy: -42, color: '#5ec860', t: 0, dur: 0.7 });
+    }
   }
 
   _spawnDeathFx(e) {
@@ -277,7 +435,8 @@ export class Game {
 
   _spawnEmberBurst() {
     for (let i = 0; i < 80; i++) {
-      this.embers.push({ x: Math.random() * this.vw, y: this.vh * (0.5 + Math.random() * 0.6),
+      this.embers.push({ x: this.cam.x + Math.random() * this.vw,
+        y: this.cam.y + this.vh * (0.5 + Math.random() * 0.6),
         vx: (Math.random() - 0.5) * 30, vy: -(30 + Math.random() * 70),
         r: 1 + Math.random() * 2.5, life: 0, dur: 2 + Math.random() * 3,
         hue: Math.random() < 0.5 ? '#ff8a3a' : '#e9c84a' });
@@ -337,14 +496,26 @@ export class Game {
     this.totalForLevel = q.length;
   }
 
+  // Spawn just beyond the camera view, biased toward where the player is moving
+  // (so as you advance you run INTO foes that were "already there").
   _spawnPos() {
-    // spawn just outside one of the four edges
+    const p = this.player;
+    const ring = Math.max(this.vw, this.vh) * 0.5 + 60 + Math.random() * 160;
+    let baseAng;
+    const moving = Math.hypot(p.fx, p.fy) > 0.01 && p.moving;
+    if (moving) {
+      baseAng = Math.atan2(p.fy, p.fx);
+      // 70% ahead (tight cone), 30% anywhere around
+      baseAng += (Math.random() < 0.7) ? (Math.random() - 0.5) * 1.4 : Math.random() * Math.PI * 2;
+    } else {
+      baseAng = Math.random() * Math.PI * 2;
+    }
     const b = this.bounds;
-    const side = Math.floor(Math.random() * 4);
-    if (side === 0) return [b.minX + Math.random() * (b.maxX - b.minX), b.minY - 20];
-    if (side === 1) return [b.maxX + 20, b.minY + Math.random() * (b.maxY - b.minY)];
-    if (side === 2) return [b.minX + Math.random() * (b.maxX - b.minX), b.maxY + 20];
-    return [b.minX - 20, b.minY + Math.random() * (b.maxY - b.minY)];
+    let x = p.x + Math.cos(baseAng) * ring;
+    let y = p.y + Math.sin(baseAng) * ring;
+    x = Math.max(b.minX, Math.min(b.maxX, x));
+    y = Math.max(b.minY, Math.min(b.maxY, y));
+    return [x, y];
   }
 
   _spawn(dt) {
@@ -355,10 +526,7 @@ export class Game {
     const n = Math.min(CONFIG.spawn.batch, this.spawnQueue.length);
     for (let i = 0; i < n; i++) {
       const type = this.spawnQueue.shift();
-      let pos;
-      if (type === 'boss' || type === 'miniboss') {
-        pos = [this.vw / 2, this.bounds.minY + 10];
-      } else pos = this._spawnPos();
+      const pos = this._spawnPos();   // bosses also stride in from off-screen
       this.enemies.push(new Enemy(type, pos[0], pos[1], this.level));
       if (type === 'boss' || type === 'miniboss') break; // a boss is its own batch
     }
@@ -413,12 +581,24 @@ export class Game {
     }
   }
 
+  // Camera locked dead-centre on the hero; the title/menus frame the world centre.
+  _updateCamera() {
+    if (this.state === 'title' || !this.player) {
+      this.cam.x = this.world.w / 2 - this.vw / 2;
+      this.cam.y = this.world.h / 2 - this.vh / 2;
+      return;
+    }
+    this.cam.x = this.player.x - this.vw / 2;
+    this.cam.y = this.player.y - this.vh / 2;
+  }
+
   // ---------- update ----------
   _update(dt) {
     this.time += dt;
     if (this.shake > 0) this.shake = Math.max(0, this.shake - dt * 24);
     if (this.flashScreen > 0) this.flashScreen -= dt;
 
+    this._updateCamera();
     this._updateAmbient(dt);     // embers, transition, intro, sweep, hp bar — run in every state
 
     // hold the world while the slash-wipe covers the screen
@@ -456,6 +636,7 @@ export class Game {
 
     for (const e of this.enemies) e.update(sdt, this);
     this._updateProjAndFx(sdt);
+    this._updatePickups(sdt);
     this._separate();
 
     // collisions: enemy contact
@@ -502,10 +683,11 @@ export class Game {
       if (this.hpGhost < this.hpDisplay) this.hpGhost = this.hpDisplay;
       else this.hpGhost += (this.hpDisplay - this.hpGhost) * Math.min(1, dt * 4);
     }
-    // floating embers (used for death fx, title & victory celebration)
+    // floating embers (used for death fx, title & victory celebration) — spawned
+    // in world space around the current view
     const want = (this.state === 'title' || this.state === 'victory') ? 60 : 0;
     if (this.embers.length < want && Math.random() < 0.6) {
-      this.embers.push({ x: Math.random() * this.vw, y: this.vh + 8,
+      this.embers.push({ x: this.cam.x + Math.random() * this.vw, y: this.cam.y + this.vh + 8,
         vx: (Math.random() - 0.5) * 14, vy: -(18 + Math.random() * 34),
         r: 1 + Math.random() * 2.2, life: 0, dur: 3 + Math.random() * 4,
         hue: Math.random() < 0.5 ? '#ff8a3a' : '#e9c84a' });
@@ -675,51 +857,72 @@ export class Game {
 
   _render() {
     const ctx = this.ctx;
+    const title = this.state === 'title';
+    const camx = this.cam.x, camy = this.cam.y;
+
     ctx.clearRect(0, 0, this.vw, this.vh);
     ctx.save();
     if (this.shake > 0) {
       ctx.translate((Math.random() - 0.5) * this.shake, (Math.random() - 0.5) * this.shake);
     }
-    if (this.bg) ctx.drawImage(this.bg, 0, 0);
-    this._drawBrazierFlames(ctx);   // animated flames on the baked posts
+    // void beyond the world boundary
+    ctx.fillStyle = this.voidColor || '#070510';
+    ctx.fillRect(-30, -30, this.vw + 60, this.vh + 60);
 
-    if (this.state === 'title') {
-      this._drawTitleScene(ctx);
-      ctx.restore();
-      this._drawLights(ctx);
-      this._drawAtmos(ctx);
-      this._drawGrade(ctx);
-      this._drawEmbers(ctx);
-      this._drawTransition(ctx);
-      return;
+    // ===== world space =====
+    ctx.save();
+    ctx.translate(-camx, -camy);
+
+    // scrolling biome ground, clipped to the world rect
+    const gx0 = Math.max(0, camx), gy0 = Math.max(0, camy);
+    const gx1 = Math.min(this.world.w, camx + this.vw), gy1 = Math.min(this.world.h, camy + this.vh);
+    if (this.groundPattern && gx1 > gx0 && gy1 > gy0) {
+      ctx.fillStyle = this.groundPattern;
+      ctx.fillRect(gx0, gy0, gx1 - gx0, gy1 - gy0);
     }
+    this._drawBoundary(ctx);
 
-    // dash after-images + swing arcs (under sprites)
+    // flat ground decals first, then depth-sorted tall props + entities
+    const view = { x0: camx - 60, y0: camy - 80, x1: camx + this.vw + 60, y1: camy + this.vh + 80 };
+    const tall = [];
+    for (const s of this.scenery) {
+      if (s.x < view.x0 || s.x > view.x1 || s.y < view.y0 || s.y > view.y1) continue;
+      if (s.flat) this._drawScenery(ctx, s); else tall.push(s);
+    }
+    this._drawBrazierFlames(ctx);
+    for (const pk of this.pickups) this._drawPickup(ctx, pk);
+
     for (const fx of this.effects) if (fx.kind === 'ghost') this._drawGhost(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'swing') this._drawSwing(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'death') this._drawDeathFx(ctx, fx);
 
-    // draw entities back-to-front by feet y
-    const drawList = [...this.enemies, this.player].sort((a, b) => a.y - b.y);
+    if (title) this._drawTitleScene(ctx);
+
+    // depth-sort tall scenery + enemies + hero by feet-y
+    const drawList = [...tall, ...this.enemies];
+    if (!title && this.player) drawList.push(this.player);
+    drawList.sort((a, b) => a.y - b.y);
     for (const ent of drawList) {
       if (ent === this.player) this._drawPlayer(ctx);
-      else this._drawEnemy(ctx, ent);
+      else if (ent.type !== undefined && ent.sprite) this._drawEnemy(ctx, ent);
+      else this._drawScenery(ctx, ent);
     }
 
-    // projectiles + ability VFX + sparks (above sprites)
     for (const pr of this.projectiles) this._drawProjectile(ctx, pr);
     for (const fb of this.allyProjectiles) this._drawFireball(ctx, fb);
     for (const fx of this.effects) this._drawAbilityFx(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'spark') this._drawSpark(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'dmg') this._drawDamage(ctx, fx);
 
-    ctx.restore();
+    this._drawLights(ctx);          // additive warm glow (world space)
+    this._drawEmbers(ctx);          // death/title/victory embers (world space)
+    ctx.restore();                  // ===== end world space =====
+    ctx.restore();                  // end shake
 
-    this._drawLights(ctx);         // additive warm glow from braziers, spells, the hero
-    this._drawAtmos(ctx);          // biome weather particles
-    this._drawGrade(ctx);          // biome colour grade
-    this._drawEmbers(ctx);
-    this._drawDeathOverlay(ctx);   // desaturate + "YOU FELL" during dying/gameover lead-in
+    this._drawAtmos(ctx);           // biome weather (screen overlay)
+    this._drawGrade(ctx);           // biome colour grade (screen overlay)
+    if (title) { this._drawTransition(ctx); return; }
+    this._drawDeathOverlay(ctx);    // desaturate + "YOU FELL" during dying/gameover lead-in
 
     // full-screen flash (ultimate)
     if (this.flashScreen > 0) {
@@ -755,9 +958,15 @@ export class Game {
   }
 
   // ---- Phase 3: atmosphere draw helpers ----
+  _inView(x, y, pad = 140) {
+    return x > this.cam.x - pad && x < this.cam.x + this.vw + pad &&
+           y > this.cam.y - pad && y < this.cam.y + this.vh + pad;
+  }
+
   _drawBrazierFlames(ctx) {
     if (!this.braziers) return;
     for (const bz of this.braziers) {
+      if (!this._inView(bz.x, bz.y)) continue;
       const f = this.titleT * 12 + bz.x;
       const h = 12 + Math.sin(f) * 3 + Math.sin(f * 2.3) * 2;
       // flame body
@@ -788,6 +997,7 @@ export class Game {
     };
     if (this.braziers) {
       for (const bz of this.braziers) {
+        if (!this._inView(bz.x, bz.y)) continue;
         const fl = 0.8 + 0.2 * Math.sin(this.titleT * 11 + bz.x);
         glow(bz.x, bz.y - 6, 120, bz.lava ? '#ff7a2a' : '#ffb24a', 0.5 * fl);
       }
@@ -837,8 +1047,9 @@ export class Game {
   }
 
   _drawTitleScene(ctx) {
-    // a knight standing his ground, a couple of foes lurking — all idling
-    const cx = this.vw / 2, gy = this.vh * 0.74;
+    // a knight standing his ground, a couple of foes lurking — all idling.
+    // drawn in WORLD space at the world centre (the title frames this spot).
+    const cx = this.world.w / 2, gy = this.world.h / 2 + this.vh * 0.18;
     const bob = Math.sin(this.titleT * 2) * 2;
     // lurking enemies flanking
     drawSprite(ctx, 'skeleton', this.titleT % 1 < 0.5 ? 'walkA' : 'walkB',
@@ -1198,11 +1409,13 @@ export class Game {
       : `LEVEL ${this.level} / ${LEVELS.length}`;
     ctx.fillText(label, this.vw / 2, 30);
 
-    // foes remaining
+    // foes remaining + gold
     const remaining = this.enemies.length + this.spawnQueue.length;
     ctx.textAlign = 'right';
     ctx.font = 'bold 15px Trebuchet MS, sans-serif';
     ctx.fillStyle = '#ece6f5';
-    ctx.fillText(`Foes: ${remaining}`, this.vw - 18, 30);
+    ctx.fillText(`Foes: ${remaining}`, this.vw - 18, 24);
+    ctx.fillStyle = '#e9c84a';
+    ctx.fillText(`◆ ${this.gold}`, this.vw - 18, 44);
   }
 }

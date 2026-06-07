@@ -4,6 +4,8 @@ const BASE = 'assets/sprites/';
 export const Assets = {
   manifest: null,
   images: {},   // name -> HTMLImageElement
+  icons: {},    // card id -> HTMLImageElement
+  iconBase: 'assets/icons/',
   ready: false,
 };
 
@@ -25,6 +27,15 @@ export async function loadAssets() {
       Assets.images[name] = await loadImage(BASE + manifest.sprites[name].file);
     })
   );
+
+  // ability/upgrade card icons
+  const iconManifest = await fetch(Assets.iconBase + 'manifest.json').then((r) => r.json());
+  await Promise.all(
+    Object.entries(iconManifest.icons).map(async ([id, file]) => {
+      Assets.icons[id] = await loadImage(Assets.iconBase + file);
+    })
+  );
+
   Assets.ready = true;
   return Assets;
 }

@@ -59,8 +59,8 @@ export const CARDS = [
   },
   {
     id: 'fireball', kind: 'ability', icon: '🔥', name: 'Fireball',
-    max: 6, cooldown: 2.7, firstDelay: 0.9,
-    desc: (l) => `Hurl a fireball at the nearest foe; explodes for ${dmgL(34, 12, l)} area dmg.`,
+    max: 6, cooldown: 3.0, firstDelay: 0.9,
+    desc: (l) => `Hurl a fireball at the nearest foe; explodes for ${dmgL(18, 7, l)} dmg in a small blast.`,
     cast(game, lvl) {
       const p = game.player;
       const tgt = game.nearestEnemy(p.x, p.y, 520);

@@ -4,6 +4,7 @@ import { Player, Enemy, inSwingArc } from './entities.js';
 import { drawSprite, pickFrame } from './sprite.js';
 import { Input } from './input.js';
 import { rollChoices, applyCard } from './abilities.js';
+import { Assets } from './assets.js';
 
 const BOSS_NAMES = { miniboss: 'The Dark Knight', boss: 'The Demon Lord' };
 
@@ -143,7 +144,8 @@ export class Game {
 
   onEnemyKilled(e, source) {
     const p = this.player;
-    p.fury = Math.min(p.furyMax, p.fury + (e.boss ? 45 : 8) * p.mods.furyMult);
+    // Fury charges slowly — the ultimate should be a rare payoff (~every few levels)
+    p.fury = Math.min(p.furyMax, p.fury + (e.boss ? 16 : 1.4) * p.mods.furyMult);
     if (source === 'sword' && p.mods.lifestealHeal > 0) {
       p.hp = Math.min(p.maxHP, p.hp + p.mods.lifestealHeal);
     }
@@ -163,14 +165,14 @@ export class Game {
 
   _explodeFireball(fb) {
     const p = this.player;
-    const R = 66 + 6 * fb.lvl;
-    const dmg = (34 + 12 * fb.lvl) * p.mods.abilityDmgMult;
+    const R = 38 + 4 * fb.lvl;                       // much tighter blast
+    const dmg = (18 + 7 * fb.lvl) * p.mods.abilityDmgMult;
     for (const e of this.enemiesInRadius(fb.x, fb.y, R)) {
       const a = Math.atan2(e.y - fb.y, e.x - fb.x);
-      this.hitEnemy(e, dmg, Math.cos(a) * 120, Math.sin(a) * 120, 'ability');
+      this.hitEnemy(e, dmg, Math.cos(a) * 90, Math.sin(a) * 90, 'ability');
     }
     this.addEffect({ kind: 'boom', x: fb.x, y: fb.y, r: R, t: 0, dur: 0.32 });
-    this.shake = Math.max(this.shake, 4);
+    this.shake = Math.max(this.shake, 3);
   }
 
   _ultimate() {
@@ -185,7 +187,8 @@ export class Game {
       if (wasAlive && e.dead) this.onEnemyKilled(e, 'ultimate');
     }
     this.addEffect({ kind: 'ult', x: p.x, y: p.y, t: 0, dur: 0.55, maxR: Math.hypot(this.vw, this.vh) });
-    this.flashScreen = 0.3;
+    this.addEffect({ kind: 'banner', text: 'FURY UNLEASHED!', t: 0, dur: 1.1 });
+    this.flashScreen = 0.22;
     this.shake = Math.max(this.shake, 11);
   }
 
@@ -460,6 +463,23 @@ export class Game {
       ctx.restore();
     }
 
+    // ultimate banner (screen-space)
+    for (const fx of this.effects) {
+      if (fx.kind !== 'banner') continue;
+      const prog = fx.t / fx.dur;
+      const a = prog < 0.15 ? prog / 0.15 : 1 - (prog - 0.15) / 0.85;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, a);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const size = 30 + prog * 14;
+      ctx.font = `bold ${size}px Trebuchet MS, sans-serif`;
+      ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,0.65)';
+      ctx.strokeText(fx.text, this.vw / 2, this.vh * 0.32);
+      ctx.fillStyle = '#ffdd6a';
+      ctx.fillText(fx.text, this.vw / 2, this.vh * 0.32);
+      ctx.restore();
+    }
+
     this._drawHUD(ctx);
     if (this.state === 'playing') this.input.draw(ctx);
   }
@@ -651,15 +671,17 @@ export class Game {
     ctx.textAlign = 'left'; ctx.fillText(ff >= 1 ? 'ULTIMATE!' : 'FURY', bx + 4, fy + fh / 2 + 1);
 
     // owned ability icons + levels
-    let ix = bx + 2; const iy = fy + fh + 16;
-    ctx.font = '17px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    let ix = bx; const iy = fy + fh + 6; const isz = 22;
+    ctx.imageSmoothingEnabled = false;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     for (const ab of p.abilities) {
-      ctx.fillText(ab.def.icon, ix, iy);
+      const img = Assets.icons[ab.id];
+      if (img) ctx.drawImage(img, ix, iy, isz, isz);
       ctx.fillStyle = '#e9c84a'; ctx.font = 'bold 10px Trebuchet MS, sans-serif';
-      ctx.fillText('' + ab.level, ix + 18, iy + 6);
-      ctx.font = '17px sans-serif';
-      ix += 32;
+      ctx.fillText('' + ab.level, ix + isz - 5, iy + isz);
+      ix += isz + 8;
     }
+    ctx.imageSmoothingEnabled = true;
 
     // level label
     ctx.textAlign = 'center';

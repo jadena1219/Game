@@ -1,0 +1,17 @@
+{
+  "size": 16,
+  "icons": {
+    "fireball": "fireball.png",
+    "lightning": "lightning.png",
+    "frost": "frost.png",
+    "whirlwind": "whirlwind.png",
+    "power": "power.png",
+    "haste": "haste.png",
+    "reach": "reach.png",
+    "swift": "swift.png",
+    "lifesteal": "lifesteal.png",
+    "fury": "fury.png",
+    "arcane": "arcane.png",
+    "dashmaster": "dashmaster.png"
+  }
+}

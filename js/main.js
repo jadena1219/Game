@@ -35,7 +35,7 @@ const ui = {
       const el = document.createElement('button');
       el.className = 'card' + (isNew ? ' is-new' : '');
       el.innerHTML =
-        `<div class="ico">${card.icon}</div>` +
+        `<img class="ico" src="assets/icons/${card.id}.png" alt="" draggable="false">` +
         `<div class="body">` +
         `<div class="name">${card.name}` +
         `<span class="tagchip">${isNew ? 'NEW' : 'Lv ' + lvl}</span></div>` +

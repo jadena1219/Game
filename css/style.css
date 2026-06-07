@@ -99,7 +99,11 @@ p { max-width: 30ch; line-height: 1.5; }
 }
 .card:active { transform: translateY(4px); box-shadow: 0 2px 0 #2a1c45, 0 4px 12px rgba(0,0,0,0.5); }
 .card.is-new { border-color: var(--gold); box-shadow: 0 6px 0 #5a4410, 0 10px 22px rgba(0,0,0,0.5); }
-.card .ico { font-size: 38px; line-height: 1; flex: 0 0 auto; width: 44px; text-align: center; }
+.card .ico {
+  flex: 0 0 auto; width: 46px; height: 46px;
+  image-rendering: pixelated; image-rendering: crisp-edges;
+  filter: drop-shadow(0 2px 2px rgba(0,0,0,0.5));
+}
 .card .body { flex: 1; }
 .card .name { font-size: 18px; font-weight: bold; color: #fff; display: flex; align-items: center; gap: 8px; }
 .card .tagchip {

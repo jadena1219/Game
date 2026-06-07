@@ -25,16 +25,17 @@ export const CONFIG = {
   // HP restored after clearing each level (capped at maxHP)
   hpRestorePerLevel: 35,
 
-  // Per-level scaling applied to base enemy stats
+  // Per-level scaling applied to base enemy stats. Ramps harder than before
+  // because the knight now snowballs in power via per-level ability cards.
   scaling: {
-    hpPerLevel: 0.12,       // +12% enemy HP per level above 1
+    hpPerLevel: 0.16,       // +16% enemy HP per level above 1
     speedPerLevel: 0.035,   // +3.5% enemy speed per level above 1
     dmgPerLevel: 0.05,      // +5% enemy contact/projectile damage per level above 1
   },
 
   spawn: {
-    interval: 0.7,          // s between spawn batches
-    batch: 2,               // enemies per batch (bosses ignore this)
+    interval: 0.62,         // s between spawn batches
+    batch: 3,               // enemies per batch (bosses ignore this)
   },
 };
 
@@ -46,23 +47,24 @@ export const ENEMY_TYPES = {
   caster:  { sprite: 'mage',     hp: 38,  speed: 58,  damage: 9,  radius: 13, touch: true,
              ranged: { range: 320, keep: 240, cooldown: 2.1, projSpeed: 185, projDmg: 9 } },
   // Steady bruisers: slow, tanky, no dash — kite them in circles and chip them down.
-  miniboss:{ sprite: 'miniboss', hp: 360, speed: 78,  damage: 16, radius: 26, touch: true,
+  miniboss:{ sprite: 'miniboss', hp: 560, speed: 80,  damage: 16, radius: 26, touch: true,
              boss: true },
-  boss:    { sprite: 'boss',     hp: 500, speed: 58,  damage: 13, radius: 34, touch: true,
+  boss:    { sprite: 'boss',     hp: 1050, speed: 60, damage: 13, radius: 34, touch: true,
              boss: true,
-             ranged: { range: 9999, keep: 0, cooldown: 2.6, projSpeed: 170, projDmg: 12, nova: 10 } },
+             ranged: { range: 9999, keep: 0, cooldown: 2.4, projSpeed: 175, projDmg: 12, nova: 12 } },
 };
 
 // Level composition. Each entry: { type: count }. miniboss at L5, boss at L10.
+// Counts ramp up to match the player's snowballing ability kit.
 export const LEVELS = [
-  { chaser: 6 },                                  // 1
-  { chaser: 9 },                                  // 2
-  { chaser: 6, swarmer: 6 },                      // 3
-  { chaser: 6, swarmer: 8, tank: 1 },             // 4
-  { miniboss: 1, chaser: 4 },                     // 5  — mini-boss
-  { swarmer: 10, caster: 3 },                     // 6
-  { chaser: 8, caster: 3, tank: 2 },              // 7
-  { swarmer: 10, caster: 3, tank: 2 },            // 8
-  { chaser: 8, swarmer: 8, caster: 3, tank: 2 },  // 9
-  { boss: 1, caster: 2, tank: 1 },                // 10 — final boss
+  { chaser: 6 },                                  // 1  (no abilities yet — gentle)
+  { chaser: 11 },                                 // 2
+  { chaser: 9, swarmer: 8 },                      // 3
+  { chaser: 8, swarmer: 12, tank: 1 },            // 4
+  { miniboss: 1, chaser: 8 },                     // 5  — mini-boss
+  { swarmer: 16, caster: 4 },                     // 6
+  { chaser: 12, caster: 4, tank: 3 },             // 7
+  { swarmer: 18, caster: 5, tank: 3 },            // 8
+  { chaser: 12, swarmer: 14, caster: 5, tank: 4 },// 9
+  { boss: 1, caster: 3, tank: 2 },                // 10 — final boss
 ];

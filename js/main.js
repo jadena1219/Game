@@ -1,13 +1,16 @@
 // Entry point: load sprites, wire up the menus, run the game.
 import { loadAssets } from './assets.js';
 import { Game } from './game.js';
+import { nextLevelOf } from './abilities.js';
 
 const screens = {
   title: document.getElementById('title-screen'),
-  levelcomplete: document.getElementById('level-complete'),
+  reward: document.getElementById('reward-screen'),
   gameover: document.getElementById('game-over'),
   victory: document.getElementById('victory'),
 };
+
+let game = null;
 
 const ui = {
   showScreen(name) {
@@ -15,16 +18,35 @@ const ui = {
       el.classList.toggle('hidden', k !== name);
     }
   },
-  levelComplete(level, hp) {
-    document.getElementById('lc-title').textContent =
-      level === 4 ? 'Wave Cleared — brace yourself' : 'Level Cleared';
-    document.getElementById('lc-sub').textContent = `+${hp} HP restored`;
-    document.getElementById('next-btn').textContent =
-      level + 1 === 5 ? 'Face the Dark Knight'
-      : level + 1 === 10 ? 'Face the Demon Lord'
-      : `Begin Level ${level + 1}`;
-    this.showScreen('levelcomplete');
+
+  // Reward card selection between levels.
+  showRewards(level, choices, player, hp) {
+    document.getElementById('rw-title').textContent =
+      level + 1 === 5 ? 'Cleared! The Dark Knight awaits…'
+      : level + 1 === 10 ? 'Cleared! The Demon Lord stirs…'
+      : 'Level Cleared';
+    document.getElementById('rw-sub').innerHTML = `+${hp} HP restored &middot; choose a power for Level ${level + 1}`;
+
+    const wrap = document.getElementById('reward-cards');
+    wrap.innerHTML = '';
+    for (const card of choices) {
+      const lvl = nextLevelOf(player, card);
+      const isNew = lvl === 1;
+      const el = document.createElement('button');
+      el.className = 'card' + (isNew ? ' is-new' : '');
+      el.innerHTML =
+        `<div class="ico">${card.icon}</div>` +
+        `<div class="body">` +
+        `<div class="name">${card.name}` +
+        `<span class="tagchip">${isNew ? 'NEW' : 'Lv ' + lvl}</span></div>` +
+        `<div class="cdesc">${card.desc(lvl)}</div>` +
+        `</div>`;
+      el.addEventListener('click', () => game.chooseReward(card), { once: true });
+      wrap.appendChild(el);
+    }
+    this.showScreen('reward');
   },
+
   gameOver(level) {
     document.getElementById('go-sub').textContent = `You reached Level ${level} of 10`;
     this.showScreen('gameover');
@@ -43,11 +65,10 @@ async function boot() {
     return;
   }
 
-  const game = new Game(canvas, ui);
+  game = new Game(canvas, ui);
   ui.showScreen('title');
 
   document.getElementById('start-btn').addEventListener('click', () => game.start());
-  document.getElementById('next-btn').addEventListener('click', () => game.nextLevel());
   document.getElementById('retry-btn').addEventListener('click', () => game.start());
   document.getElementById('win-btn').addEventListener('click', () => game.start());
 }

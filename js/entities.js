@@ -1,5 +1,6 @@
 // Player + enemy + projectile entities.
 import { CONFIG, ENEMY_TYPES } from './config.js';
+import { BASE_MODS } from './abilities.js';
 
 const TAU = Math.PI * 2;
 function norm(x, y) { const l = Math.hypot(x, y) || 1; return [x / l, y / l]; }
@@ -26,15 +27,27 @@ export class Player {
     this.dashTimer = 0;                // >0 while dashing
     this.dashCD = 0;
     this.dashDirX = 1; this.dashDirY = 0;
+    // progression
+    this.mods = BASE_MODS();
+    this.cardLevels = {};              // cardId -> level
+    this.abilities = [];              // [{id, def, level, cd}]
+    this.fury = 0; this.furyMax = 100;
   }
 
   get facingAngle() { return Math.atan2(this.fy, this.fx); }
   get dashing() { return this.dashTimer > 0; }
+  // effective stats after upgrades
+  get moveSpeed() { return CONFIG.player.speed * this.mods.moveSpeedMult; }
+  get swordDamage() { return CONFIG.player.swordDamage * this.mods.swordDamageMult; }
+  get reach() { return CONFIG.player.swordReach * this.mods.reachMult; }
+  get arcDeg() { return CONFIG.player.swordArcDeg + this.mods.arcBonusDeg; }
+  get swingCooldown0() { return CONFIG.player.swingCooldown * this.mods.swingCooldownMult; }
+  get dashCooldown0() { return CONFIG.player.dashCooldown * this.mods.dashCooldownMult; }
 
   startSwing() {
     const p = CONFIG.player;
     this.swingTimer = p.swingActive;
-    this.swingCD = p.swingCooldown;
+    this.swingCD = this.swingCooldown0;
     this.attackAnim = p.swingActive + 0.08;
     this.swingProgress = 0;
     this.hitThisSwing.clear();
@@ -49,7 +62,7 @@ export class Player {
     this.dashDirX = dx; this.dashDirY = dy;
     this.fx = dx; this.fy = dy; this.faceLeft = dx < 0;
     this.dashTimer = p.dashDur;
-    this.dashCD = p.dashCooldown;
+    this.dashCD = this.dashCooldown0;
     this.invuln = Math.max(this.invuln, p.dashDur + p.dashInvuln);
     game.onDash(this);
   }
@@ -76,8 +89,9 @@ export class Player {
     } else {
       this.moving = mlen > 0.08;
       if (this.moving) {
-        this.x += (mv.x / (mlen || 1)) * p.speed * Math.min(1, mlen) * dt;
-        this.y += (mv.y / (mlen || 1)) * p.speed * Math.min(1, mlen) * dt;
+        const spd = this.moveSpeed;
+        this.x += (mv.x / (mlen || 1)) * spd * Math.min(1, mlen) * dt;
+        this.y += (mv.y / (mlen || 1)) * spd * Math.min(1, mlen) * dt;
         this.fx = mv.x / (mlen || 1);
         this.fy = mv.y / (mlen || 1);
         this.faceLeft = this.fx < 0;
@@ -163,6 +177,7 @@ export class Enemy {
     this.state = 'walk';               // walk | windup | charging
     this.stateT = 0;
     this.cdmg = this.damage;           // current contact damage (boosted while charging)
+    this.slowT = 0;                    // >0 while chilled (frost)
   }
 
   takeHit(dmg, kx, ky) {
@@ -172,9 +187,12 @@ export class Enemy {
     if (this.hp <= 0) { this.hp = 0; this.dead = true; }
   }
 
+  applySlow(dur) { this.slowT = Math.max(this.slowT, dur); }
+
   update(dt, game) {
     if (this.flash > 0) this.flash -= dt;
     if (this.attackAnim > 0) this.attackAnim -= dt;
+    if (this.slowT > 0) this.slowT -= dt;
     const p = game.player;
     let dx = p.x - this.x, dy = p.y - this.y;
     const dist = Math.hypot(dx, dy) || 1;
@@ -240,7 +258,10 @@ export class Enemy {
     return this._finish(game);
   }
 
-  _step(nx, ny, dt) { this.x += nx * this.speed * dt; this.y += ny * this.speed * dt; }
+  _step(nx, ny, dt) {
+    const spd = this.speed * (this.slowT > 0 ? 0.5 : 1);
+    this.x += nx * spd * dt; this.y += ny * spd * dt;
+  }
 
   _finish(game) {
     const b = game.bounds;
@@ -271,8 +292,8 @@ export class Enemy {
 export function inSwingArc(player, enemy) {
   const dx = enemy.x - player.x, dy = enemy.y - player.y;
   const dist = Math.hypot(dx, dy);
-  if (dist > CONFIG.player.swordReach + enemy.r) return false;
+  if (dist > player.reach + enemy.r) return false;
   const a = Math.atan2(dy, dx);
-  const half = (CONFIG.player.swordArcDeg * Math.PI / 180) / 2;
+  const half = (player.arcDeg * Math.PI / 180) / 2;
   return Math.abs(angDiff(a, player.facingAngle)) <= half;
 }

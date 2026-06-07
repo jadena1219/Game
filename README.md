@@ -30,6 +30,21 @@ desktop browser.
 
 Plays in both portrait and landscape — rotate your phone and it re-fits.
 
+## Powers (roguelite progression)
+
+- **Clear a level → choose 1 of 3 cards.** Cards are either a **new auto-cast
+  ability** or an **upgrade** to your knight.
+- **Abilities auto-fire** on their own cooldown, auto-aiming at foes — keep your
+  thumbs on move/swing/dash. First four: **Lightning Bolt** (chains), **Frost
+  Nova** (AoE + slow), **Fireball** (exploding), **Whirlwind** (spin AoE). Pick
+  one again to level it up.
+- **Upgrades:** sharper blade, swifter strikes, longer reach, swift boots,
+  lifesteal, wrath (more fury), arcane power (ability damage), fleetfoot (dash).
+- **Fury meter** fills as you slay; when full it **auto-unleashes an ultimate**
+  that blasts and knocks back everything on screen.
+- Enemies scale up harder each level to match your snowballing kit. Dying still
+  sends you back to Level 1 — and resets your powers, so every run is a new build.
+
 ## Rules
 
 - **10 levels = 10 waves.** Each level spawns a fixed number of foes; clear them

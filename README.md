@@ -19,10 +19,16 @@ desktop browser.
 
 - **Move:** left side of the screen — touch and drag a virtual joystick. The
   knight faces the way he moves.
+- **Dash:** double-tap the left (move) side to dash a short distance with a
+  split-second of invulnerability — dodge through a crowd to escape, then turn
+  and fight. Short cooldown.
 - **Swing:** the glowing button on the bottom-right swings the greatsword in a
   wide ~120° arc in front of you, hitting every foe in the cone. It also
   deflects incoming projectiles.
-- **Desktop testing:** `WASD` / arrow keys to move, `Space` / `J` to swing.
+- **Desktop testing:** `WASD` / arrow keys to move, `Shift` to dash, `Space` /
+  `J` to swing.
+
+Plays in both portrait and landscape — rotate your phone and it re-fits.
 
 ## Rules
 

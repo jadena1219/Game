@@ -6,6 +6,8 @@ export class Input {
     this.canvas = canvas;
     this.move = { x: 0, y: 0 };     // normalized direction * magnitude (0..1)
     this.swingHeld = false;
+    this.dashQueued = false;        // set on double-tap (move side) / Shift; consumed by player
+    this._lastMoveTap = 0;          // timestamp of last move-side tap (for double-tap)
 
     // joystick visual state
     this.stick = { active: false, id: null, ox: 0, oy: 0, x: 0, y: 0 };
@@ -36,10 +38,17 @@ export class Input {
     const onDown = (id, x, y) => {
       if (this._inButton(x, y)) {
         this.btn.active = true; this.btn.id = id; this.swingHeld = true;
-      } else if (!this.stick.active) {
-        this.stick.active = true; this.stick.id = id;
-        this.stick.ox = this.stick.x = x; this.stick.oy = this.stick.y = y;
-        this._updateMove();
+      } else {
+        // move side: detect a quick double-tap to dash (works even while holding
+        // the joystick, since the 2nd finger lands here too)
+        const now = performance.now() / 1000;
+        if (now - this._lastMoveTap < 0.32) { this.dashQueued = true; this._lastMoveTap = 0; }
+        else this._lastMoveTap = now;
+        if (!this.stick.active) {
+          this.stick.active = true; this.stick.id = id;
+          this.stick.ox = this.stick.x = x; this.stick.oy = this.stick.y = y;
+          this._updateMove();
+        }
       }
     };
     const onMove = (id, x, y) => {
@@ -85,8 +94,10 @@ export class Input {
 
     // Keyboard
     window.addEventListener('keydown', (e) => {
-      this.keys.add(e.key.toLowerCase());
-      if ([' ', 'j', 'k'].includes(e.key.toLowerCase())) this.swingHeld = true;
+      const k = e.key.toLowerCase();
+      if (k === 'shift' && !e.repeat) this.dashQueued = true;   // dodge on desktop
+      this.keys.add(k);
+      if ([' ', 'j', 'k'].includes(k)) this.swingHeld = true;
     });
     window.addEventListener('keyup', (e) => {
       this.keys.delete(e.key.toLowerCase());

@@ -22,9 +22,14 @@ export class Player {
     this.hitThisSwing = new Set();
     this.flash = 0;
     this.dead = false;
+    // dash state
+    this.dashTimer = 0;                // >0 while dashing
+    this.dashCD = 0;
+    this.dashDirX = 1; this.dashDirY = 0;
   }
 
   get facingAngle() { return Math.atan2(this.fy, this.fx); }
+  get dashing() { return this.dashTimer > 0; }
 
   startSwing() {
     const p = CONFIG.player;
@@ -36,17 +41,47 @@ export class Player {
     this._swinging = true;
   }
 
+  startDash(mv, mlen, game) {
+    const p = CONFIG.player;
+    let dx, dy;
+    if (mlen > 0.1) { dx = mv.x / mlen; dy = mv.y / mlen; }
+    else { dx = this.fx; dy = this.fy; }       // dash forward if not steering
+    this.dashDirX = dx; this.dashDirY = dy;
+    this.fx = dx; this.fy = dy; this.faceLeft = dx < 0;
+    this.dashTimer = p.dashDur;
+    this.dashCD = p.dashCooldown;
+    this.invuln = Math.max(this.invuln, p.dashDur + p.dashInvuln);
+    game.onDash(this);
+  }
+
   update(dt, input, game) {
     const p = CONFIG.player;
     const mv = input.move;
     const mlen = Math.hypot(mv.x, mv.y);
-    this.moving = mlen > 0.08;
-    if (this.moving) {
-      this.x += (mv.x / (mlen || 1)) * p.speed * Math.min(1, mlen) * dt;
-      this.y += (mv.y / (mlen || 1)) * p.speed * Math.min(1, mlen) * dt;
-      this.fx = mv.x / (mlen || 1);
-      this.fy = mv.y / (mlen || 1);
-      this.faceLeft = this.fx < 0;
+
+    if (this.dashCD > 0) this.dashCD -= dt;
+
+    // trigger a dash (double-tap move side / Shift). Consume the request.
+    if (input.dashQueued) {
+      input.dashQueued = false;
+      if (this.dashTimer <= 0 && this.dashCD <= 0) this.startDash(mv, mlen, game);
+    }
+
+    if (this.dashTimer > 0) {
+      // dashing: locked-direction burst, ignores steering
+      this.dashTimer -= dt;
+      this.x += this.dashDirX * p.dashSpeed * dt;
+      this.y += this.dashDirY * p.dashSpeed * dt;
+      this.moving = true;
+    } else {
+      this.moving = mlen > 0.08;
+      if (this.moving) {
+        this.x += (mv.x / (mlen || 1)) * p.speed * Math.min(1, mlen) * dt;
+        this.y += (mv.y / (mlen || 1)) * p.speed * Math.min(1, mlen) * dt;
+        this.fx = mv.x / (mlen || 1);
+        this.fy = mv.y / (mlen || 1);
+        this.faceLeft = this.fx < 0;
+      }
     }
     // clamp to arena
     this.x = Math.max(game.bounds.minX, Math.min(game.bounds.maxX, this.x));
@@ -64,8 +99,8 @@ export class Player {
       this._swinging = false;
     }
 
-    // begin a swing
-    if (input.swingHeld && this.swingCD <= 0) {
+    // begin a swing (not while mid-dash)
+    if (input.swingHeld && this.swingCD <= 0 && this.dashTimer <= 0) {
       this.startSwing();
       game.onSwing(this);
     }

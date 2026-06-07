@@ -27,6 +27,16 @@ export class Game {
     this.bg = null;
     this._resize();
     window.addEventListener('resize', () => this._resize());
+    // Orientation flip (portrait <-> landscape): some mobile browsers report the
+    // new window size a frame or two late, so re-layout again shortly after.
+    window.addEventListener('orientationchange', () => {
+      this._resize();
+      setTimeout(() => this._resize(), 200);
+      setTimeout(() => this._resize(), 500);
+    });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', () => this._resize());
+    }
 
     this._last = performance.now();
     requestAnimationFrame((t) => this._frame(t));
@@ -131,6 +141,12 @@ export class Game {
     }
   }
 
+  // ---------- dash ----------
+  onDash(player) {
+    this.shake = Math.max(this.shake, 3);
+    this._dashGhostT = 0;
+  }
+
   // ---------- swing ----------
   onSwing(player) {
     this.shake = Math.max(this.shake, 3);
@@ -185,6 +201,14 @@ export class Game {
     const p = this.player;
     p.update(dt, this.input, this);
     this._applySwingDamage();
+    // dash after-image trail
+    if (p.dashing) {
+      this._dashGhostT = (this._dashGhostT || 0) - dt;
+      if (this._dashGhostT <= 0) {
+        this._dashGhostT = 0.03;
+        this.effects.push({ kind: 'ghost', x: p.x, y: p.y, faceLeft: p.faceLeft, t: 0, dur: 0.22 });
+      }
+    }
     this._spawn(dt);
 
     for (const e of this.enemies) e.update(dt, this);
@@ -279,7 +303,8 @@ export class Game {
 
     if (this.state === 'title') { ctx.restore(); this.input.draw(ctx); return; }
 
-    // swing arcs (under sprites)
+    // dash after-images + swing arcs (under sprites)
+    for (const fx of this.effects) if (fx.kind === 'ghost') this._drawGhost(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'swing') this._drawSwing(ctx, fx);
 
     // draw entities back-to-front by feet y
@@ -335,6 +360,14 @@ export class Game {
     ctx.beginPath(); ctx.arc(pr.x, pr.y, pr.r * 2.4, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#fff';
     ctx.beginPath(); ctx.arc(pr.x, pr.y, pr.r * 0.5, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  _drawGhost(ctx, fx) {
+    const a = (1 - fx.t / fx.dur) * 0.4;
+    ctx.save();
+    ctx.globalAlpha = a;
+    drawSprite(ctx, 'knight', 'idle', fx.x, fx.y, fx.faceLeft, 1, { color: '#9fd8ff', a: 0.8 });
     ctx.restore();
   }
 

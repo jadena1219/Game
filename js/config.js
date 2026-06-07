@@ -13,8 +13,13 @@ export const CONFIG = {
     swordDamage: 34,
     swingCooldown: 0.42,    // s between swings
     swingActive: 0.16,      // s the blade can connect
-    knockback: 150,         // px/s impulse applied to struck enemies
+    knockback: 230,         // px/s impulse applied to struck enemies (shoves crowds back)
     invuln: 0.8,            // s of i-frames after taking a hit
+    // Dodge dash — double-tap the move side (or Shift on desktop)
+    dashSpeed: 760,         // px/s burst speed
+    dashDur: 0.18,          // s of dash motion (~135px)
+    dashCooldown: 0.85,     // s before you can dash again
+    dashInvuln: 0.32,       // s of invulnerability granted by a dash (slip through crowds)
   },
 
   // HP restored after clearing each level (capped at maxHP)
@@ -40,12 +45,12 @@ export const ENEMY_TYPES = {
   tank:    { sprite: 'ogre',     hp: 130, speed: 42,  damage: 15, radius: 20, touch: true },
   caster:  { sprite: 'mage',     hp: 38,  speed: 58,  damage: 9,  radius: 13, touch: true,
              ranged: { range: 320, keep: 240, cooldown: 2.1, projSpeed: 185, projDmg: 9 } },
-  miniboss:{ sprite: 'miniboss', hp: 360, speed: 86,  damage: 16, radius: 26, touch: true,
-             boss: true, charge: { cooldown: 3.4, speed: 350, windup: 0.75, dur: 0.45 } },
-  boss:    { sprite: 'boss',     hp: 500, speed: 56,  damage: 13, radius: 34, touch: true,
+  // Steady bruisers: slow, tanky, no dash — kite them in circles and chip them down.
+  miniboss:{ sprite: 'miniboss', hp: 360, speed: 78,  damage: 16, radius: 26, touch: true,
+             boss: true },
+  boss:    { sprite: 'boss',     hp: 500, speed: 58,  damage: 13, radius: 34, touch: true,
              boss: true,
-             ranged: { range: 9999, keep: 0, cooldown: 2.6, projSpeed: 170, projDmg: 12, nova: 10 },
-             charge: { cooldown: 5.0, speed: 300, windup: 0.8, dur: 0.5 } },
+             ranged: { range: 9999, keep: 0, cooldown: 2.6, projSpeed: 170, projDmg: 12, nova: 10 } },
 };
 
 // Level composition. Each entry: { type: count }. miniboss at L5, boss at L10.

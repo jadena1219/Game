@@ -1,0 +1,12 @@
+{
+  "name": "knights-last-stand",
+  "version": "0.1.0",
+  "description": "A 2D mobile melee wave-survival game: ten waves, one knight, no retreat.",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node tools/serve.js",
+    "serve": "node tools/serve.js",
+    "sprites": "node tools/gen-sprites.js"
+  },
+  "license": "MIT"
+}

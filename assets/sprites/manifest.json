@@ -1,0 +1,40 @@
+{
+  "frameW": 16,
+  "frameH": 24,
+  "frames": {
+    "idle": 0,
+    "walkA": 1,
+    "walkB": 2,
+    "attack": 3
+  },
+  "sprites": {
+    "knight": {
+      "file": "knight.png",
+      "scale": 1
+    },
+    "skeleton": {
+      "file": "skeleton.png",
+      "scale": 1
+    },
+    "imp": {
+      "file": "imp.png",
+      "scale": 0.72
+    },
+    "mage": {
+      "file": "mage.png",
+      "scale": 1
+    },
+    "ogre": {
+      "file": "ogre.png",
+      "scale": 1.5
+    },
+    "miniboss": {
+      "file": "miniboss.png",
+      "scale": 1.8
+    },
+    "boss": {
+      "file": "boss.png",
+      "scale": 2.6
+    }
+  }
+}

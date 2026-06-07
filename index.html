@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#0d0b14" />
+  <title>Knight's Last Stand</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="app">
+    <canvas id="game"></canvas>
+
+    <!-- Title -->
+    <div class="screen" id="title-screen">
+      <h1>Knight's<br />Last Stand</h1>
+      <p class="tag">Ten waves. One blade. No retreat.</p>
+      <button class="btn" id="start-btn">Begin the Stand</button>
+      <p class="hint">Left side to move &middot; Right button to swing</p>
+    </div>
+
+    <!-- Level complete -->
+    <div class="screen hidden" id="level-complete">
+      <h2 id="lc-title">Level Cleared</h2>
+      <p id="lc-sub">+30 HP restored</p>
+      <button class="btn" id="next-btn">Next Level</button>
+    </div>
+
+    <!-- Game over -->
+    <div class="screen hidden" id="game-over">
+      <h2 class="danger">You Fell</h2>
+      <p id="go-sub">You reached Level 1</p>
+      <p class="hint">The stand begins anew...</p>
+      <button class="btn" id="retry-btn">Back to Level 1</button>
+    </div>
+
+    <!-- Victory -->
+    <div class="screen hidden" id="victory">
+      <h2 class="gold">The Demon Lord Falls</h2>
+      <p>You survived all ten waves. The realm is saved.</p>
+      <button class="btn" id="win-btn">Play Again</button>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

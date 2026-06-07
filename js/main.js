@@ -29,11 +29,13 @@ const ui = {
 
     const wrap = document.getElementById('reward-cards');
     wrap.innerHTML = '';
-    for (const card of choices) {
+    const els = [];
+    choices.forEach((card, i) => {
       const lvl = nextLevelOf(player, card);
       const isNew = lvl === 1;
       const el = document.createElement('button');
       el.className = 'card' + (isNew ? ' is-new' : '');
+      el.style.animationDelay = (i * 0.11) + 's';   // cascade in one-by-one
       el.innerHTML =
         `<img class="ico" src="assets/icons/${card.id}.png" alt="" draggable="false">` +
         `<div class="body">` +
@@ -41,9 +43,19 @@ const ui = {
         `<span class="tagchip">${isNew ? 'NEW' : 'Lv ' + lvl}</span></div>` +
         `<div class="cdesc">${card.desc(lvl)}</div>` +
         `</div>`;
-      el.addEventListener('click', () => game.chooseReward(card), { once: true });
+      el.addEventListener('click', () => {
+        if (wrap.dataset.locked) return;
+        wrap.dataset.locked = '1';
+        // animated pick: chosen card pops, others slide away, then commit
+        els.forEach((other) => {
+          other.style.animationDelay = '0s';
+          other.classList.add(other === el ? 'picked' : 'dismiss');
+        });
+        setTimeout(() => { delete wrap.dataset.locked; game.chooseReward(card); }, 430);
+      });
+      els.push(el);
       wrap.appendChild(el);
-    }
+    });
     this.showScreen('reward');
   },
 

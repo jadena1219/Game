@@ -29,6 +29,21 @@ export class Game {
     this.flashScreen = 0;
     this.kills = 0;
 
+    // --- Phase 2 polish state ---
+    this.embers = [];          // ambient floating ember particles
+    this.transition = null;    // slash-wipe between scenes
+    this.countdown = 0;        // 3..2..1..FIGHT pre-level timer
+    this.intro = null;         // level/boss intro card
+    this.sweep = null;         // "LEVEL CLEARED" banner sweep
+    this.pendingReward = null; // rewards shown after the sweep
+    this.hitStop = 0;          // brief world freeze on heavy hits
+    this.timeScale = 1;        // for slow-mo on death
+    this.dying = 0;            // dramatic death sequence timer
+    this.hpDisplay = 100;      // smoothed health-bar value
+    this.hpGhost = 100;        // lagging "damage taken" chunk
+    this.titleT = 0;           // title-scene animation clock
+    this.wipeEl = document.getElementById('wipe');
+
     this.bg = null;
     this._resize();
     window.addEventListener('resize', () => this._resize());
@@ -92,7 +107,17 @@ export class Game {
 
   // ---------- flow ----------
   // A fresh run resets all progression (death sends you back to Level 1).
-  start() { this.player = new Player(this.vw / 2, this.vh / 2); this.kills = 0; this.level = 1; this._startLevel(1, true); }
+  start() {
+    this._slashWipe(() => {
+      this.player = new Player(this.vw / 2, this.vh / 2);
+      this.kills = 0; this.level = 1;
+      this.hpDisplay = this.hpGhost = this.player.maxHP;
+      this.timeScale = 1; this.dying = 0;
+      this._startLevel(1, true);
+    });
+  }
+
+  nextLevel() { this._slashWipe(() => this._startLevel(this.level + 1, false)); }
 
   _startLevel(level, fullHeal) {
     this.level = level;
@@ -100,6 +125,7 @@ export class Game {
     this.player.x = this.vw / 2; this.player.y = this.vh / 2;
     if (fullHeal) { this.player.hp = this.player.maxHP; }
     this.player.dead = false; this.player.invuln = 0.6;
+    this.player.fury = this.player.fury; // (persists across levels)
     // stagger ability cooldowns so they don't all fire at once on level start
     this.player.abilities.forEach((a, i) => { a.cd = 0.4 + i * 0.14; });
 
@@ -108,6 +134,22 @@ export class Game {
     this._buildQueue(level);
     this.state = 'playing';
     this.ui.showScreen(null);
+
+    // pre-level countdown + intro card (boss intro on 5 & 10)
+    this.countdown = 3.6;
+    const bossType = (LEVELS[level - 1].boss && 'boss') || (LEVELS[level - 1].miniboss && 'miniboss');
+    if (bossType) {
+      this.intro = { kind: 'boss', text: BOSS_NAMES[bossType], sub: `LEVEL ${level}`, t: 0, dur: 2.4 };
+      this.countdown = 4.2;
+      this.shake = Math.max(this.shake, 8);
+    } else {
+      this.intro = { kind: 'level', text: `LEVEL ${level}`, sub: level === 1 ? 'The stand begins' : '', t: 0, dur: 1.8 };
+    }
+  }
+
+  // Slash-wipe transition: cover the screen, run `mid` at the midpoint, then reveal.
+  _slashWipe(mid) {
+    this.transition = { t: 0, dur: 0.74, half: 0.37, mid, fired: false };
   }
 
   // ---------- combat helpers (used by abilities) ----------
@@ -139,6 +181,7 @@ export class Game {
     e.takeHit(dmg, kx, ky);
     this.spawnDamageNumber(e.x, e.y - e.r - 6, Math.round(dmg), source);
     if (source === 'sword') this._spark(e.x, e.y);
+    if (e.boss && wasAlive) this.hitStop = Math.max(this.hitStop, 0.05); // weight on boss hits
     if (wasAlive && e.dead) this.onEnemyKilled(e, source);
   }
 
@@ -150,6 +193,33 @@ export class Game {
       p.hp = Math.min(p.maxHP, p.hp + p.mods.lifestealHeal);
     }
     this.kills++;
+    // hit-pause on meaningful kills (skip trash so swarms stay fluid)
+    if (e.boss) this.hitStop = Math.max(this.hitStop, 0.14);
+    else if (e.type === 'tank') this.hitStop = Math.max(this.hitStop, 0.06);
+    this._spawnDeathFx(e);
+  }
+
+  _spawnDeathFx(e) {
+    // dissolving sprite + rising embers / soul-wisp
+    this.effects.push({ kind: 'death', sprite: e.sprite, x: e.x, y: e.y,
+      faceLeft: e.faceLeft, boss: e.boss, t: 0, dur: e.boss ? 0.7 : 0.4 });
+    const n = e.boss ? 22 : 6;
+    for (let i = 0; i < n; i++) {
+      this.embers.push({ x: e.x + (Math.random() - 0.5) * e.r * 1.5,
+        y: e.y - e.r * 0.5 + (Math.random() - 0.5) * e.r,
+        vx: (Math.random() - 0.5) * 40, vy: -(40 + Math.random() * 70),
+        r: 1 + Math.random() * 2, life: 0, dur: 0.5 + Math.random() * 0.7,
+        hue: e.boss ? '#ff5a3a' : '#cfe0ff' });
+    }
+  }
+
+  _spawnEmberBurst() {
+    for (let i = 0; i < 80; i++) {
+      this.embers.push({ x: Math.random() * this.vw, y: this.vh * (0.5 + Math.random() * 0.6),
+        vx: (Math.random() - 0.5) * 30, vy: -(30 + Math.random() * 70),
+        r: 1 + Math.random() * 2.5, life: 0, dur: 2 + Math.random() * 3,
+        hue: Math.random() < 0.5 ? '#ff8a3a' : '#e9c84a' });
+    }
   }
 
   spawnDamageNumber(x, y, amount, source) {
@@ -190,6 +260,7 @@ export class Game {
     this.addEffect({ kind: 'banner', text: 'FURY UNLEASHED!', t: 0, dur: 1.1 });
     this.flashScreen = 0.22;
     this.shake = Math.max(this.shake, 11);
+    this.hitStop = Math.max(this.hitStop, 0.12);
   }
 
   _buildQueue(level) {
@@ -284,32 +355,45 @@ export class Game {
   _update(dt) {
     this.time += dt;
     if (this.shake > 0) this.shake = Math.max(0, this.shake - dt * 24);
-    if (this.state !== 'playing') return;
-
     if (this.flashScreen > 0) this.flashScreen -= dt;
 
+    this._updateAmbient(dt);     // embers, transition, intro, sweep, hp bar — run in every state
+
+    // hold the world while the slash-wipe covers the screen
+    if (this.transition && this.transition.t < this.transition.half) return;
+
+    if (this.state === 'dying') return this._updateDying(dt);
+    if (this.state !== 'playing') return;
+
+    // brief hit-pause freezes the simulation for weight
+    if (this.hitStop > 0) { this.hitStop -= dt; return; }
+
+    const sdt = dt * this.timeScale;
     this.input.poll();
     const p = this.player;
-    p.update(dt, this.input, this);
+    p.update(sdt, this.input, this);
     this._applySwingDamage();
-    this._updateAbilities(dt);
-    // Fury ultimate auto-unleashes when the meter is full
+
+    // pre-level countdown: you can move, but nothing spawns until "FIGHT!"
+    if (this.countdown > 0) {
+      this.countdown -= dt;
+      this._updateProjAndFx(sdt);
+      return;
+    }
+
+    this._updateAbilities(sdt);
     if (p.fury >= p.furyMax) { p.fury = 0; this._ultimate(); }
-    // dash after-image trail
     if (p.dashing) {
-      this._dashGhostT = (this._dashGhostT || 0) - dt;
+      this._dashGhostT = (this._dashGhostT || 0) - sdt;
       if (this._dashGhostT <= 0) {
         this._dashGhostT = 0.03;
         this.effects.push({ kind: 'ghost', x: p.x, y: p.y, faceLeft: p.faceLeft, t: 0, dur: 0.22 });
       }
     }
-    this._spawn(dt);
+    this._spawn(sdt);
 
-    for (const e of this.enemies) e.update(dt, this);
-    for (const pr of this.projectiles) pr.update(dt, this);
-    this._updateAllyProjectiles(dt);
-
-    // separation so enemies don't fully stack
+    for (const e of this.enemies) e.update(sdt, this);
+    this._updateProjAndFx(sdt);
     this._separate();
 
     // collisions: enemy contact
@@ -326,19 +410,84 @@ export class Game {
       if (Math.hypot(dx, dy) < p.r + pr.r) { if (p.takeHit(pr.dmg)) this.shake = 5; pr.dead = true; }
     }
 
-    // effects
-    for (const fx of this.effects) {
-      fx.t += dt;
-      if (fx.kind === 'spark') { fx.x += fx.vx * dt; fx.y += fx.vy * dt; fx.vx *= 0.9; fx.vy *= 0.9; }
-      else if (fx.kind === 'dmg') { fx.y += fx.vy * dt; fx.vy *= 0.9; }
-    }
-    this.effects = this.effects.filter((f) => f.t < f.dur);
     this.enemies = this.enemies.filter((e) => !e.dead);
     this.projectiles = this.projectiles.filter((pr) => !pr.dead);
 
     // outcomes
     if (p.dead) return this._lose();
     if (this.spawnQueue.length === 0 && this.enemies.length === 0) this._win();
+  }
+
+  _updateProjAndFx(sdt) {
+    for (const pr of this.projectiles) pr.update(sdt, this);
+    this._updateAllyProjectiles(sdt);
+    for (const fx of this.effects) {
+      fx.t += sdt;
+      if (fx.kind === 'spark') { fx.x += fx.vx * sdt; fx.y += fx.vy * sdt; fx.vx *= 0.9; fx.vy *= 0.9; }
+      else if (fx.kind === 'dmg') { fx.y += fx.vy * sdt; fx.vy *= 0.9; }
+      else if (fx.kind === 'death') { fx.vy += 260 * sdt; }
+    }
+    this.effects = this.effects.filter((f) => f.t < f.dur);
+  }
+
+  // Ambient/UI animation that runs regardless of pause/menus.
+  _updateAmbient(dt) {
+    this.titleT += dt;
+    // smoothed health bar
+    if (this.player) {
+      const hp = Math.max(0, this.player.hp);
+      this.hpDisplay += (hp - this.hpDisplay) * Math.min(1, dt * 14);
+      if (this.hpGhost < this.hpDisplay) this.hpGhost = this.hpDisplay;
+      else this.hpGhost += (this.hpDisplay - this.hpGhost) * Math.min(1, dt * 4);
+    }
+    // floating embers (title, victory, and a few during play)
+    const want = (this.state === 'title' || this.state === 'victory') ? 60 : 14;
+    if (this.embers.length < want && Math.random() < 0.6) {
+      this.embers.push({ x: Math.random() * this.vw, y: this.vh + 8,
+        vx: (Math.random() - 0.5) * 14, vy: -(18 + Math.random() * 34),
+        r: 1 + Math.random() * 2.2, life: 0, dur: 3 + Math.random() * 4,
+        hue: Math.random() < 0.5 ? '#ff8a3a' : '#e9c84a' });
+    }
+    for (const e of this.embers) {
+      e.life += dt; e.x += e.vx * dt; e.y += e.vy * dt;
+      e.vy += 4 * dt; e.flick = 0.5 + 0.5 * Math.sin(this.titleT * 8 + e.x);
+    }
+    this.embers = this.embers.filter((e) => e.life < e.dur && e.y > -20);
+
+    // slash-wipe transition
+    if (this.transition) {
+      const tr = this.transition;
+      tr.t += dt;
+      if (!tr.fired && tr.t >= tr.half) { tr.fired = true; if (tr.mid) tr.mid(); }
+      if (tr.t >= tr.dur) this.transition = null;
+    }
+    // intro card timer
+    if (this.intro) { this.intro.t += dt; if (this.intro.t >= this.intro.dur) this.intro = null; }
+    // "level cleared" sweep -> then show reward cards
+    if (this.sweep) {
+      this.sweep.t += dt;
+      if (this.sweep.t >= this.sweep.dur) {
+        this.sweep = null;
+        const r = this.pendingReward; this.pendingReward = null;
+        this.state = 'reward';
+        this.ui.showRewards(this.level, r.choices, this.player, r.heal);
+      }
+    }
+  }
+
+  _updateDying(dt) {
+    // ease into slow-mo, keep the world drifting, then show game over
+    this.timeScale += (0.18 - this.timeScale) * Math.min(1, dt * 6);
+    const sdt = dt * this.timeScale;
+    for (const e of this.enemies) e.update(sdt, this);
+    this._updateProjAndFx(sdt);
+    this._separate();
+    this.dying -= dt;
+    if (this.dying <= 0) {
+      this.timeScale = 1;
+      this.state = 'gameover';
+      this.ui.gameOver(this.level);
+    }
   }
 
   _updateAbilities(dt) {
@@ -389,20 +538,23 @@ export class Game {
   }
 
   _lose() {
-    this.state = 'gameover';
-    this.ui.gameOver(this.level);
+    // dramatic death: slow-mo + desaturate, then the game-over screen
+    this.state = 'dying';
+    this.dying = 1.5;
+    this.shake = Math.max(this.shake, 9);
   }
 
   _win() {
     if (this.level >= LEVELS.length) {
       this.state = 'victory';
       this.ui.victory();
+      this._spawnEmberBurst();
     } else {
-      // restore a chunk of the FIXED max HP, then offer a reward card
+      // "LEVEL CLEARED" sweep, then the reward cards
       this.player.hp = Math.min(this.player.maxHP, this.player.hp + CONFIG.hpRestorePerLevel);
-      this.state = 'reward';
-      this._rewardChoices = rollChoices(this.player, 3);
-      this.ui.showRewards(this.level, this._rewardChoices, this.player, CONFIG.hpRestorePerLevel);
+      this.state = 'clearing';
+      this.sweep = { t: 0, dur: 1.5 };
+      this.pendingReward = { choices: rollChoices(this.player, 3), heal: CONFIG.hpRestorePerLevel };
     }
   }
 
@@ -411,8 +563,6 @@ export class Game {
     applyCard(this.player, card);
     this.nextLevel();
   }
-
-  nextLevel() { this._startLevel(this.level + 1, false); }
 
   // ---------- render ----------
   _frame(t) {
@@ -432,11 +582,18 @@ export class Game {
     }
     if (this.bg) ctx.drawImage(this.bg, 0, 0);
 
-    if (this.state === 'title') { ctx.restore(); this.input.draw(ctx); return; }
+    if (this.state === 'title') {
+      this._drawTitleScene(ctx);
+      ctx.restore();
+      this._drawEmbers(ctx);
+      this._drawTransition(ctx);
+      return;
+    }
 
     // dash after-images + swing arcs (under sprites)
     for (const fx of this.effects) if (fx.kind === 'ghost') this._drawGhost(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'swing') this._drawSwing(ctx, fx);
+    for (const fx of this.effects) if (fx.kind === 'death') this._drawDeathFx(ctx, fx);
 
     // draw entities back-to-front by feet y
     const drawList = [...this.enemies, this.player].sort((a, b) => a.y - b.y);
@@ -453,6 +610,9 @@ export class Game {
     for (const fx of this.effects) if (fx.kind === 'dmg') this._drawDamage(ctx, fx);
 
     ctx.restore();
+
+    this._drawEmbers(ctx);
+    this._drawDeathOverlay(ctx);   // desaturate + "YOU FELL" during dying/gameover lead-in
 
     // full-screen flash (ultimate)
     if (this.flashScreen > 0) {
@@ -480,8 +640,174 @@ export class Game {
       ctx.restore();
     }
 
+    this._drawSweep(ctx);          // "LEVEL CLEARED" banner sweep
+    this._drawCountdownIntro(ctx); // level/boss intro + 3..2..1..FIGHT
     this._drawHUD(ctx);
     if (this.state === 'playing') this.input.draw(ctx);
+    this._drawTransition(ctx);     // slash-wipe on the very top
+  }
+
+  // ---- Phase 2 draw helpers ----
+  _drawEmbers(ctx) {
+    if (!this.embers.length) return;
+    ctx.save();
+    for (const e of this.embers) {
+      const a = Math.min(1, e.life < 0.3 ? e.life / 0.3 : 1 - e.life / e.dur) * (e.flick ?? 1);
+      ctx.globalAlpha = Math.max(0, a) * 0.9;
+      ctx.fillStyle = e.hue;
+      ctx.fillRect(e.x - e.r, e.y - e.r, e.r * 2, e.r * 2);
+    }
+    ctx.restore();
+  }
+
+  _drawTitleScene(ctx) {
+    // a knight standing his ground, a couple of foes lurking — all idling
+    const cx = this.vw / 2, gy = this.vh * 0.74;
+    const bob = Math.sin(this.titleT * 2) * 2;
+    // lurking enemies flanking
+    drawSprite(ctx, 'skeleton', this.titleT % 1 < 0.5 ? 'walkA' : 'walkB',
+      cx - this.vw * 0.26, gy + 18 + bob, false, 1.4);
+    drawSprite(ctx, 'imp', this.titleT % 0.6 < 0.3 ? 'walkA' : 'walkB',
+      cx + this.vw * 0.27, gy - 6 - bob, true, 1.2);
+    drawSprite(ctx, 'ogre', this.titleT % 1.2 < 0.6 ? 'idle' : 'walkA',
+      cx + this.vw * 0.17, gy + 40 + bob, true, 1.5);
+    // hero, larger, sword drawn, gentle breathing
+    drawSprite(ctx, 'knight', this.titleT % 1.4 < 0.7 ? 'idle' : 'walkA',
+      cx - this.vw * 0.02, gy + bob, false, 2.4);
+    // ground glow under hero
+    ctx.save();
+    const g = ctx.createRadialGradient(cx, gy + 6, 4, cx, gy + 6, 90);
+    g.addColorStop(0, 'rgba(120,180,255,0.18)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.fillRect(cx - 90, gy - 84, 180, 120);
+    ctx.restore();
+  }
+
+  _drawDeathFx(ctx, fx) {
+    const prog = fx.t / fx.dur;
+    ctx.save();
+    ctx.globalAlpha = (1 - prog) * 0.9;
+    // squash as it dissolves, tinted bright
+    const sx = 1 + prog * 0.4, sy = 1 - prog * 0.5;
+    ctx.translate(fx.x, fx.y); ctx.scale(sx, sy); ctx.translate(-fx.x, -fx.y);
+    drawSprite(ctx, fx.sprite, 'idle', fx.x, fx.y, fx.faceLeft, 1,
+      { color: fx.boss ? '#ff8a5a' : '#dff0ff', a: 0.5 + prog * 0.5 });
+    ctx.restore();
+  }
+
+  // The wipe is a DOM layer (above the menus); drive it from the transition clock.
+  _drawTransition() {
+    if (!this.wipeEl) return;
+    if (!this.transition) {
+      if (this.wipeEl.style.opacity !== '0') this.wipeEl.style.opacity = '0';
+      return;
+    }
+    const prog = Math.min(1, this.transition.t / this.transition.dur);
+    const tx = -140 + 280 * prog;   // slides across, covering the screen at the midpoint
+    this.wipeEl.style.opacity = '1';
+    this.wipeEl.style.transform = `translateX(${tx}%) skewX(-12deg)`;
+  }
+
+  _drawSweep(ctx) {
+    if (!this.sweep) return;
+    const prog = this.sweep.t / this.sweep.dur;
+    // a band sweeps left->right with the text, then fades
+    const a = prog < 0.7 ? 1 : 1 - (prog - 0.7) / 0.3;
+    const cx = this.vw / 2;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, a);
+    ctx.fillStyle = 'rgba(10,8,18,0.7)';
+    const bandH = 92;
+    ctx.fillRect(0, this.vh / 2 - bandH / 2, this.vw, bandH);
+    ctx.fillStyle = '#e9c84a';
+    ctx.fillRect(0, this.vh / 2 - bandH / 2, this.vw, 3);
+    ctx.fillRect(0, this.vh / 2 + bandH / 2 - 3, this.vw, 3);
+    const slideIn = Math.min(1, prog / 0.25);
+    const x = cx - (1 - slideIn) * 60;
+    ctx.globalAlpha *= slideIn;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = 'bold 40px Trebuchet MS, sans-serif';
+    ctx.fillStyle = '#fff';
+    ctx.fillText('LEVEL CLEARED', x, this.vh / 2);
+    ctx.restore();
+  }
+
+  _drawCountdownIntro(ctx) {
+    // boss letterbox
+    if (this.intro && this.intro.kind === 'boss') {
+      const p = this.intro.t / this.intro.dur;
+      const barH = (p < 0.85 ? 1 : 1 - (p - 0.85) / 0.15) * 64;
+      ctx.save();
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, this.vw, barH);
+      ctx.fillRect(0, this.vh - barH, this.vw, barH);
+      ctx.restore();
+    }
+    if (this.intro) {
+      const it = this.intro, p = it.t / it.dur;
+      const slide = p < 0.2 ? p / 0.2 : 1;
+      const a = p > 0.8 ? 1 - (p - 0.8) / 0.2 : 1;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, a);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const y = this.vh * 0.38;
+      if (it.kind === 'boss') {
+        ctx.font = 'bold 16px Trebuchet MS, sans-serif'; ctx.fillStyle = '#d8413a';
+        ctx.fillText(it.sub, this.vw / 2, y - 34);
+        const size = 34 + slide * 8;
+        ctx.font = `bold ${size}px Trebuchet MS, sans-serif`;
+        ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+        ctx.strokeText(it.text, this.vw / 2, y);
+        ctx.fillStyle = '#ffce4a'; ctx.fillText(it.text, this.vw / 2, y);
+      } else {
+        const x = this.vw / 2 + (1 - slide) * 80;
+        ctx.font = 'bold 38px Trebuchet MS, sans-serif';
+        ctx.fillStyle = '#e9c84a';
+        ctx.fillText(it.text, x, y);
+        if (it.sub) { ctx.font = 'italic 15px Trebuchet MS, sans-serif'; ctx.fillStyle = '#cfc6e6';
+          ctx.fillText(it.sub, x, y + 28); }
+      }
+      ctx.restore();
+    }
+    // 3..2..1..FIGHT countdown
+    if (this.state === 'playing' && this.countdown > 0) {
+      const c = this.countdown;
+      const fight = c <= 0.9;
+      const label = fight ? 'FIGHT!' : '' + Math.ceil(c - 0.9);
+      // pulse: each number/word pops then settles within its ~0.9s window
+      const phase = (c % 0.9) / 0.9;            // 1 at appear -> 0 at end
+      const scale = 1 + 0.22 * phase;
+      const a = fight ? Math.min(1, c / 0.5) : Math.min(1, phase * 4);
+      ctx.save();
+      ctx.globalAlpha = Math.max(0.25, a);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const sz = (fight ? 60 : 84) * scale;
+      ctx.font = `bold ${sz}px Trebuchet MS, sans-serif`;
+      ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+      ctx.strokeText(label, this.vw / 2, this.vh * 0.5);
+      ctx.fillStyle = fight ? '#d8413a' : '#fff';
+      ctx.fillText(label, this.vw / 2, this.vh * 0.5);
+      ctx.restore();
+    }
+  }
+
+  _drawDeathOverlay(ctx) {
+    if (this.state !== 'dying') return;
+    const p = 1 - this.dying / 1.5;
+    ctx.save();
+    ctx.globalAlpha = Math.min(0.55, p);
+    ctx.fillStyle = '#1a0c10';
+    ctx.fillRect(0, 0, this.vw, this.vh);
+    if (p > 0.35) {
+      const sp = Math.min(1, (p - 0.35) / 0.25);
+      ctx.globalAlpha = sp;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = `bold ${64 + (1 - sp) * 40}px Trebuchet MS, sans-serif`;
+      ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+      ctx.strokeText('YOU FELL', this.vw / 2, this.vh * 0.45);
+      ctx.fillStyle = '#d8413a';
+      ctx.fillText('YOU FELL', this.vw / 2, this.vh * 0.45);
+    }
+    ctx.restore();
   }
 
   _drawAbilityFx(ctx, fx) {
@@ -643,21 +969,23 @@ export class Game {
   }
 
   _drawHUD(ctx) {
-    if (this.state === 'title') return;
+    if (this.state === 'title' || this.state === 'gameover' || this.state === 'victory') return;
     const p = this.player;
     if (!p) return;
-    // health bar (fixed max)
+    // health bar (fixed max) — smoothed with a "damage ghost" chunk
     const bw = Math.min(260, this.vw * 0.44), bh = 20, bx = 18, by = 20;
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.fillRect(bx - 3, by - 3, bw + 6, bh + 6);
-    const hpf = Math.max(0, p.hp / p.maxHP);
+    const hpf = Math.max(0, this.hpDisplay / p.maxHP);
+    const ghostf = Math.max(hpf, this.hpGhost / p.maxHP);
     const col = hpf > 0.5 ? '#5ec860' : hpf > 0.25 ? '#e9c84a' : '#d8413a';
     ctx.fillStyle = '#2a1d28'; ctx.fillRect(bx, by, bw, bh);
+    ctx.fillStyle = 'rgba(232,120,120,0.65)'; ctx.fillRect(bx, by, bw * ghostf, bh); // ghost
     ctx.fillStyle = col; ctx.fillRect(bx, by, bw * hpf, bh);
     ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1; ctx.strokeRect(bx, by, bw, bh);
     ctx.fillStyle = '#fff'; ctx.font = 'bold 13px Trebuchet MS, sans-serif';
     ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
-    ctx.fillText(`${Math.ceil(p.hp)} / ${p.maxHP}`, bx + 8, by + bh / 2 + 1);
+    ctx.fillText(`${Math.max(0, Math.ceil(p.hp))} / ${p.maxHP}`, bx + 8, by + bh / 2 + 1);
 
     // fury bar (under health)
     const fy = by + bh + 5, fh = 9;

@@ -30,6 +30,16 @@ html, body {
   background: #15101f;
 }
 
+/* slash-wipe transition layer (sits above the menus) */
+#wipe {
+  position: fixed; top: -12%; bottom: -12%; left: -25%; right: -25%;
+  background: linear-gradient(100deg, #0c0a14 0%, #181228 60%, #0c0a14 100%);
+  transform: translateX(-140%) skewX(-12deg);
+  opacity: 0; z-index: 50; pointer-events: none;
+  box-shadow: 0 0 40px 8px rgba(150, 210, 255, 0.25);
+  will-change: transform, opacity;
+}
+
 /* ---- overlay screens ---- */
 .screen {
   position: absolute; inset: 0;
@@ -50,7 +60,21 @@ h1 {
   letter-spacing: 2px;
   color: var(--gold);
   text-shadow: 0 3px 0 #3a2c0a, 0 0 24px rgba(233,200,74,0.35);
+  animation: logoPulse 2.6s ease-in-out infinite;
 }
+@keyframes logoPulse {
+  0%, 100% { transform: scale(1); text-shadow: 0 3px 0 #3a2c0a, 0 0 24px rgba(233,200,74,0.35); }
+  50% { transform: scale(1.04); text-shadow: 0 3px 0 #3a2c0a, 0 0 40px rgba(233,200,74,0.6); }
+}
+
+/* lighter title overlay so the animated battlefield + embers show through */
+#title-screen {
+  background: linear-gradient(to bottom, rgba(8,6,14,0.55) 0%, rgba(8,6,14,0.2) 45%, rgba(8,6,14,0.72) 100%);
+  backdrop-filter: none;
+  justify-content: flex-start;
+  padding-top: 12vh;
+}
+#title-screen .hint { margin-top: auto; margin-bottom: 4vh; }
 h2 {
   font-size: clamp(30px, 9vw, 56px);
   letter-spacing: 1px;
@@ -98,6 +122,21 @@ p { max-width: 30ch; line-height: 1.5; }
   transition: transform 0.06s, box-shadow 0.06s, border-color 0.06s;
 }
 .card:active { transform: translateY(4px); box-shadow: 0 2px 0 #2a1c45, 0 4px 12px rgba(0,0,0,0.5); }
+
+/* cascade in one-by-one, animated pick/dismiss */
+.card { animation: cardIn 0.4s cubic-bezier(0.2, 1.25, 0.35, 1) both; }
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(-46px) scale(0.92); }
+  to { opacity: 1; transform: none; }
+}
+.card.picked { animation: cardPick 0.42s ease forwards; z-index: 3; border-color: #fff; }
+@keyframes cardPick {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.09); box-shadow: 0 0 0 3px #fff, 0 0 26px rgba(255,255,255,0.6); }
+  100% { transform: scale(1.04); box-shadow: 0 0 0 3px #fff, 0 0 26px rgba(255,255,255,0.6); }
+}
+.card.dismiss { animation: cardOut 0.34s ease forwards; pointer-events: none; }
+@keyframes cardOut { to { opacity: 0; transform: translateX(70px) scale(0.86); } }
 .card.is-new { border-color: var(--gold); box-shadow: 0 6px 0 #5a4410, 0 10px 22px rgba(0,0,0,0.5); }
 .card .ico {
   flex: 0 0 auto; width: 46px; height: 46px;

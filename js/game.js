@@ -887,6 +887,7 @@ export class Game {
     } else {
       // "LEVEL CLEARED" sweep, then the camp shop
       this.player.hp = Math.min(this.player.maxHP, this.player.hp + CONFIG.hpRestorePerLevel);
+      this.gold += 10 + this.level * 4;       // steady clear bonus so the shop is always useful
       this.state = 'clearing';
       this.sweep = { t: 0, dur: 1.5 };
       this.pendingReward = { heal: CONFIG.hpRestorePerLevel };
@@ -900,6 +901,8 @@ export class Game {
     this.rerollCost = 12;
     this.shopOpen = false;
     this.enemies = []; this.projectiles = []; this.allyProjectiles = []; this.pickups = [];
+    this.effects = [];                      // clear leftover swing arcs / damage numbers / death fx
+    this.hitStop = 0; this.timeScale = 1;
     const W = this.world.w, H = this.world.h;
     this.player.x = W * 0.5; this.player.y = H * 0.30;
     this.player.dashTimer = 0; this.player.swingTimer = 0; this.player.invuln = 0;
@@ -920,6 +923,7 @@ export class Game {
     this.input.poll();
     const p = this.player;
     p.update(dt, this.input, this);
+    this._updateProjAndFx(dt);                 // animate & clear any practice-swing arcs
     const c = this.camp;
     const sd = Math.hypot(p.x - c.sorcerer.x, p.y - c.sorcerer.y);
     const dd = Math.hypot(p.x - c.door.x, p.y - c.door.y);
@@ -1531,7 +1535,7 @@ export class Game {
     const p = this.player;
     if (!p) return;
     // health bar (fixed max) — smoothed with a "damage ghost" chunk
-    const bw = Math.min(260, this.vw * 0.44), bh = 20, bx = 18, by = 20;
+    const bw = Math.min(180, this.vw * 0.36), bh = 20, bx = 18, by = 20;
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.fillRect(bx - 3, by - 3, bw + 6, bh + 6);
     const hpf = Math.max(0, this.hpDisplay / p.maxHP);
@@ -1556,37 +1560,51 @@ export class Game {
     ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = 'bold 9px Trebuchet MS, sans-serif';
     ctx.textAlign = 'left'; ctx.fillText(ff >= 1 ? 'ULTIMATE!' : 'FURY', bx + 4, fy + fh / 2 + 1);
 
-    // owned ability icons + levels
-    let ix = bx; const iy = fy + fh + 6; const isz = 22;
-    ctx.imageSmoothingEnabled = false;
-    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-    for (const ab of p.abilities) {
-      const img = Assets.icons[ab.id];
-      if (img) ctx.drawImage(img, ix, iy, isz, isz);
-      ctx.fillStyle = '#e9c84a'; ctx.font = 'bold 10px Trebuchet MS, sans-serif';
-      ctx.fillText('' + ab.level, ix + isz - 5, iy + isz);
-      ix += isz + 8;
-    }
-    ctx.imageSmoothingEnabled = true;
-
-    // level label
-    ctx.textAlign = 'center';
-    ctx.font = 'bold 18px Trebuchet MS, sans-serif';
-    ctx.fillStyle = '#e9c84a';
-    ctx.textBaseline = 'middle';
-    const bossType = (LEVELS[this.level - 1].boss && 'boss') ||
-      (LEVELS[this.level - 1].miniboss && 'miniboss');
-    const label = bossType ? `LEVEL ${this.level} — ${BOSS_NAMES[bossType]}`
-      : `LEVEL ${this.level} / ${LEVELS.length}`;
-    ctx.fillText(label, this.vw / 2, 30);
-
-    // foes remaining + gold
+    // level medallion (centred, below the bars) + foes/gold on the right
+    this._drawLevelBadge(ctx);
     const remaining = this.enemies.length + this.spawnQueue.length;
     ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
     ctx.font = 'bold 15px Trebuchet MS, sans-serif';
-    ctx.fillStyle = '#ece6f5';
-    ctx.fillText(`Foes: ${remaining}`, this.vw - 18, 24);
     ctx.fillStyle = '#e9c84a';
-    ctx.fillText(`◆ ${this.gold}`, this.vw - 18, 44);
+    ctx.fillText(`◆ ${this.gold}`, this.vw - 18, 26);
+    if (this.state !== 'camp') {
+      ctx.fillStyle = '#cdbfe0'; ctx.font = 'bold 13px Trebuchet MS, sans-serif';
+      ctx.fillText(`☠ ${remaining}`, this.vw - 18, 46);
+    }
+  }
+
+  // A "cool" diamond level medallion (no longer collides with the bars).
+  _drawLevelBadge(ctx) {
+    const cx = this.vw / 2, cy = 40;
+    const bossType = (LEVELS[this.level - 1].boss && 'boss') ||
+      (LEVELS[this.level - 1].miniboss && 'miniboss');
+    const accent = bossType ? '#e5524a' : '#f0cf5a';
+    const deep = bossType ? '#3a0e0c' : '#3a2c08';
+    const R = 26;
+    ctx.save();
+    // glow
+    const g = ctx.createRadialGradient(cx, cy, 2, cx, cy, R + 14);
+    g.addColorStop(0, bossType ? 'rgba(229,82,74,0.5)' : 'rgba(240,207,90,0.45)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.fillRect(cx - R - 16, cy - R - 16, (R + 16) * 2, (R + 16) * 2);
+    // diamond plate
+    const dia = (r) => { ctx.beginPath(); ctx.moveTo(cx, cy - r); ctx.lineTo(cx + r, cy);
+      ctx.lineTo(cx, cy + r); ctx.lineTo(cx - r, cy); ctx.closePath(); };
+    dia(R); ctx.fillStyle = deep; ctx.fill();
+    const lg = ctx.createLinearGradient(cx, cy - R, cx, cy + R);
+    lg.addColorStop(0, 'rgba(255,255,255,0.18)'); lg.addColorStop(0.5, 'rgba(0,0,0,0)');
+    ctx.fillStyle = lg; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = accent; ctx.stroke();
+    dia(R - 5); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.stroke();
+    // text
+    ctx.textAlign = 'center';
+    ctx.fillStyle = accent; ctx.font = 'bold 8px Trebuchet MS, sans-serif'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(bossType ? 'BOSS' : 'LEVEL', cx, cy - 11);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 22px Georgia, serif'; ctx.textBaseline = 'middle';
+    ctx.fillText('' + this.level, cx, cy + 4);
+    ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.font = 'bold 8px Trebuchet MS, sans-serif';
+    ctx.fillText('/ ' + LEVELS.length, cx, cy + 16);
+    ctx.restore();
   }
 }

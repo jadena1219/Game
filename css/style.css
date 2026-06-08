@@ -53,6 +53,7 @@ html, body {
   z-index: 10;
 }
 .screen.hidden { display: none; }
+#camp-prompt.hidden { display: none; }
 
 h1 {
   font-size: clamp(38px, 13vw, 78px);

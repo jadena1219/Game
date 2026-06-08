@@ -272,11 +272,12 @@ function drawWeapon(g, spec, skin, oy, attack) {
   } else if (spec.weapon === 'hammer') {
     const wood = hex('#6b4a2a'), head = hex(spec.hammerHead || '#9aa6b8'), headHi = shade(hex(spec.hammerHead || '#9aa6b8'), 1.25);
     if (attack) {
-      g.rect(11, 3 + oy, 15, 6 + oy, head); g.px(15, 3 + oy, headHi); // raised head
-      g.rect(11, 6 + oy, 12, 10 + oy, wood);                          // handle
+      g.rect(10, 1 + oy, 15, 5 + oy, head); g.px(15, 1 + oy, headHi); // head raised overhead
+      g.rect(12, 5 + oy, 13, 9 + oy, wood);                           // handle
     } else {
-      g.rect(13, 8 + oy, 13, 15 + oy, wood);                          // handle down
-      g.rect(11, 14 + oy, 15, 17 + oy, head); g.px(11, 14 + oy, headHi); // head low
+      // shouldered warhammer: chunky head up by the shoulder, short handle (no thin dangling line)
+      g.rect(12, 7 + oy, 13, 11 + oy, wood);
+      g.rect(11, 3 + oy, 15, 7 + oy, head); g.px(15, 3 + oy, headHi); g.px(11, 3 + oy, headHi);
     }
   }
 }

@@ -134,10 +134,12 @@ export class Input {
     // clamp visual knob
     this.stick.x = this.stick.ox + dx;
     this.stick.y = this.stick.oy + dy;
-    const mag = Math.min(1, len / max);
-    if (len > 4) {
-      this.move.x = (dx / (len || 1)) * mag;
-      this.move.y = (dy / (len || 1)) * mag;
+    // CONSTANT speed: once past a small dead-zone, move full speed in that
+    // direction (no analog scaling — that made speed depend on how far you could
+    // drag, which differs by screen position and felt random/slow).
+    if (len > 7) {
+      this.move.x = dx / len;
+      this.move.y = dy / len;
     } else {
       this.move.x = 0; this.move.y = 0;
     }

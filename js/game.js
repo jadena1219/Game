@@ -592,6 +592,9 @@ export class Game {
       x: player.x, y: player.y, angle: player.facingAngle });
   }
 
+  // knockback resistance: bosses are immovable, tanks heavy, trash light
+  _kbResist(e) { return e.boss ? 0.07 : (e.type === 'tank' ? 0.4 : 1); }
+
   _applySwingDamage() {
     const p = this.player;
     if (p.swingTimer <= 0) return;
@@ -602,7 +605,8 @@ export class Game {
       if (p.hitThisSwing.has(e)) continue;
       if (inSwingArc(p, e)) {
         const [kx, ky] = [Math.cos(p.facingAngle), Math.sin(p.facingAngle)];
-        const kb = e.boss ? kbStrength * 0.25 : kbStrength;
+        // bosses are heavy — barely shoved (stops perma-knockback cheese)
+        const kb = kbStrength * this._kbResist(e);
         let dmg = p.swordDamage * berserk;
         if (p.relics.has('exec') && e.hp < e.maxHP * 0.35) dmg *= 1.7;
         // Rogue: chance to crit
@@ -617,7 +621,8 @@ export class Game {
           for (const o of this.enemiesInRadius(e.x, e.y, 48)) {
             if (o === e || p.hitThisSwing.has(o)) continue;
             const a = Math.atan2(o.y - e.y, o.x - e.x);
-            this.hitEnemy(o, dmg * 0.4, Math.cos(a) * 200, Math.sin(a) * 200, 'ability');
+            const sk = 200 * this._kbResist(o);
+            this.hitEnemy(o, dmg * 0.4, Math.cos(a) * sk, Math.sin(a) * sk, 'ability');
             p.hitThisSwing.add(o);
           }
           this.hitStop = Math.max(this.hitStop, 0.04);
@@ -1704,24 +1709,51 @@ export class Game {
 
   _drawSwing(ctx, fx) {
     const p = this.player;
+    const style = (p.hero && p.hero.swingStyle) || 'sweep';
     const reach = p.reach;
     const arc = p.arcDeg * Math.PI / 180;
     const prog = Math.min(1, fx.t / fx.dur);
-    const a0 = fx.angle - arc / 2;
-    const cur = a0 + prog * arc;
+    const a = fx.angle, a0 = a - arc / 2, cur = a0 + prog * arc, fade = 1 - prog;
     ctx.save();
     ctx.translate(p.x, p.y);
-    // faint full cone
-    ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, reach, a0, fx.angle + arc / 2);
-    ctx.closePath();
-    ctx.fillStyle = 'rgba(150,220,255,0.08)'; ctx.fill();
-    // bright sweep trail
     ctx.lineCap = 'round';
-    ctx.strokeStyle = 'rgba(190,233,255,0.55)'; ctx.lineWidth = 12;
-    ctx.beginPath(); ctx.arc(0, 0, reach * 0.88, a0, cur); ctx.stroke();
-    // leading edge
-    ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(cur) * reach, Math.sin(cur) * reach); ctx.stroke();
+
+    if (style === 'stab') {
+      // Rogue: two quick darting dagger slashes along the facing direction
+      ctx.strokeStyle = `rgba(150,255,200,${0.75 * fade})`; ctx.lineWidth = 4;
+      for (const off of [-0.22, 0.22]) {
+        const aa = a + off;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(aa) * reach * 0.3, Math.sin(aa) * reach * 0.3);
+        ctx.lineTo(Math.cos(aa) * reach, Math.sin(aa) * reach);
+        ctx.stroke();
+      }
+      ctx.strokeStyle = `rgba(255,255,255,${0.9 * fade})`; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(0, 0, reach * 0.92, a - 0.26, a + 0.26); ctx.stroke();
+
+    } else if (style === 'slam') {
+      // Paladin: a heavy, crushing hammer arc + a bright impact crescent
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, reach, a0, a + arc / 2); ctx.closePath();
+      ctx.fillStyle = 'rgba(255,206,110,0.12)'; ctx.fill();
+      ctx.strokeStyle = 'rgba(255,196,84,0.6)'; ctx.lineWidth = 18;
+      ctx.beginPath(); ctx.arc(0, 0, reach * 0.8, a0, cur); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,246,200,0.95)'; ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(cur) * reach, Math.sin(cur) * reach); ctx.stroke();
+      if (prog > 0.55) {                    // crushing impact flare at full extension
+        const ia = 1 - (prog - 0.55) / 0.45;
+        ctx.strokeStyle = `rgba(255,170,50,${0.85 * ia})`; ctx.lineWidth = 6;
+        ctx.beginPath(); ctx.arc(0, 0, reach * 1.02, cur - 0.55, cur + 0.55); ctx.stroke();
+      }
+
+    } else {
+      // Knight: the classic wide sweeping cleave
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, reach, a0, a + arc / 2); ctx.closePath();
+      ctx.fillStyle = 'rgba(150,220,255,0.08)'; ctx.fill();
+      ctx.strokeStyle = 'rgba(190,233,255,0.55)'; ctx.lineWidth = 12;
+      ctx.beginPath(); ctx.arc(0, 0, reach * 0.88, a0, cur); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(cur) * reach, Math.sin(cur) * reach); ctx.stroke();
+    }
     ctx.restore();
   }
 

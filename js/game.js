@@ -347,28 +347,32 @@ export class Game {
   }
 
   // ---------- flow ----------
-  // The cold open: the title lifts away and the knight — already striding the
-  // endless corridor behind it — walks on. The passage scrolls faster, the far
-  // end floods with torchlight, and that bloom hides the cut straight into L1.
+  // The cold open: the title lifts away and the knight walks on down the
+  // corridor. An archway and a wide chamber scroll into view ahead; he steps
+  // through the opening, and only then does Level 1 blend in beneath him.
   beginIntro(heroId = 'knight') {
     if (this.state !== 'title') return;
     this.heroId = heroId;
     this.state = 'intro';
     this.introT = 0;
     this.introFired = false;
+    // the corridor mouth sits a fixed distance ahead (in world/scroll units)
+    this.introEnd = this.tunnelScroll + this.vw * 1.15;
     this.ui.swipeTitleAway();           // CSS lift-and-blur on the title overlay
   }
 
   _updateIntro(dt) {
     this.introT += dt;
     // a slow, careful walk that only gently gathers pace
-    const speed = 46 + Math.min(120, this.introT * 46);
+    const speed = 56 + Math.min(150, this.introT * 60);
     this.tunnelScroll += speed * dt;
-    const WALK = 3.0;                    // seconds of slow corridor before the threshold
-    if (!this.introFired && this.introT >= WALK) {
+    // the archway's on-screen x; once he's stepped well past it (into the open
+    // chamber) we blend into Level 1 from there — not from mid-corridor.
+    const hx = this.vw * 0.46;
+    const endSx = this.introEnd - this.tunnelScroll;
+    if (!this.introFired && (endSx < hx - 90 || this.introT > 6.5)) {
       this.introFired = true;
-      // freeze the corridor exactly as it looks now, then cut to Level 1 and let
-      // that snapshot dissolve away — he simply walks out into the open dark.
+      // freeze him standing in the opening, then dissolve that into the arena
       const buf = this._tunnelBuf || (this._tunnelBuf = document.createElement('canvas'));
       buf.width = this.vw; buf.height = this.vh;
       this._drawTunnelScene(buf.getContext('2d'));
@@ -1626,15 +1630,25 @@ export class Game {
       ctx.translate(hx, hy); ctx.scale(z, z); ctx.translate(-hx, -hy);
     }
 
-    // tiled corridor, then a heavy darkness veil — it lives in shadow
+    // the corridor is finite during the intro: it ends at an archway (endSx),
+    // beyond which a wide open chamber waits. In the title it runs forever.
+    const endSx = (this.state === 'intro' && this.introEnd != null) ? this.introEnd - scroll : Infinity;
+
+    // open chamber first (behind the arch), then the corridor clipped to the arch
+    if (endSx < W) this._drawOpening(ctx, endSx, top, bot);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 0, Math.max(0, Math.min(W, endSx)), H); ctx.clip();
     for (let x = -off; x < W + SEG; x += SEG) ctx.drawImage(this.tunnelStrip, Math.round(x), 0);
+    ctx.restore();
+    // a heavy darkness veil — it all lives in shadow
     ctx.fillStyle = 'rgba(5,3,10,0.7)'; ctx.fillRect(0, 0, W, H);
 
-    // on-screen torches (one per slice, on each wall). Flicker is keyed to WORLD
-    // position so it doesn't strobe as the corridor scrolls past.
+    // on-screen torches (one per slice, on each wall), only those before the arch.
+    // Flicker is keyed to WORLD position so it doesn't strobe as it scrolls past.
     const torches = [];
     for (let x = -off; x < W + SEG; x += SEG) {
-      const tx = x + SEG * 0.5, world = tx + scroll;       // stable per physical torch
+      const tx = x + SEG * 0.5; if (tx > endSx - 12) continue;
+      const world = tx + scroll;                           // stable per physical torch
       torches.push([tx, torchY.top, world], [tx, torchY.bot, world + 53]);
     }
 
@@ -1653,11 +1667,17 @@ export class Game {
       const fl = 0.9 + 0.1 * Math.sin(this.titleT * 2.4 + world * 0.05);   // slow, gentle
       glow(tx, ty, 130, '#ffae46', 0.28 * fl);
     }
+    if (endSx < W) {                                       // braziers framing the corridor mouth
+      const fl = 0.9 + 0.1 * Math.sin(this.titleT * 2.4);
+      glow(endSx - 4, top, 150, '#ffae46', 0.3 * fl);
+      glow(endSx - 4, bot, 150, '#ffae46', 0.3 * fl);
+    }
     glow(hx, hy - 10, 96, '#ffd28a', 0.14);
     ctx.restore();
 
     // torch flames on top of their pools
     for (const [tx, ty, world] of torches) this._tunnelFlame(ctx, tx, ty, world);
+    if (endSx < W) { this._tunnelFlame(ctx, endSx - 4, top, scroll); this._tunnelFlame(ctx, endSx - 4, bot, scroll + 99); }
 
     // the knight, far off, walking slowly and carefully into the dark
     const cyc = this.titleT * 1.7;                          // slow gait
@@ -1670,6 +1690,36 @@ export class Game {
     drawSprite(ctx, 'knight', frame, hx, hy - bob, false, 1.5);
 
     ctx.restore();   // end push-in
+  }
+
+  // The chamber beyond the corridor mouth: a wide, dark catacomb floor that
+  // opens up taller than the passage and fades into depth — so when Level 1
+  // dissolves in over it, he's already standing in an open space.
+  _drawOpening(ctx, sx, top, bot) {
+    const W = this.vw, H = this.vh, b = biomeForLevel(1);
+    const oTop = Math.round(H * 0.12), oBot = Math.round(H * 0.95);
+    sx = Math.max(0, sx);
+    ctx.save();
+    // chamber floor
+    const grd = ctx.createLinearGradient(0, oTop, 0, oBot);
+    grd.addColorStop(0, b.ground[0]); grd.addColorStop(1, b.ground[1]);
+    ctx.fillStyle = grd; ctx.fillRect(sx, oTop, W - sx, oBot - oTop);
+    if (b.detail) {                                        // a little flagstone grime, clipped to the room
+      ctx.save(); ctx.beginPath(); ctx.rect(sx, oTop, W - sx, oBot - oTop); ctx.clip();
+      ctx.translate(sx - 40, oTop); b.detail(ctx, W - sx + 80, oBot - oTop); ctx.restore();
+    }
+    // depth: the far side of the room sinks into black
+    const dg = ctx.createLinearGradient(sx, 0, W, 0);
+    dg.addColorStop(0, 'rgba(0,0,0,0)'); dg.addColorStop(1, 'rgba(2,1,6,0.9)');
+    ctx.fillStyle = dg; ctx.fillRect(sx, oTop, W - sx, oBot - oTop);
+    // the corridor mouth: stone jambs above & below the passage opening
+    ctx.fillStyle = b.wall;
+    ctx.fillRect(sx - 7, 0, 16, top + 6);
+    ctx.fillRect(sx - 7, bot - 6, 16, H - bot + 6);
+    ctx.fillStyle = b.cap;
+    ctx.fillRect(sx - 9, top - 3, 20, 7);
+    ctx.fillRect(sx - 9, bot - 4, 20, 7);
+    ctx.restore();
   }
 
   _tunnelFlame(ctx, x, y, world) {

@@ -39,7 +39,7 @@ export const FORGE = [
 // ---- RELICS: unique, characterful, build-defining ----
 export const RELICS = [
   { id: 'vampire', icon: '🩸', name: 'Vampiric Fang', cost: 34,
-    flavor: 'Torn from a thing that refused to die.', desc: 'Heal 5 HP for every foe your sword slays.' },
+    flavor: 'Torn from a thing that refused to die.', desc: 'Heal 2 HP for every foe your sword slays.' },
   { id: 'ember', icon: '👑', name: 'Ember Crown', cost: 40,
     flavor: "It smoulders still with a dead king's wrath.", desc: 'Slain foes erupt, burning those nearby.' },
   { id: 'thunder', icon: '⚡', name: 'Thunderbrand', cost: 42,
@@ -51,7 +51,7 @@ export const RELICS = [
   { id: 'berserk', icon: '💢', name: "Berserker's Heart", cost: 38,
     flavor: 'It drinks your pain and repays it in rage.', desc: 'Up to +45% sword damage as your HP falls.' },
   { id: 'idol', icon: '🪙', name: 'Golden Idol', cost: 26,
-    flavor: "The dungeon's greed, given form.", desc: '+60% gold from the slain.' },
+    flavor: "The dungeon's greed, given form.", desc: '+30% gold from the slain.' },
   { id: 'wind', icon: '🌬️', name: 'Windrunner Boots', cost: 34,
     flavor: 'The wind owes you a favour.', desc: 'Dash recharges 30% faster, longer invulnerability.' },
   { id: 'exec', icon: '🪓', name: "Executioner's Seal", cost: 38,
@@ -74,9 +74,9 @@ export function recompute(player) {
   if (L.armor) m.bonusHP = 18 * L.armor;
 
   const R = player.relics;
-  if (R.has('vampire')) m.lifestealHeal += 5;
+  if (R.has('vampire')) m.lifestealHeal += 2;
   if (R.has('stone')) m.damageReduction += 0.18;
-  if (R.has('idol')) m.goldMult *= 1.6;
+  if (R.has('idol')) m.goldMult *= 1.3;
   if (R.has('wind')) { m.dashCooldownMult *= 0.7; m.dashInvulnBonus += 0.15; }
   player.mods = m;
 }

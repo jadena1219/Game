@@ -269,9 +269,9 @@ async function boot() {
   document.getElementById('start-btn').addEventListener('click', () => game.beginIntro('knight'));
   document.getElementById('retry-btn').addEventListener('click', () => game.start('knight'));
   document.getElementById('win-btn').addEventListener('click', () => game.start('knight'));
-  // return to the title after a run
-  document.getElementById('go-menu-btn').addEventListener('click', () => ui.showScreen('title'));
-  document.getElementById('win-menu-btn').addEventListener('click', () => ui.showScreen('title'));
+  // return to the title after a run (resets game state so the corridor shows)
+  document.getElementById('go-menu-btn').addEventListener('click', () => game.toTitle());
+  document.getElementById('win-menu-btn').addEventListener('click', () => game.toTitle());
 }
 
 boot();

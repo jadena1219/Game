@@ -96,6 +96,16 @@ function drawFrame(spec, pose) {
 
   const oy = bob; // vertical body offset for walk bob
 
+  // ---- CAPE (behind everything) ----
+  if (spec.cape) {
+    const cp = hex(spec.cape), cpDk = shade(cp, 0.6), cpHi = shade(cp, 1.25);
+    g.rect(3, 7 + oy, 12, 22, cp);        // long drape hanging past the legs
+    g.rect(3, 7 + oy, 4, 22, cpHi);       // left edge catches light
+    g.rect(11, 7 + oy, 12, 22, cpDk);     // right edge in shadow
+    g.rect(5, 21, 10, 22, cpDk);          // lower fold
+    g.px(3, 23, cp); g.px(6, 22, cp); g.px(8, 23, cp); g.px(10, 22, cp); g.px(12, 23, cp); // ragged hem
+  }
+
   // ---- LEGS ----
   const legCol = spec.legs ? hex(spec.legs) : shade(body, 0.8);
   g.rect(5, 15 + oy, 6, 21 + lFoot, legCol);      // left leg
@@ -337,10 +347,10 @@ const CHARACTERS = {
     head: 'horns', horn: '#efe7d0', belt: '#3a2a18', weapon: 'club',
     club: '#5a3d22', eye: '#2a1810', scale: 1.5,
   },
-  miniboss: { // Dark Knight (level 5) — a towering, horned dread-knight
-    skin: '#9a98a4', body: '#1b1b23', detail: '#0b0b10', legs: '#131318',
-    head: 'helmet', helmHorns: true, horn: '#0d0d12', crest: '#c01818', emblem: '#c01818',
-    weapon: 'greatsword', blade: '#ff5050', guard: '#5a0e0e', eye: '#ff3030', scale: 3.4,
+  miniboss: { // Dark Knight (level 5) — a towering, caped, horned dread-knight in steel
+    skin: '#aaa8b4', body: '#3c3c48', detail: '#212129', legs: '#2b2b35',
+    head: 'helmet', helmHorns: true, horn: '#15151c', crest: '#d01818', emblem: '#d01818',
+    cape: '#5a0e14', weapon: 'greatsword', blade: '#ff5454', guard: '#5a0e0e', eye: '#ff3030', scale: 3.4,
   },
   boss: { // Demon Lord (level 10)
     skin: '#8e1f1f', body: '#5a1414', detail: '#2c0a0a', legs: '#3a0e0e',

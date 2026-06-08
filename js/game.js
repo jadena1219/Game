@@ -475,6 +475,18 @@ export class Game {
   }
 
   // ---------- flow ----------
+  // Return to the title. Must reset the game state (not just the DOM) so the
+  // canvas renders the title corridor again — otherwise the last scene (e.g. the
+  // victory) shows through behind the menu.
+  toTitle() {
+    this.state = 'title';
+    this.player = null;          // the title branch renders the corridor when there's no player
+    this.enemies = []; this.projectiles = []; this.allyProjectiles = []; this.effects = []; this.pickups = [];
+    this.interlude = null; this.interludeFade = null; this.introCut = null; this.campToast = null;
+    this.intro = null; this.sweep = null; this.transition = null; this.camp = null; this.bossKind = null;
+    this.ui.showScreen('title');
+  }
+
   // The cold open: the title lifts away and the knight walks on down the
   // corridor. An archway and a wide chamber scroll into view ahead; he steps
   // through the opening, and only then does Level 1 blend in beneath him.
@@ -677,8 +689,8 @@ export class Game {
     // gold: most enemies drop a little; bosses/tanks/elites drop a lot
     const coins = e.boss ? 12 : (e.elite ? 6 : (e.type === 'tank' ? 4 : (Math.random() < 0.8 ? 1 : 0)));
     for (let i = 0; i < coins; i++) drop('gold', e.boss ? 6 : (1 + (Math.random() < 0.3 ? 1 : 0)));
-    // health: rare from trash, guaranteed from elites/bosses
-    if (e.boss || e.elite || (e.type === 'tank' && Math.random() < 0.5) || Math.random() < 0.05) {
+    // health: bosses always; otherwise scarce, so big waves don't flood you with heals
+    if (e.boss || (e.elite && Math.random() < 0.4) || (e.type === 'tank' && Math.random() < 0.22) || Math.random() < 0.012) {
       drop('health', e.boss ? 30 : 14);
     }
   }
@@ -1151,11 +1163,12 @@ export class Game {
     if (il.phase === 'in') {
       if (il.t >= 0.6 || this._tapped) { il.phase = 'type'; il.t = 0; this._tapped = false; }
     } else if (il.phase === 'type') {
-      il.shown = Math.min(il.totalChars, il.shown + dt * 13);     // ~13 chars/sec — slow & ominous
-      if (this._tapped) { il.shown = il.totalChars; this._tapped = false; }  // tap = finish line
-      if (il.shown >= il.totalChars) { il.phase = 'hold'; il.t = 0; }
+      il.shown = Math.min(il.totalChars, il.shown + dt * 9);      // ~9 chars/sec — slow & ominous
+      if (this._tapped && il.t > 0.25) { il.shown = il.totalChars; this._tapped = false; }  // tap = finish line
+      if (il.shown >= il.totalChars) { il.phase = 'hold'; il.t = 0; this._tapped = false; }
     } else if (il.phase === 'hold') {
-      if (il.t >= 2.0 || this._tapped) {
+      // hold here forever — only a deliberate tap dismisses it
+      if (this._tapped && il.t > 0.25) {
         this.interlude = null; this._tapped = false;
         this.interludeFade = { t: 0, dur: 0.7 };
         this.openCamp();                                            // built under black; the fade reveals it
@@ -2063,9 +2076,9 @@ export class Game {
     const lines = il.wrapped;
     ctx.font = '100px "Silkscreen", monospace';
     let longest = 1; for (const l of lines) longest = Math.max(longest, ctx.measureText(l).width);
-    const sizeW = 100 * (W * 0.86) / longest;              // fill the width
-    const sizeH = (H * 0.6) / (lines.length * 1.5);        // …or the height, whichever's smaller
-    const size = Math.max(12, Math.min(sizeW, sizeH, 30));
+    const sizeW = 100 * (W * 0.78) / longest;              // fill the width
+    const sizeH = (H * 0.5) / (lines.length * 1.5);        // …or the height, whichever's smaller
+    const size = Math.max(11, Math.min(sizeW, sizeH, 22));
     ctx.font = `${size}px "Silkscreen", monospace`;
     const lh = size * 1.5, cy = H * 0.46 - (lines.length - 1) * lh / 2;
 
@@ -2481,25 +2494,29 @@ export class Game {
     }
   }
 
-  // A Souls-style boss bar pinned to the top of the screen while a boss lives.
+  // A big Souls-style boss bar near the bottom-centre while a boss lives.
   _drawBossBar(ctx) {
     if (this.state !== 'playing') return;
     const boss = this.enemies.find((e) => e.boss && !e.dead);
     if (!boss) return;
-    const W = this.vw, bw = Math.min(W * 0.74, 360), bx = (W - bw) / 2, by = 16;
+    const W = this.vw, H = this.vh;
+    const bw = Math.min(W * 0.82, 460), bx = (W - bw) / 2, bh = 15, by = H - 78;
     const hpf = Math.max(0, boss.hp / boss.maxHP);
     if (boss._hpShown == null) boss._hpShown = hpf;
     boss._hpShown += (hpf - boss._hpShown) * Math.min(1, 0.016 * 8);   // smooth drain
+    const name = (BOSS_NAMES[boss.type] || 'BOSS').toUpperCase();
     ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.65)'; this._roundRect(ctx, bx - 3, by - 3, bw + 6, 14, 4); ctx.fill();
-    ctx.fillStyle = '#2a0606'; ctx.fillRect(bx, by, bw, 8);
-    ctx.fillStyle = 'rgba(255,120,90,0.45)'; ctx.fillRect(bx, by, bw * boss._hpShown, 8);  // drain ghost
-    ctx.fillStyle = '#d8231a'; ctx.fillRect(bx, by, bw * hpf, 8);
-    ctx.fillStyle = 'rgba(255,150,120,0.6)'; ctx.fillRect(bx, by, bw * hpf, 2);
-    ctx.fillStyle = 'rgba(255,40,30,0.25)'; ctx.fillRect(bx - 1, by - 1, bw + 2, 10);  // edge bleed
-    ctx.font = '11px "Silkscreen", monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = '#000'; ctx.fillText((BOSS_NAMES[boss.type] || 'BOSS').toUpperCase(), W / 2 + 1, by + 27);
-    ctx.fillStyle = '#e9b8b2'; ctx.fillText((BOSS_NAMES[boss.type] || 'BOSS').toUpperCase(), W / 2, by + 26);
+    // name above the bar
+    ctx.font = '14px "Silkscreen", monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.strokeText(name, W / 2, by - 8);
+    ctx.fillStyle = '#e9b8b2'; ctx.fillText(name, W / 2, by - 8);
+    // frame + track
+    ctx.fillStyle = 'rgba(0,0,0,0.7)'; this._roundRect(ctx, bx - 4, by - 4, bw + 8, bh + 8, 5); ctx.fill();
+    ctx.strokeStyle = 'rgba(120,16,12,0.9)'; ctx.lineWidth = 2; this._roundRect(ctx, bx - 4, by - 4, bw + 8, bh + 8, 5); ctx.stroke();
+    ctx.fillStyle = '#2a0606'; ctx.fillRect(bx, by, bw, bh);
+    ctx.fillStyle = 'rgba(255,120,90,0.4)'; ctx.fillRect(bx, by, bw * boss._hpShown, bh);  // drain ghost
+    ctx.fillStyle = '#d8231a'; ctx.fillRect(bx, by, bw * hpf, bh);
+    ctx.fillStyle = 'rgba(255,160,130,0.6)'; ctx.fillRect(bx, by, bw * hpf, 3);             // top sheen
     ctx.restore();
   }
 

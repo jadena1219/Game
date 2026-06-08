@@ -893,8 +893,11 @@ export class Game {
 
   // ---------- swing ----------
   onSwing(player) {
-    this.shake = Math.max(this.shake, 3);
-    this.effects.push({ kind: 'swing', t: 0, dur: CONFIG.player.swingActive,
+    this.shake = Math.max(this.shake, 3.5);
+    const style = (player.hero && player.hero.swingStyle) || 'sweep';
+    // visual lives LONGER than the hit window so the slash actually reads on screen
+    const dur = style === 'stab' ? 0.2 : 0.32;
+    this.effects.push({ kind: 'swing', t: 0, dur, style,
       x: player.x, y: player.y, angle: player.facingAngle });
   }
 
@@ -2635,72 +2638,100 @@ export class Game {
     ctx.restore();
   }
 
+  // Build a tapered crescent (lens) Path2D: pinched to points at both ends, fat
+  // in the middle — the classic anime blade-trail shape. `u0..u1` lets the slash
+  // "wipe in" along the arc as it's drawn.
+  _crescentPath(a0, arc, rMid, thick, u0, u1) {
+    const path = new Path2D(), steps = 24;
+    for (let i = 0; i <= steps; i++) {
+      const u = u0 + (u1 - u0) * (i / steps), ang = a0 + u * arc;
+      const t = Math.sin(u * Math.PI), r = rMid + t * thick * 0.5;
+      const x = Math.cos(ang) * r, y = Math.sin(ang) * r;
+      i === 0 ? path.moveTo(x, y) : path.lineTo(x, y);
+    }
+    for (let i = steps; i >= 0; i--) {
+      const u = u0 + (u1 - u0) * (i / steps), ang = a0 + u * arc;
+      const t = Math.sin(u * Math.PI), r = rMid - t * thick * 0.5;
+      path.lineTo(Math.cos(ang) * r, Math.sin(ang) * r);
+    }
+    path.closePath();
+    return path;
+  }
+
   _drawSwing(ctx, fx) {
     const p = this.player;
-    const style = (p.hero && p.hero.swingStyle) || 'sweep';
+    const style = fx.style || (p.hero && p.hero.swingStyle) || 'sweep';
     const reach = p.reach;
     const arc = p.arcDeg * Math.PI / 180;
-    const prog = Math.min(1, fx.t / fx.dur);
-    const a = fx.angle, a0 = a - arc / 2, cur = a0 + prog * arc, fade = 1 - prog;
+    const a = fx.angle, a0 = a - arc / 2;
+    const life = fx.t / fx.dur;                          // 0..1 over the whole visual
+    const sweep = Math.min(1, fx.t / (fx.dur * 0.42));   // leading edge wipes in fast
+    const fade = life < 0.4 ? 1 : Math.max(0, 1 - (life - 0.4) / 0.6);
+    const cur = a0 + sweep * arc;
     ctx.save();
-    ctx.translate(p.x, p.y);
+    ctx.translate(fx.x, fx.y);                           // slash stays where it was swung
     ctx.lineCap = 'round';
+    ctx.globalCompositeOperation = 'lighter';            // additive glow over the dark dungeon
 
     if (style === 'stab') {
-      // Rogue: two quick darting dagger slashes along the facing direction
-      ctx.strokeStyle = `rgba(150,255,200,${0.75 * fade})`; ctx.lineWidth = 4;
-      for (const off of [-0.22, 0.22]) {
+      // Rogue: a pair of fast neon-green dagger streaks + a thin crescent flick
+      for (const off of [-0.16, 0.16]) {
         const aa = a + off;
+        const grd = ctx.createLinearGradient(Math.cos(aa) * reach * 0.25, Math.sin(aa) * reach * 0.25,
+          Math.cos(aa) * reach * 1.05, Math.sin(aa) * reach * 1.05);
+        grd.addColorStop(0, 'rgba(120,255,190,0)');
+        grd.addColorStop(0.6, `rgba(150,255,200,${0.85 * fade})`);
+        grd.addColorStop(1, `rgba(255,255,255,${0.95 * fade})`);
+        ctx.strokeStyle = grd; ctx.lineWidth = 5;
         ctx.beginPath();
-        ctx.moveTo(Math.cos(aa) * reach * 0.3, Math.sin(aa) * reach * 0.3);
-        ctx.lineTo(Math.cos(aa) * reach, Math.sin(aa) * reach);
+        ctx.moveTo(Math.cos(aa) * reach * 0.25, Math.sin(aa) * reach * 0.25);
+        ctx.lineTo(Math.cos(aa) * reach * 1.05, Math.sin(aa) * reach * 1.05);
         ctx.stroke();
       }
-      ctx.strokeStyle = `rgba(255,255,255,${0.9 * fade})`; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(0, 0, reach * 0.92, a - 0.26, a + 0.26); ctx.stroke();
-
-    } else if (style === 'slam') {
-      // Paladin: a heavy, crushing hammer arc + a bright impact crescent
-      ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, reach, a0, a + arc / 2); ctx.closePath();
-      ctx.fillStyle = 'rgba(255,206,110,0.12)'; ctx.fill();
-      ctx.strokeStyle = 'rgba(255,196,84,0.6)'; ctx.lineWidth = 18;
-      ctx.beginPath(); ctx.arc(0, 0, reach * 0.8, a0, cur); ctx.stroke();
-      ctx.strokeStyle = 'rgba(255,246,200,0.95)'; ctx.lineWidth = 6;
-      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(cur) * reach, Math.sin(cur) * reach); ctx.stroke();
-      if (prog > 0.55) {                    // crushing impact flare at full extension
-        const ia = 1 - (prog - 0.55) / 0.45;
-        ctx.strokeStyle = `rgba(255,170,50,${0.85 * ia})`; ctx.lineWidth = 6;
-        ctx.beginPath(); ctx.arc(0, 0, reach * 1.02, cur - 0.55, cur + 0.55); ctx.stroke();
-      }
+      ctx.fillStyle = `rgba(180,255,220,${0.5 * fade})`;
+      ctx.fill(this._crescentPath(a - 0.32, 0.64, reach * 0.94, reach * 0.16, 0, sweep));
 
     } else {
-      // Knight: a fast crescent cleave — a glowing blade-trail with a white-hot
-      // leading edge that whips around as the swing extends.
-      const head = cur;                                   // leading edge angle
-      const tail = a0 + Math.max(0, prog * arc - arc * 0.6);  // trail follows behind
-      const rO = reach, rI = reach * 0.46;
-      // a faint wide wash for the whoosh
-      ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, reach, a0, a + arc / 2); ctx.closePath();
-      ctx.fillStyle = `rgba(150,220,255,${0.06 * fade})`; ctx.fill();
-      // the crescent blade-trail (bright at the rim, clear inside)
+      // Knight (sweep) & Paladin (slam): a bold glowing crescent cleave.
+      const slam = style === 'slam';
+      const rMid = reach * 0.92;
+      // hot palette per class
+      const bloom = slam ? '120,80,20' : '60,150,255';
+      const mid   = slam ? '255,180,70' : '150,220,255';
+      // 1) origin flash — a quick radial pop where the swing begins
+      if (life < 0.28) {
+        const f = (1 - life / 0.28) * fade;
+        const rg = ctx.createRadialGradient(0, 0, 0, 0, 0, reach * 0.55);
+        rg.addColorStop(0, `rgba(${mid},${0.55 * f})`);
+        rg.addColorStop(1, `rgba(${mid},0)`);
+        ctx.fillStyle = rg;
+        ctx.beginPath(); ctx.arc(0, 0, reach * 0.55, 0, Math.PI * 2); ctx.fill();
+      }
+      // 2) fat soft bloom crescent
+      ctx.fillStyle = `rgba(${bloom},${0.22 * fade})`;
+      ctx.fill(this._crescentPath(a0, arc, rMid, reach * (slam ? 0.95 : 0.82), 0, sweep));
+      // 3) mid-tone glow crescent
+      ctx.fillStyle = `rgba(${mid},${0.36 * fade})`;
+      ctx.fill(this._crescentPath(a0, arc, rMid, reach * 0.52, 0, sweep));
+      // 4) white-hot core crescent
+      ctx.fillStyle = `rgba(255,255,255,${0.6 * fade})`;
+      ctx.fill(this._crescentPath(a0, arc, rMid, reach * 0.24, 0, sweep));
+      // 5) leading-edge gleam — the bright cutting edge + a tip spark
+      const eT = Math.sin(sweep * Math.PI);
+      const r0 = rMid - eT * reach * 0.42, r1 = rMid + eT * reach * 0.42;
+      ctx.strokeStyle = `rgba(255,255,255,${0.95 * fade})`; ctx.lineWidth = slam ? 6 : 4;
       ctx.beginPath();
-      ctx.arc(0, 0, rO, tail, head);
-      ctx.arc(0, 0, rI, head, tail, true);
-      ctx.closePath();
-      const g = ctx.createRadialGradient(0, 0, rI, 0, 0, rO);
-      g.addColorStop(0, 'rgba(190,233,255,0)');
-      g.addColorStop(0.65, `rgba(190,233,255,${0.32 * fade})`);
-      g.addColorStop(1, `rgba(255,255,255,${0.6 * fade})`);
-      ctx.fillStyle = g; ctx.fill();
-      // white-hot leading edge + tip gleam
-      ctx.strokeStyle = `rgba(255,255,255,${0.95 * fade})`; ctx.lineWidth = 5;
-      ctx.beginPath();
-      ctx.moveTo(Math.cos(head) * rI, Math.sin(head) * rI);
-      ctx.lineTo(Math.cos(head) * rO * 1.05, Math.sin(head) * rO * 1.05);
+      ctx.moveTo(Math.cos(cur) * r0, Math.sin(cur) * r0);
+      ctx.lineTo(Math.cos(cur) * r1 * 1.06, Math.sin(cur) * r1 * 1.06);
       ctx.stroke();
-      ctx.fillStyle = `rgba(255,255,255,${0.9 * fade})`;
-      ctx.beginPath(); ctx.arc(Math.cos(head) * rO, Math.sin(head) * rO, 3.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = `rgba(255,255,255,${0.95 * fade})`;
+      ctx.beginPath(); ctx.arc(Math.cos(cur) * r1, Math.sin(cur) * r1, slam ? 6 : 4.5, 0, Math.PI * 2); ctx.fill();
+      if (slam && sweep >= 1) {              // crushing ground-flare at full extension
+        ctx.strokeStyle = `rgba(255,150,40,${0.7 * fade})`; ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.arc(0, 0, reach * 1.05, a0 - 0.1, a + arc / 2 + 0.1); ctx.stroke();
+      }
     }
+    ctx.globalCompositeOperation = 'source-over';
     ctx.restore();
   }
 

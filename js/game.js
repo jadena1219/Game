@@ -769,7 +769,7 @@ export class Game {
   // Per-archetype death: each foe dies in its own characterful way.
   _spawnDeathFx(e) {
     const x = e.x, y = e.y, r = e.r, type = e.type;
-    let style = 'collapse', dur = 0.4;
+    let style = 'collapse', dur = 0.4, tintCol = null;
 
     if (e.boss) {                              // bosses: a violent, ringing death
       style = 'collapse'; dur = 0.95;
@@ -783,10 +783,13 @@ export class Game {
     } else if (type === 'chaser') {            // skeleton: clatters apart into bones
       this._gib(x, y, '#ddd6c2', 9, 190, { dur: 0.6, size: 2 + Math.random() * 3, shape: 'bone' });
       this._puff(x, y - 2, '#b6b09c', 3, r * 0.5, { r1: r * 0.8, dur: 0.35 });
-    } else if (type === 'swarmer') {           // imp: bursts into a puff of foul ash
-      style = 'poof'; dur = 0.28;
-      this._puff(x, y - 2, '#7a3a96', 5, r * 0.4, { r0: 3, r1: r * 1.2, dur: 0.42 });
-      this._gib(x, y, '#c060e0', 5, 160, { dur: 0.34, size: 2 });
+    } else if (type === 'swarmer') {           // imp: ruptures into crimson cinders + dark blood-smoke
+      style = 'poof'; dur = 0.26; tintCol = '#ff8a5a';
+      this._puff(x, y - 2, '#3a0c10', 5, r * 0.5, { r0: 3, r1: r * 1.3, dur: 0.4 });
+      this.addEffect({ kind: 'ring', x, y: y - r * 0.3, r: r * 1.5, color: '#ff5a30', t: 0, dur: 0.26 });
+      for (let i = 0; i < 8; i++) this._mote(x + (Math.random() - 0.5) * r, y - r * 0.3 + (Math.random() - 0.5) * r,
+        Math.random() < 0.5 ? '#ff8a3a' : '#ff3a28',
+        { vx: (Math.random() - 0.5) * 150, vy: -(20 + Math.random() * 120), g: 240, r: 1.5 + Math.random() * 1.6, dur: 0.35 + Math.random() * 0.3 });
     } else if (type === 'tank') {              // ogre: topples with a heavy dust-burst
       style = 'topple'; dur = 0.62;
       this._puff(x, y + r * 0.4, '#5a5048', 9, r * 0.9, { r0: 6, r1: r * 1.7, dur: 0.6 });
@@ -798,22 +801,29 @@ export class Game {
       this.addEffect({ kind: 'ring', x, y, r: r * 2.2, color: '#9fd0ff', t: 0, dur: 0.4 });
       this._gib(x, y, '#7fd0ff', 10, 230, { dur: 0.55, size: 2 + Math.random() * 2, shape: 'wisp' });
       this._puff(x, y, '#5a8adf', 4, r * 0.3, { r1: r * 0.9, dur: 0.5 });
-    } else if (type === 'bomber') {            // bomber: the blast does the talking; toss fire bits
-      style = 'poof'; dur = 0.24;
-      this._gib(x, y, '#ff9a3a', 8, 250, { dur: 0.5, size: 2 + Math.random() * 3 });
+    } else if (type === 'bomber') {            // bomber: the blast does the talking; hurl blazing fire-bits
+      style = 'poof'; dur = 0.24; tintCol = '#ffb060';
+      this._gib(x, y, '#ff9a3a', 9, 260, { dur: 0.5, size: 2 + Math.random() * 3 });
+      for (let i = 0; i < 6; i++) this._mote(x, y - r * 0.3, Math.random() < 0.5 ? '#ffd36b' : '#ff6a2a',
+        { vx: (Math.random() - 0.5) * 160, vy: -(30 + Math.random() * 120), g: 220, r: 1.5 + Math.random() * 2, dur: 0.4 });
     } else {
       this._gib(x, y, '#cfd0da', 7, 180, { dur: 0.5 });
     }
 
-    // elites pop a bright shock in their affix colour
+    // elites die LOUD — an affix-coloured shockwave, a flash ring, a fan of
+    // glowing motes + debris. You feel the threat extinguish.
     if (e.elite) {
       const col = (ELITE_AFFIXES[e.elite] && ELITE_AFFIXES[e.elite].color) || '#fff';
-      this.addEffect({ kind: 'ring', x, y, r: r * 2.4, color: col, t: 0, dur: 0.45 });
-      this._gib(x, y, col, 8, 240, { dur: 0.6, size: 2 + Math.random() * 2 });
+      this.addEffect({ kind: 'ring', x, y, r: r * 2.0, color: '#ffffff', t: 0, dur: 0.3 });
+      this.addEffect({ kind: 'ring', x, y, r: r * 3.2, color: col, t: 0, dur: 0.55 });
+      this._gib(x, y, col, 12, 300, { dur: 0.7, size: 2 + Math.random() * 3 });
+      for (let i = 0; i < 14; i++) { const a = Math.random() * 6.28, s = 60 + Math.random() * 200;
+        this._mote(x, y - r * 0.4, col, { vx: Math.cos(a) * s, vy: Math.sin(a) * s - 30, g: 160, drag: 0.97, r: 1.6 + Math.random() * 2, dur: 0.5 + Math.random() * 0.4 }); }
+      this.shake = Math.max(this.shake, 6);
     }
 
     // the dissolving / animating corpse sprite
-    this.effects.push({ kind: 'death', sprite: e.sprite, x, y, r, style,
+    this.effects.push({ kind: 'death', sprite: e.sprite, x, y, r, style, tintCol,
       faceLeft: e.faceLeft, boss: e.boss, t: 0, dur });
 
     // rising soul embers / wisps
@@ -930,7 +940,7 @@ export class Game {
       // empowered "elite" foe — forced by an event ambush, else rare & depth-scaled
       if (!e.boss) {
         if (this.forceElite > 0) { this.forceElite--; this._eliteify(e); }
-        else if (this.level >= 3 && Math.random() < Math.min(0.42, 0.04 + this.level * 0.022)) this._eliteify(e);
+        else if (this.level >= 3 && Math.random() < Math.min(0.16, 0.015 + this.level * 0.008)) this._eliteify(e);
       }
       this.enemies.push(e);
       if (type === 'boss' || type === 'miniboss') break; // a boss is its own batch
@@ -1065,6 +1075,72 @@ export class Game {
     }
   }
 
+  // A single drifting glow-mote (used for elite auras, ember rain, frost mist...).
+  _mote(x, y, color, opts = {}) {
+    this.effects.push({ kind: 'mote', x, y,
+      vx: opts.vx ?? 0, vy: opts.vy ?? 0, g: opts.g ?? 0, drag: opts.drag ?? 1,
+      r: opts.r ?? 2, color, glow: opts.glow !== false, twinkle: opts.twinkle || 0,
+      t: 0, dur: opts.dur ?? (0.5 + Math.random() * 0.5) });
+  }
+
+  // Ambient particle breath for every elite on screen — each affix exhales its
+  // own threat: fire-rain, frost-mist, blood-drip, sparks. Throttled by sdt so
+  // it scales with framerate, not enemy count.
+  _emitAuras(sdt) {
+    const rate = (per) => Math.random() < per * sdt * 60;   // ~per particles/frame@60
+    // the blessed knight sheds slow rising motes of holy light
+    const p = this.player;
+    if (p && this.furyReady && this.countdown <= 0 && rate(0.6)) {
+      this._mote(p.x + (Math.random() - 0.5) * p.r * 1.6, p.y - 6 - Math.random() * 10,
+        Math.random() < 0.5 ? '#ffe9a8' : '#ffd36b',
+        { vx: (Math.random() - 0.5) * 10, vy: -(18 + Math.random() * 24), g: -10, r: 1.4 + Math.random() * 1.4, twinkle: 1, dur: 0.6 + Math.random() * 0.4 });
+    }
+    for (const e of this.enemies) {
+      if (e.dead || e.boss) continue;
+      const x = e.x, y = e.y - e.r * 0.4, r = e.r;
+      if (e.type === 'bomber') {                 // a hissing, smoking fuse
+        if (rate(0.5)) this._mote(x + (Math.random() - 0.5) * r, y - r * 0.8,
+          Math.random() < 0.5 ? '#ffd36b' : '#ff7a2a', { vy: -(20 + Math.random() * 30), g: -40, r: 1.5 + Math.random(), dur: 0.4 });
+        continue;
+      }
+      if (!e.elite) continue;
+      switch (e.elite) {
+        case 'explosive': {                      // smouldering — rains embers, glows hot
+          if (rate(0.9)) this._mote(x + (Math.random() - 0.5) * r * 1.4, y + (Math.random() - 0.5) * r,
+            Math.random() < 0.4 ? '#ffe08a' : (Math.random() < 0.6 ? '#ff7a2a' : '#e0401a'),
+            { vx: (Math.random() - 0.5) * 20, vy: -(25 + Math.random() * 45), g: -30, r: 1.5 + Math.random() * 1.8, dur: 0.5 + Math.random() * 0.4 });
+          break;
+        }
+        case 'icy': {                            // a slow, cold frost-mist + ice motes
+          if (rate(0.7)) this._mote(x + (Math.random() - 0.5) * r * 1.8, y + (Math.random() - 0.5) * r * 1.2,
+            Math.random() < 0.5 ? '#dffaff' : '#9fe0ff',
+            { vx: (Math.random() - 0.5) * 12, vy: (Math.random() - 0.3) * 14, drag: 0.95, r: 1.2 + Math.random() * 1.6, twinkle: 1, dur: 0.8 + Math.random() * 0.6 });
+          break;
+        }
+        case 'vampiric': {                       // weeps blood, pulses a dark heart
+          if (rate(0.5)) this.effects.push({ kind: 'gib', x: x + (Math.random() - 0.5) * r * 1.2, y: y + Math.random() * r * 0.5,
+            vx: (Math.random() - 0.5) * 16, vy: 10 + Math.random() * 30, g: 380, size: 1.5 + Math.random() * 1.5,
+            rot: 0, vr: 0, color: Math.random() < 0.5 ? '#8a1518' : '#5a0c10', shape: 'rect', t: 0, dur: 0.5 + Math.random() * 0.3 });
+          if (rate(0.5)) this._mote(x + (Math.random() - 0.5) * r * 2.4, y + (Math.random() - 0.5) * r * 2,
+            '#d8413a', { vx: 0, vy: 0, r: 1.4 + Math.random(), dur: 0.4, twinkle: 1 });
+          break;
+        }
+        case 'swift': {                          // crackling, electric — darting sparks
+          if (rate(0.8)) { const a = Math.random() * 6.28, s = 40 + Math.random() * 90;
+            this.effects.push({ kind: 'spark', x: x + (Math.random() - 0.5) * r, y: y + (Math.random() - 0.5) * r,
+              vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, dur: 0.18 + Math.random() * 0.12, streak: true, col: '#bfffff' }); }
+          break;
+        }
+        case 'armored': {                        // heavy — occasional grinding spark + dust
+          if (rate(0.35)) { const a = Math.random() * 6.28, s = 30 + Math.random() * 60;
+            this.effects.push({ kind: 'spark', x: x + Math.cos(a) * r, y: y + Math.sin(a) * r,
+              vx: Math.cos(a) * s, vy: Math.sin(a) * s - 20, t: 0, dur: 0.25, col: '#fff0d0' }); }
+          break;
+        }
+      }
+    }
+  }
+
   // Fury button: a fixed control centred at the bottom, between move + swing.
   _updateFuryButton() {
     const ib = this.input.furyBtn || (this.input.furyBtn = { x: 0, y: 0, r: 0, visible: false });
@@ -1138,6 +1214,7 @@ export class Game {
     this._spawn(sdt);
 
     for (const e of this.enemies) e.update(sdt, this);
+    this._emitAuras(sdt);
     this._updateProjAndFx(sdt);
     this._updatePickups(sdt);
     this._separate();
@@ -1177,6 +1254,7 @@ export class Game {
       else if (fx.kind === 'dmg') { fx.y += fx.vy * sdt; fx.vy *= 0.9; }
       else if (fx.kind === 'gib') { fx.vy += (fx.g || 540) * sdt; fx.x += fx.vx * sdt; fx.y += fx.vy * sdt; fx.vx *= 0.985; fx.rot += fx.vr * sdt; }
       else if (fx.kind === 'puff') { fx.x += fx.vx * sdt; fx.y += fx.vy * sdt; fx.vx *= 0.92; fx.vy *= 0.92; }
+      else if (fx.kind === 'mote') { fx.vy += (fx.g || 0) * sdt; fx.x += fx.vx * sdt; fx.y += fx.vy * sdt; const d = fx.drag || 1; fx.vx *= d; fx.vy *= d; }
     }
     this.effects = this.effects.filter((f) => f.t < f.dur);
   }
@@ -1648,6 +1726,7 @@ export class Game {
     for (const fb of this.allyProjectiles) this._drawFireball(ctx, fb);
     for (const fx of this.effects) this._drawAbilityFx(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'gib') this._drawGib(ctx, fx);
+    for (const fx of this.effects) if (fx.kind === 'mote') this._drawMote(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'slash') this._drawSlashMark(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'hitring') this._drawHitRing(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'spark') this._drawSpark(ctx, fx);
@@ -2250,6 +2329,28 @@ export class Game {
     ctx.restore();
   }
 
+  // A glowing additive mote — soft halo + bright core, with optional twinkle.
+  _drawMote(ctx, fx) {
+    const prog = fx.t / fx.dur;
+    let a = prog < 0.2 ? prog / 0.2 : 1 - (prog - 0.2) / 0.8;   // ease in, fade out
+    if (fx.twinkle) a *= 0.55 + 0.45 * Math.sin(this.time * 22 + fx.x);
+    a = Math.max(0, a);
+    const r = fx.r || 2;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    if (fx.glow) {
+      const g = ctx.createRadialGradient(fx.x, fx.y, 0, fx.x, fx.y, r * 3);
+      g.addColorStop(0, fx.color); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.globalAlpha = a * 0.5;
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(fx.x, fx.y, r * 3, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = a;
+    ctx.fillStyle = fx.color;
+    ctx.beginPath(); ctx.arc(fx.x, fx.y, r, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
   _drawDeathFx(ctx, fx) {
     const prog = fx.t / fx.dur, style = fx.style || 'collapse';
     ctx.save();
@@ -2258,7 +2359,7 @@ export class Game {
     if (style === 'poof') {                    // imps/bombers: balloon out into smoke
       const s = 1 + prog * 0.45;
       ctx.globalAlpha = (1 - prog) * 0.85; ctx.scale(s, s);
-      tint = { color: '#caa0e0', a: 0.4 + prog * 0.6 };
+      tint = { color: fx.tintCol || '#caa0e0', a: 0.4 + prog * 0.6 };
     } else if (style === 'topple') {           // ogres: lean over and fall
       ctx.translate(0, fx.r * 0.45 * prog);
       ctx.rotate(prog * 0.8 * (fx.faceLeft ? 1 : -1));
@@ -2558,21 +2659,18 @@ export class Game {
   _drawPlayer(ctx) {
     const p = this.player;
     const frame = pickFrame(p, this.time);
-    // Fury charged: a cool animated purple aura + outline around the knight
+    // Fury charged: the knight is BLESSED — a soft holy halo + a thin glowing
+    // gold rim traced around the body (a real silhouette outline, not a square).
     if (this.furyReady && this.state === 'playing') {
       const t = this.time, pulse = 0.5 + 0.5 * Math.sin(t * 6);
       ctx.save();
-      const g = ctx.createRadialGradient(p.x, p.y - 18, 4, p.x, p.y - 18, 46);
-      g.addColorStop(0, `rgba(170,110,255,${0.28 + 0.18 * pulse})`);
-      g.addColorStop(1, 'rgba(140,80,230,0)');
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y - 18, 46, 0, Math.PI * 2); ctx.fill();
-      // purple silhouette offset around the sprite = glowing outline
-      const off = 1.5 + pulse;
-      const aura = { color: '#c89aff', a: 0.55 + 0.35 * pulse };
-      for (const [dx, dy] of [[off, 0], [-off, 0], [0, off], [0, -off]]) {
-        drawSprite(ctx, p.sprite, frame, p.x + dx, p.y + dy, p.faceLeft, 1, aura);
-      }
+      // warm radial halo behind the body
+      const g = ctx.createRadialGradient(p.x, p.y - 18, 4, p.x, p.y - 18, 44);
+      g.addColorStop(0, `rgba(255,224,150,${0.18 + 0.12 * pulse})`);
+      g.addColorStop(1, 'rgba(255,200,90,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y - 18, 44, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
+      this._drawBlessedRim(ctx, p, frame, pulse);
     }
     if (p.invuln > 0 && Math.floor(this.time * 20) % 2 === 0 && p.flash <= 0) {
       ctx.globalAlpha = 0.6;   // blink during i-frames
@@ -2581,6 +2679,35 @@ export class Game {
       : (p.slowT > 0 ? { color: '#9fe0ff', a: 0.45 } : null);
     drawSprite(ctx, p.sprite, frame, p.x, p.y, p.faceLeft, 1, tint);
     ctx.globalAlpha = 1;
+  }
+
+  // Render the hero sprite to a transparent offscreen, tint it solid gold (the
+  // silhouette mask is correct there), then blit it offset + blurred behind the
+  // real sprite — leaving only a glowing gold rim showing: a "blessed" outline.
+  _drawBlessedRim(ctx, p, frame, pulse) {
+    const AW = 120, AH = 140, PAD = 10;
+    if (!this._auraCv) {
+      this._auraCv = (typeof OffscreenCanvas !== 'undefined')
+        ? new OffscreenCanvas(AW, AH) : document.createElement('canvas');
+      this._auraCv.width = AW; this._auraCv.height = AH;
+      this._auraCx = this._auraCv.getContext('2d');
+    }
+    const acx = this._auraCx;
+    acx.setTransform(1, 0, 0, 1, 0, 0);
+    acx.clearRect(0, 0, AW, AH);
+    acx.imageSmoothingEnabled = false;
+    // solid gold silhouette on a transparent backdrop (source-atop masks cleanly here)
+    drawSprite(acx, p.sprite, frame, AW / 2, AH - PAD, p.faceLeft, 1, { color: '#ffe9a8', a: 1 });
+    const destX = p.x - AW / 2, destY = p.y - (AH - PAD);
+    const grow = 1.4 + pulse;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.5 + 0.3 * pulse;
+    ctx.shadowColor = '#ffd86a'; ctx.shadowBlur = 7 + 5 * pulse;
+    for (const [dx, dy] of [[grow, 0], [-grow, 0], [0, grow], [0, -grow]]) {
+      ctx.drawImage(this._auraCv, destX + dx, destY + dy);
+    }
+    ctx.restore();
   }
 
   _drawEnemy(ctx, e) {
@@ -2623,25 +2750,52 @@ export class Game {
     }
     // elite aura + bomber fuse-glow
     if ((e.elite || e.type === 'bomber') && !e.boss) {
+      const isElite = !!e.elite;
       const col = e.affix ? e.affix.color : '#ff7a2a';
-      const pulse = 0.5 + 0.5 * Math.sin(this.time * (e.type === 'bomber' ? 9 : 4) + e.x);
-      const rr = Math.round(e.r * 2.2);
+      const pulse = 0.5 + 0.5 * Math.sin(this.time * (e.type === 'bomber' ? 9 : 3.2) + e.x);
+      // soft radial ground glow (cached gradient)
+      const rr = Math.round(e.r * (isElite ? 2.5 : 2.0));
       const cache = this._glowCache || (this._glowCache = new Map());
       const key = rr + '|' + col;
       let g = cache.get(key);
-      if (!g) {
-        g = ctx.createRadialGradient(0, 0, 0, 0, 0, rr);
-        g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)');
-        cache.set(key, g);
-      }
-      const ay = e.y - e.r * 0.5;
-      ctx.save(); ctx.globalAlpha = 0.3 + 0.2 * pulse; ctx.fillStyle = g;
-      ctx.translate(e.x, ay); ctx.beginPath(); ctx.arc(0, 0, rr, 0, Math.PI * 2); ctx.fill();
+      if (!g) { g = ctx.createRadialGradient(0, 0, 0, 0, 0, rr); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)'); cache.set(key, g); }
+      ctx.save();
+      ctx.globalAlpha = (isElite ? 0.22 : 0.3) + 0.18 * pulse; ctx.fillStyle = g;
+      ctx.translate(e.x, e.y - e.r * 0.5); ctx.beginPath(); ctx.arc(0, 0, rr, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
+      if (isElite) {
+        // Frostbound chills the very ground it stands on
+        if (e.elite === 'icy') {
+          ctx.save(); ctx.globalAlpha = 0.18 + 0.1 * pulse; ctx.fillStyle = col;
+          ctx.beginPath(); ctx.ellipse(e.x, e.y + 5, e.r * 1.5, e.r * 0.55, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        }
+        // a pulsing consecrated ring at the feet
+        ctx.save();
+        ctx.globalAlpha = 0.3 + 0.3 * pulse; ctx.strokeStyle = col; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.ellipse(e.x, e.y + 4, e.r * 1.3, e.r * 0.52, 0, 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+        // three glowing motes orbiting the body — the unmistakable elite signature
+        const t = this.time * 1.8 + (e.auraT || 0);
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < 3; i++) {
+          const a = t + i * (Math.PI * 2 / 3);
+          const ox = e.x + Math.cos(a) * e.r * 1.5;
+          const oy = (e.y - e.r * 0.8) + Math.sin(a) * e.r * 0.62;
+          const mr = 2.6 + 0.8 * Math.sin(t * 3 + i);
+          const gg = ctx.createRadialGradient(ox, oy, 0, ox, oy, mr * 3);
+          gg.addColorStop(0, col); gg.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.globalAlpha = 0.85; ctx.fillStyle = gg;
+          ctx.beginPath(); ctx.arc(ox, oy, mr * 3, 0, Math.PI * 2); ctx.fill();
+          ctx.globalAlpha = 1; ctx.fillStyle = '#ffffff';
+          ctx.beginPath(); ctx.arc(ox, oy, mr * 0.55, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.restore();
+      }
     }
     const tint = e.flash > 0 ? { color: '#ffffff', a: 0.7 }
       : (e.state === 'windup' || e.state === 'special' ? { color: '#ff4040', a: 0.5 }
-      : (e.elite ? { color: e.affix.color, a: 0.28 } : null));
+      : (e.elite ? { color: e.affix.color, a: 0.16 } : null));
     drawSprite(ctx, e.sprite, frame, e.x, e.y, e.faceLeft, 1, tint);
     // small floating HP bar for tanks & elites (bosses use the big top bar)
     if (!e.boss && (e.type === 'tank' || e.elite)) {

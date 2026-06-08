@@ -195,9 +195,10 @@ export class Enemy {
   // Empower a regular enemy with an elite affix.
   applyElite(key, def) {
     this.elite = key; this.affix = def;
-    this.maxHP = Math.round(this.maxHP * (def.hp || 2.2)); this.hp = this.maxHP;
-    this.damage *= 1.25; this.cdmg = this.damage;
-    this.r = Math.round(this.r * 1.16);
+    this.maxHP = Math.round(this.maxHP * (def.hp || 2.4)); this.hp = this.maxHP;
+    this.damage *= 1.5; this.cdmg = this.damage;       // elites hit noticeably harder
+    this.r = Math.round(this.r * 1.24);                 // and loom larger
+    this.auraT = Math.random() * 6.28;                  // phase for orbiting aura motes
     if (def.speed) this.speed *= def.speed;
     if (def.armor) this.armor = def.armor;
   }

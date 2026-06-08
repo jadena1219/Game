@@ -649,7 +649,7 @@ export class Game {
             if (o === e || p.hitThisSwing.has(o)) continue;
             const a = Math.atan2(o.y - e.y, o.x - e.x);
             const sk = 200 * this._kbResist(o);
-            this.hitEnemy(o, dmg * 0.4, Math.cos(a) * sk, Math.sin(a) * sk, 'ability');
+            this.hitEnemy(o, dmg * 0.32, Math.cos(a) * sk, Math.sin(a) * sk, 'ability');
             p.hitThisSwing.add(o);
           }
           this.hitStop = Math.max(this.hitStop, 0.04);

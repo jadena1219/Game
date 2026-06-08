@@ -1634,8 +1634,12 @@ export class Game {
     // beyond which a wide open chamber waits. In the title it runs forever.
     const endSx = (this.state === 'intro' && this.introEnd != null) ? this.introEnd - scroll : Infinity;
 
-    // open chamber first (behind the arch), then the corridor clipped to the arch
-    if (endSx < W) this._drawOpening(ctx, endSx, top, bot);
+    // open chamber first (behind the arch), then the corridor clipped to the arch.
+    // The chamber is BAKED once and blitted, so its flagstone grime never flickers.
+    if (endSx < W) {
+      if (!this.openingBg || this._openingW !== W || this._openingH !== H) this._buildOpening();
+      ctx.drawImage(this.openingBg, Math.round(endSx), 0);
+    }
     ctx.save();
     ctx.beginPath(); ctx.rect(0, 0, Math.max(0, Math.min(W, endSx)), H); ctx.clip();
     for (let x = -off; x < W + SEG; x += SEG) ctx.drawImage(this.tunnelStrip, Math.round(x), 0);
@@ -1692,34 +1696,74 @@ export class Game {
     ctx.restore();   // end push-in
   }
 
-  // The chamber beyond the corridor mouth: a wide, dark catacomb floor that
-  // opens up taller than the passage and fades into depth — so when Level 1
-  // dissolves in over it, he's already standing in an open space.
-  _drawOpening(ctx, sx, top, bot) {
+  // Bake the chamber beyond the corridor mouth ONCE: a wide, dark catacomb floor
+  // that opens up taller than the passage and fades into depth, framed by stone
+  // jambs and a smashed, rotting door — so when Level 1 dissolves in over it, he
+  // is already standing in a ruined open space. Baking kills the live-paint flicker.
+  _buildOpening() {
     const W = this.vw, H = this.vh, b = biomeForLevel(1);
+    const { top, bot } = this._tunnel;
     const oTop = Math.round(H * 0.12), oBot = Math.round(H * 0.95);
-    sx = Math.max(0, sx);
-    ctx.save();
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const g = c.getContext('2d');
     // chamber floor
-    const grd = ctx.createLinearGradient(0, oTop, 0, oBot);
+    const grd = g.createLinearGradient(0, oTop, 0, oBot);
     grd.addColorStop(0, b.ground[0]); grd.addColorStop(1, b.ground[1]);
-    ctx.fillStyle = grd; ctx.fillRect(sx, oTop, W - sx, oBot - oTop);
-    if (b.detail) {                                        // a little flagstone grime, clipped to the room
-      ctx.save(); ctx.beginPath(); ctx.rect(sx, oTop, W - sx, oBot - oTop); ctx.clip();
-      ctx.translate(sx - 40, oTop); b.detail(ctx, W - sx + 80, oBot - oTop); ctx.restore();
+    g.fillStyle = grd; g.fillRect(0, oTop, W, oBot - oTop);
+    if (b.detail) {                                        // flagstone grime — baked, so it never flickers
+      g.save(); g.beginPath(); g.rect(0, oTop, W, oBot - oTop); g.clip();
+      g.translate(0, oTop); b.detail(g, W, oBot - oTop); g.restore();
     }
     // depth: the far side of the room sinks into black
-    const dg = ctx.createLinearGradient(sx, 0, W, 0);
-    dg.addColorStop(0, 'rgba(0,0,0,0)'); dg.addColorStop(1, 'rgba(2,1,6,0.9)');
-    ctx.fillStyle = dg; ctx.fillRect(sx, oTop, W - sx, oBot - oTop);
-    // the corridor mouth: stone jambs above & below the passage opening
-    ctx.fillStyle = b.wall;
-    ctx.fillRect(sx - 7, 0, 16, top + 6);
-    ctx.fillRect(sx - 7, bot - 6, 16, H - bot + 6);
-    ctx.fillStyle = b.cap;
-    ctx.fillRect(sx - 9, top - 3, 20, 7);
-    ctx.fillRect(sx - 9, bot - 4, 20, 7);
-    ctx.restore();
+    const dg = g.createLinearGradient(0, 0, W, 0);
+    dg.addColorStop(0, 'rgba(0,0,0,0)'); dg.addColorStop(0.6, 'rgba(2,1,6,0.5)'); dg.addColorStop(1, 'rgba(2,1,6,0.96)');
+    g.fillStyle = dg; g.fillRect(0, oTop, W, oBot - oTop);
+    // stone jambs above & below the passage opening (continue the corridor walls)
+    g.fillStyle = b.wall; g.fillRect(0, 0, 16, top + 6); g.fillRect(0, bot - 6, 16, H - bot + 6);
+    g.fillStyle = b.cap; g.fillRect(0, top - 3, 20, 7); g.fillRect(0, bot - 4, 20, 7);
+    this._bakeRuinedDoor(g, top, bot);
+    this.openingBg = c; this._openingW = W; this._openingH = H;
+  }
+
+  // A long-rotted wooden door, long since broken inward — splintered planks
+  // still hang from the lintel and jut from the sill, the middle smashed open,
+  // debris scattered across the threshold. We're entering a sealed, ruined place.
+  _bakeRuinedDoor(g, top, bot) {
+    const dh = bot - top, woodDk = '#241a0e', wood = '#3a2a18', woodHi = '#4d3a22';
+    const iron = '#2b2b33', rivet = '#454552';
+    const plank = (x, y, w, h, splinterDown) => {
+      g.fillStyle = wood; g.fillRect(x, y, w, h);
+      g.fillStyle = woodHi; g.fillRect(x, y, 2, h);                 // grain highlight
+      g.fillStyle = woodDk; g.fillRect(x + w - 2, y, 2, h);         // grain shadow
+      // jagged splintered break at one end
+      const sy = splinterDown ? y + h : y;
+      g.fillStyle = wood;
+      for (let i = 0; i < w; i += 2) {
+        const len = (3 + ((i * 7 + x) % 5)) * (splinterDown ? 1 : -1);
+        g.fillRect(x + i, splinterDown ? sy : sy + len, 2, Math.abs(len));
+      }
+    };
+    g.save();
+    // planks hanging down from the top lintel, broken at the bottom
+    plank(3, top, 7, dh * 0.46, true);
+    plank(12, top, 7, dh * 0.30, true);
+    plank(21, top, 6, dh * 0.52, true);
+    // an iron band bracing the hanging planks, with rivets
+    g.fillStyle = iron; g.fillRect(2, top + dh * 0.16, 26, 4);
+    g.fillStyle = rivet; g.fillRect(4, top + dh * 0.16 + 1, 2, 2); g.fillRect(24, top + dh * 0.16 + 1, 2, 2);
+    // stub planks rising from the bottom sill, broken at the top
+    plank(5, bot - dh * 0.34, 7, dh * 0.34, false);
+    plank(20, bot - dh * 0.22, 6, dh * 0.22, false);
+    // a plank fallen across the gap at an angle
+    g.translate(15, top + dh * 0.5); g.rotate(0.5);
+    g.fillStyle = woodDk; g.fillRect(-3, -2, 30, 6);
+    g.fillStyle = wood; g.fillRect(-3, -2, 30, 2);
+    g.restore();
+    // splinters & debris scattered on the floor just inside the threshold
+    g.fillStyle = woodDk;
+    const debris = [[30, top + dh * 0.62, 5, 2], [40, bot - dh * 0.3, 6, 2], [26, bot - 8, 4, 2],
+      [48, top + dh * 0.5, 3, 2], [34, top + dh * 0.4, 4, 2]];
+    for (const [x, y, w, h] of debris) { g.fillRect(x, y, w, h); g.fillStyle = wood; g.fillRect(x, y, w, 1); g.fillStyle = woodDk; }
   }
 
   _tunnelFlame(ctx, x, y, world) {

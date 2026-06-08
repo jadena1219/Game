@@ -220,6 +220,84 @@ export class Game {
     ctx.restore();
   }
 
+  // ---- camp room props ----
+  _drawCampFloor(ctx) {
+    const t = this.camp.t;
+    // glowing descent door at the bottom wall
+    const d = this.camp.door, pulse = 0.7 + 0.3 * Math.sin(t * 3);
+    ctx.save();
+    const g = ctx.createRadialGradient(d.x, d.y, 4, d.x, d.y, 60);
+    g.addColorStop(0, `rgba(210,240,255,${0.9 * pulse})`);
+    g.addColorStop(0.5, `rgba(150,210,255,${0.45 * pulse})`);
+    g.addColorStop(1, 'rgba(120,180,255,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(d.x, d.y, 46, 54, 0, 0, Math.PI * 2); ctx.fill();
+    // archway frame
+    ctx.strokeStyle = `rgba(220,245,255,${pulse})`; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(d.x - 22, d.y + 24); ctx.lineTo(d.x - 22, d.y - 10);
+    ctx.arc(d.x, d.y - 10, 22, Math.PI, 0); ctx.lineTo(d.x + 22, d.y + 24); ctx.stroke();
+    // bright core
+    ctx.fillStyle = `rgba(255,255,255,${0.5 * pulse})`;
+    ctx.beginPath(); ctx.ellipse(d.x, d.y + 4, 14, 24, 0, 0, Math.PI * 2); ctx.fill();
+    // rising sparks
+    for (let i = 0; i < 4; i++) {
+      const yy = d.y + 20 - ((t * 30 + i * 18) % 50);
+      ctx.fillStyle = `rgba(210,240,255,${0.6 * pulse})`;
+      ctx.fillRect(d.x - 16 + ((i * 9 + t * 14) % 32), yy, 2, 2);
+    }
+    ctx.restore();
+
+    // the sorcerer's table
+    const s = this.camp.sorcerer, tx = s.x, ty = s.y + 20;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(tx, ty + 8, 30, 8, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#4a3320'; ctx.fillRect(tx - 26, ty - 4, 52, 12);       // top
+    ctx.fillStyle = '#33230f'; ctx.fillRect(tx - 26, ty + 4, 52, 4);
+    ctx.fillStyle = '#3a2818'; ctx.fillRect(tx - 22, ty + 8, 4, 12); ctx.fillRect(tx + 18, ty + 8, 4, 12); // legs
+    // wares on the table: candle + potions
+    ctx.fillStyle = '#caa54a'; ctx.fillRect(tx - 20, ty - 9, 3, 5);
+    const fl = 0.6 + 0.4 * Math.sin(t * 9);
+    ctx.fillStyle = `rgba(255,180,80,${fl})`; ctx.fillRect(tx - 19, ty - 12, 1, 3);
+    ctx.fillStyle = '#7fe0a0'; ctx.fillRect(tx - 4, ty - 9, 4, 5);          // green potion
+    ctx.fillStyle = '#e06a9a'; ctx.fillRect(tx + 10, ty - 8, 4, 4);        // pink potion
+    ctx.restore();
+  }
+
+  _drawSorcerer(ctx, s) {
+    const t = this.camp.t;
+    // arcane aura
+    ctx.save();
+    const aur = ctx.createRadialGradient(s.x, s.y - 14, 2, s.x, s.y - 14, 40);
+    aur.addColorStop(0, `rgba(150,110,230,${0.3 + 0.1 * Math.sin(t * 2)})`);
+    aur.addColorStop(1, 'rgba(120,80,200,0)');
+    ctx.fillStyle = aur; ctx.beginPath(); ctx.arc(s.x, s.y - 14, 40, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    const frame = (t % 1.4) < 0.7 ? 'idle' : 'walkA';
+    drawSprite(ctx, 'mage', frame, s.x, s.y - Math.sin(t * 2) * 1.5, true, 1.5);
+    // floating orb above his hand
+    const ox = s.x - 12, oy = s.y - 22 + Math.sin(t * 3) * 2;
+    ctx.save();
+    const og = ctx.createRadialGradient(ox, oy, 0, ox, oy, 7);
+    og.addColorStop(0, '#e9d8ff'); og.addColorStop(0.6, '#9a6ce0'); og.addColorStop(1, 'rgba(120,80,200,0)');
+    ctx.fillStyle = og; ctx.beginPath(); ctx.arc(ox, oy, 7, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  _drawCampLabels(ctx) {
+    const t = this.camp.t, c = this.camp;
+    ctx.save();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const label = (text, x, y, col, glow) => {
+      ctx.font = 'bold 13px Trebuchet MS, sans-serif';
+      ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+      ctx.strokeText(text, x, y); ctx.fillStyle = col; ctx.fillText(text, x, y);
+    };
+    const bob = Math.sin(t * 2.5) * 2;
+    label('The Sorcerer', c.sorcerer.x, c.sorcerer.y - 48 + bob, '#c8a8ff');
+    if (c.prompt === 'sorcerer') label('▲ trade', c.sorcerer.x, c.sorcerer.y - 34 + bob, '#fff');
+    label('Descend ▾', c.door.x, c.door.y - 40 + bob, '#bfe9ff');
+    ctx.restore();
+  }
+
   // ---------- flow ----------
   // A fresh run resets all progression (death sends you back to Level 1).
   start() {
@@ -580,6 +658,7 @@ export class Game {
     if (this.transition && this.transition.t < this.transition.half) return;
 
     if (this.state === 'dying') return this._updateDying(dt);
+    if (this.state === 'camp') return this._updateCamp(dt);
     if (this.state !== 'playing') return;
 
     // brief hit-pause freezes the simulation for weight
@@ -814,13 +893,46 @@ export class Game {
     }
   }
 
-  // ---- the camp shop ----
+  // ---- the camp: an in-world safe room with a sorcerer to trade with and a
+  // glowing door to descend through ----
   openCamp() {
     this.shopStock = rollStock(this.player, 4);
     this.rerollCost = 12;
-    this.state = 'shop';
-    this.ui.showCamp(this);
+    this.shopOpen = false;
+    this.enemies = []; this.projectiles = []; this.allyProjectiles = []; this.pickups = [];
+    const W = this.world.w, H = this.world.h;
+    this.player.x = W * 0.5; this.player.y = H * 0.30;
+    this.player.dashTimer = 0; this.player.swingTimer = 0; this.player.invuln = 0;
+    this.camp = {
+      sorcerer: { x: W * 0.76, y: H * 0.5 },
+      door: { x: W * 0.5, y: H - 58 },
+      prompt: null, t: 0,
+    };
+    this.state = 'camp';
+    this.ui.showScreen(null);
+    this.ui.setCampPrompt(null);
   }
+
+  _updateCamp(dt) {
+    if (this.transition && this.transition.t < this.transition.half) return;
+    this.camp.t += dt;
+    if (this.shopOpen) return;                 // frozen while the shop panel is open
+    this.input.poll();
+    const p = this.player;
+    p.update(dt, this.input, this);
+    const c = this.camp;
+    const sd = Math.hypot(p.x - c.sorcerer.x, p.y - c.sorcerer.y);
+    const dd = Math.hypot(p.x - c.door.x, p.y - c.door.y);
+    let prompt = null;
+    if (sd < 70) prompt = 'sorcerer';
+    else if (dd < 60) prompt = 'door';
+    if (prompt !== c.prompt) { c.prompt = prompt; this.ui.setCampPrompt(prompt); }
+  }
+
+  // called by the floating prompt button / shop panel
+  campTrade() { if (this.state === 'camp') { this.shopOpen = true; this.ui.setCampPrompt(null); this.ui.showShop(this); } }
+  campDescend() { if (this.state === 'camp') { this.ui.setCampPrompt(null); this.ui.hideShop(); this.descend(); } }
+  closeShop() { this.shopOpen = false; this.ui.hideShop(); }
 
   buyWare(ware) {
     if (!ware || ware.sold || this.gold < ware.cost) return false;
@@ -903,15 +1015,19 @@ export class Game {
     for (const fx of this.effects) if (fx.kind === 'death') this._drawDeathFx(ctx, fx);
 
     if (title) this._drawTitleScene(ctx);
+    if (this.state === 'camp') this._drawCampFloor(ctx);   // door + table (on the floor)
 
-    // depth-sort enemies + hero by feet-y
+    // depth-sort enemies + hero (+ sorcerer) by feet-y
     const drawList = [...this.enemies];
     if (!title && this.player) drawList.push(this.player);
+    if (this.state === 'camp') drawList.push({ sorcerer: true, x: this.camp.sorcerer.x, y: this.camp.sorcerer.y });
     drawList.sort((a, b) => a.y - b.y);
     for (const ent of drawList) {
       if (ent === this.player) this._drawPlayer(ctx);
+      else if (ent.sorcerer) this._drawSorcerer(ctx, ent);
       else this._drawEnemy(ctx, ent);
     }
+    if (this.state === 'camp') this._drawCampLabels(ctx);
 
     for (const pr of this.projectiles) this._drawProjectile(ctx, pr);
     for (const fb of this.allyProjectiles) this._drawFireball(ctx, fb);
@@ -962,7 +1078,7 @@ export class Game {
     this._drawSweep(ctx);          // "LEVEL CLEARED" banner sweep
     this._drawCountdownIntro(ctx); // level/boss intro + 3..2..1..FIGHT
     this._drawHUD(ctx);
-    if (this.state === 'playing') this.input.draw(ctx);
+    if (this.state === 'playing' || (this.state === 'camp' && !this.shopOpen)) this.input.draw(ctx);
     this._drawTransition(ctx);     // slash-wipe on the very top
   }
 
@@ -1052,6 +1168,10 @@ export class Game {
     for (const fb of this.allyProjectiles) hole(fb.x, fb.y, 90, 0.15);
     for (const pr of this.projectiles) hole(pr.x, pr.y, 52, 0.15);
     for (const pk of this.pickups) hole(pk.x, pk.y, 30, 0.1);   // loot glints in the dark
+    if (this.state === 'camp' && this.camp) {                   // door + sorcerer light the room
+      hole(this.camp.door.x, this.camp.door.y - 6, 120, 0.12);
+      hole(this.camp.sorcerer.x, this.camp.sorcerer.y - 12, 110, 0.2);
+    }
     for (const fx of this.effects) { if (fx.kind === 'boom' || fx.kind === 'ult') hole(fx.x, fx.y, (fx.r || 80) * 1.1, 0.1); }
     g.globalCompositeOperation = 'source-over';
     ctx.save(); ctx.imageSmoothingEnabled = true;

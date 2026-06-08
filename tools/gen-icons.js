@@ -45,105 +45,101 @@ class G {
   }
 }
 
-// ---- icon painters ----
+// ---- icon painters (ids match forge + relic ids) ----
 const ICONS = {
-  fireball(g) {
-    const r = hex('#d8330f'), o = hex('#ff7a1e'), y = hex('#ffd23a'), w = hex('#fff6c8');
-    // flame tip
-    g.line(8, 1, 8, 4, r); g.px(9, 3, o);
-    g.disc(8, 9, 6, r);             // outer
-    g.disc(8, 10, 5, o);            // mid
-    g.disc(8, 11, 3, y);            // inner
-    g.disc(8, 11, 2, w);            // hot core
-    g.px(8, 4, o); g.px(7, 6, o); g.px(10, 6, r);
-    g.px(4, 8, o); g.px(12, 8, o);
-  },
-  lightning(g) {
-    const y = hex('#ffe23a'), e = hex('#f0a000');
-    const pts = [[10, 1], [6, 8], [9, 8], [5, 15]];
-    g.line(pts[0][0], pts[0][1], pts[1][0], pts[1][1], y);
-    g.line(pts[1][0], pts[1][1], pts[2][0], pts[2][1], y);
-    g.line(pts[2][0], pts[2][1], pts[3][0], pts[3][1], y);
-    // thicken
-    g.line(11, 1, 7, 8, e); g.line(8, 8, 6, 15, e);
-    g.line(10, 1, 6, 8, y); g.line(9, 8, 5, 15, y);
-  },
-  frost(g) {
-    const c = hex('#bdf0ff'), b = hex('#6fd0ff');
-    g.line(8, 1, 8, 14, c); g.line(2, 4, 14, 12, c); g.line(14, 4, 2, 12, c);
-    // tips
-    const tip = (x, y, dx, dy) => { g.px(x + dx, y + dy, b); g.px(x - dx, y + dy, b); };
-    tip(8, 3, 2, 1); tip(8, 12, 2, -1);
-    g.px(8, 8, hex('#ffffff'));
-  },
-  whirlwind(g) {
-    const c = hex('#cfe9ff'), b = hex('#8fc8ff');
-    for (let a = 0; a < 11; a += 0.35) {
-      const rr = a * 0.62;
-      g.px(8 + Math.cos(a) * rr, 8 + Math.sin(a) * rr, a > 6 ? c : b);
-    }
-    g.disc(8, 8, 1, hex('#ffffff'));
-  },
-  power(g) { // sharpened blade
+  // --- forge ---
+  power(g) { // Sharpen Blade
     const steel = hex('#cdd6e2'), edge = hex('#ffffff'), gold = hex('#e9c84a'), grip = hex('#6b4a2a');
     g.line(4, 13, 12, 3, steel); g.line(5, 13, 13, 3, steel);
     g.line(12, 3, 13, 3, edge); g.line(12, 4, 13, 5, edge);
-    g.rect(3, 12, 5, 14, gold);   // guard
-    g.line(2, 15, 4, 13, grip);   // pommel
+    g.rect(3, 12, 5, 14, gold); g.line(2, 15, 4, 13, grip);
   },
-  haste(g) { // swift strikes: blade + motion streaks
-    const steel = hex('#d6dde8'), c = hex('#7fe0ff'), gold = hex('#e9c84a');
-    g.line(6, 13, 13, 4, steel); g.line(7, 13, 14, 4, steel);
-    g.rect(5, 12, 7, 14, gold);
-    g.line(2, 5, 6, 5, c); g.line(2, 8, 7, 8, c); g.line(3, 11, 6, 11, c); // speed lines
+  armor(g) { // Reinforce Armor: shield
+    const st = hex('#9fb4cf'), dk = hex('#5d6e8a'), lt = hex('#d4e0f2'), gold = hex('#e9c84a');
+    for (let y = 2; y <= 9; y++) { const w = 6; g.rect(8 - w, y, 8 + w, y, st); }
+    for (let y = 10; y <= 14; y++) { const w = 6 - (y - 9) * 1.2; g.rect(Math.round(8 - w), y, Math.round(8 + w), y, st); }
+    g.line(2, 3, 8, 14, dk); g.rect(8, 2, 9, 6, lt);
+    g.line(8, 4, 8, 11, gold); g.line(5, 7, 11, 7, gold); // emblem cross
   },
-  reach(g) { // long reach: long spear + range arc
+  whet(g) { // Whetstone: stone + blade + spark
+    const stone = hex('#6f6a7e'), sd = hex('#4a4658'), steel = hex('#cdd6e2'), w = hex('#ffffff');
+    g.rect(3, 10, 13, 13, stone); g.rect(3, 13, 13, 13, sd);
+    g.line(4, 9, 12, 4, steel); g.line(5, 9, 13, 4, steel);
+    g.px(13, 3, w); g.px(12, 3, w); g.px(13, 4, w); g.px(13, 2, w); g.px(14, 3, w); // spark
+  },
+  boots(g) { // Swift Boots: winged boot
+    const br = hex('#7a5230'), brd = hex('#5a3d22'), w = hex('#f4f7ff'), wb = hex('#bcd0ff');
+    g.rect(7, 4, 9, 12, br); g.rect(7, 11, 13, 13, br);
+    g.rect(7, 4, 7, 12, brd); g.rect(7, 13, 13, 13, brd);
+    g.line(2, 6, 6, 7, w); g.line(2, 8, 6, 9, w); g.line(3, 10, 6, 10, wb);
+  },
+  reach(g) { // Long Reach: spear + arc
     const steel = hex('#d6dde8'), edge = hex('#ffffff'), c = hex('#9fe0ff'), brown = hex('#6b4a2a');
-    g.line(2, 14, 13, 3, brown);
-    g.line(3, 14, 14, 3, steel);
-    g.px(14, 3, edge); g.px(13, 3, edge); g.px(14, 4, edge);
-    // range arc
+    g.line(2, 14, 13, 3, brown); g.line(3, 14, 14, 3, steel);
+    g.px(14, 3, edge); g.px(13, 3, edge);
     for (let a = -0.7; a < 0.7; a += 0.12) g.px(11 + Math.cos(a) * 4, 11 + Math.sin(a) * 4, c);
   },
-  swift(g) { // winged boots
-    const br = hex('#7a5230'), brd = hex('#5a3d22'), w = hex('#f4f7ff'), wb = hex('#bcd0ff');
-    // boot (L shape)
-    g.rect(7, 4, 9, 12, br); g.rect(7, 11, 13, 13, br);
-    g.rect(7, 4, 7, 12, brd); g.rect(13, 12, 13, 13, brd);
-    g.rect(7, 13, 13, 13, brd);
-    // wing
-    g.line(2, 6, 6, 7, w); g.line(2, 8, 6, 9, w); g.line(3, 10, 6, 10, wb);
-    g.px(2, 6, wb); g.px(2, 8, wb);
-  },
-  lifesteal(g) { // green plus
-    const gr = hex('#4cd964'), gd = hex('#2f9d46'), lt = hex('#b8ffc6');
-    g.rect(6, 3, 9, 12, gr); g.rect(3, 6, 12, 9, gr);
-    g.rect(7, 3, 8, 12, lt); g.rect(3, 7, 12, 8, lt);
-    // shading
-    g.rect(6, 11, 9, 12, gd); g.rect(10, 6, 12, 9, gd);
-  },
-  fury(g) { // wrath: spiky burst star
+  wrath(g) { // Wrath: burst star
     const r = hex('#e23a12'), o = hex('#ff8a1e'), y = hex('#ffd23a');
-    // 8-point star
     const spikes = [[8, 0], [8, 15], [0, 8], [15, 8], [3, 3], [13, 3], [3, 13], [13, 13]];
     for (const [x, y2] of spikes) g.line(8, 8, x, y2, r);
     g.disc(8, 8, 4, o); g.disc(8, 8, 2, y);
   },
-  arcane(g) { // purple gem + sparkle
-    const p = hex('#9a59e0'), pd = hex('#6b34b0'), lt = hex('#d9b8ff'), w = hex('#ffffff');
-    // diamond gem
-    for (let y = 0; y <= 5; y++) g.rect(8 - y, 6 + y, 8 + y, 6 + y, p);
-    for (let y = 0; y <= 4; y++) g.rect(8 - (4 - y), 12 - y, 8 + (4 - y), 12 - y, p);
-    g.rect(6, 6, 10, 6, lt); g.line(8, 2, 8, 6, lt); // top facet/stem
-    g.rect(8, 7, 8, 11, pd);
-    // sparkle
-    g.px(13, 3, w); g.px(13, 2, w); g.px(13, 4, w); g.px(12, 3, w); g.px(14, 3, w);
+  // --- relics ---
+  vampire(g) { // Vampiric Fang
+    const w = hex('#f4f2ea'), sh = hex('#c9c4b4'), red = hex('#c01828'), rl = hex('#ff4a5a');
+    g.rect(5, 2, 10, 4, w); g.line(6, 4, 4, 11, w); g.line(9, 4, 11, 11, w);
+    g.px(5, 5, sh); g.px(10, 5, sh);
+    g.disc(8, 13, 1, red); g.px(8, 11, rl); g.px(8, 13, rl); // blood drop
   },
-  dashmaster(g) { // fleetfoot: double chevron (fast-forward)
-    const c = hex('#7fe0ff'), b = hex('#3aa0d8');
-    const chev = (ox) => { g.line(ox, 3, ox + 4, 8, c); g.line(ox + 4, 8, ox, 13, c);
-      g.line(ox + 1, 3, ox + 5, 8, b); g.line(ox + 5, 8, ox + 1, 13, b); };
-    chev(3); chev(8);
+  ember(g) { // Ember Crown
+    const gold = hex('#e9c84a'), gd = hex('#a8841f'), red = hex('#d8330f'), o = hex('#ff7a1e');
+    g.rect(3, 9, 13, 13, gold); g.rect(3, 13, 13, 13, gd);
+    g.line(3, 9, 3, 4, gold); g.line(8, 9, 8, 2, gold); g.line(13, 9, 13, 4, gold);
+    g.px(3, 4, o); g.px(8, 2, o); g.px(13, 4, o);
+    g.disc(8, 11, 1, red); g.px(5, 11, red); g.px(11, 11, red);
+  },
+  thunder(g) { // Thunderbrand: blade + bolt
+    const steel = hex('#cdd6e2'), y = hex('#ffe23a'), e = hex('#f0a000');
+    g.line(4, 14, 11, 5, steel); g.line(5, 14, 12, 5, steel);
+    g.line(11, 1, 8, 7, y); g.line(8, 7, 11, 7, y); g.line(11, 7, 8, 13, y);
+    g.line(11, 1, 9, 6, e);
+  },
+  frost(g) { // Frostbite Edge: snowflake
+    const c = hex('#bdf0ff'), b = hex('#6fd0ff'), w = hex('#ffffff');
+    g.line(8, 1, 8, 14, c); g.line(2, 4, 14, 12, c); g.line(14, 4, 2, 12, c);
+    const tip = (x, y, dx, dy) => { g.px(x + dx, y + dy, b); g.px(x - dx, y + dy, b); };
+    tip(8, 3, 2, 1); tip(8, 12, 2, -1); g.px(8, 8, w);
+  },
+  stone(g) { // Stoneheart: boulder
+    const st = hex('#7a7488'), lt = hex('#a59abd'), dk = hex('#4f4a5e');
+    g.disc(8, 9, 5, st); g.rect(3, 9, 13, 13, st); g.rect(3, 13, 13, 13, dk);
+    g.disc(6, 7, 1, lt); g.px(10, 8, dk); g.px(7, 11, dk);
+  },
+  berserk(g) { // Berserker's Heart
+    const r = hex('#d01828'), dk = hex('#8a0e1c'), lt = hex('#ff5a6a');
+    g.disc(5, 6, 2, r); g.disc(11, 6, 2, r);
+    for (let y = 0; y <= 6; y++) { const w = 6 - y; g.rect(8 - w, 7 + y, 8 + w, 7 + y, r); }
+    g.px(4, 5, lt); g.px(10, 5, lt); g.line(8, 7, 7, 12, dk);
+  },
+  idol(g) { // Golden Idol: coin
+    const gold = hex('#e9c84a'), gd = hex('#a8841f'), lt = hex('#fff0a8');
+    g.disc(8, 8, 6, gold); g.disc(8, 8, 6, gold);
+    g.line(8, 4, 8, 12, gd); g.line(5, 8, 11, 8, gd); // rune
+    g.px(5, 5, lt); g.px(6, 4, lt);
+  },
+  wind(g) { // Windrunner Boots: gust
+    const c = hex('#cfe9ff'), b = hex('#7fc8ff'), w = hex('#ffffff');
+    g.line(2, 4, 11, 4, c); for (let x = 11; x <= 13; x++) g.px(x, 4 - (x - 11), b);
+    g.line(3, 8, 13, 8, w); for (let x = 13; x >= 11; x--) g.px(x, 8 + (13 - x), b);
+    g.line(2, 12, 10, 12, c); for (let x = 10; x <= 12; x++) g.px(x, 12 - (x - 10), b);
+  },
+  exec(g) { // Executioner's Seal: axe
+    const steel = hex('#cdd6e2'), dk = hex('#7a8294'), brown = hex('#6b4a2a'), edge = hex('#ffffff');
+    g.line(7, 2, 7, 14, brown); g.line(8, 2, 8, 14, brown); // haft
+    g.rect(8, 2, 14, 7, steel); g.line(14, 2, 14, 7, dk);
+    for (let y = 2; y <= 7; y++) g.px(8, y, edge);
+    g.rect(9, 3, 13, 3, edge);
   },
 };
 

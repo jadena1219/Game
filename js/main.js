@@ -4,7 +4,7 @@ import { Game } from './game.js';
 
 const screens = {
   title: document.getElementById('title-screen'),
-  camp: document.getElementById('camp-screen'),
+  shop: document.getElementById('shop-modal'),
   gameover: document.getElementById('game-over'),
   victory: document.getElementById('victory'),
 };
@@ -18,19 +18,22 @@ const ui = {
     }
   },
 
-  // The between-level dungeon camp: spend gold on forge upgrades & relics.
-  showCamp(g) {
+  // Floating prompt while roaming the camp room.
+  setCampPrompt(kind) {
+    const b = document.getElementById('camp-prompt');
+    if (!kind) { b.classList.add('hidden'); return; }
+    b.classList.remove('hidden');
+    if (kind === 'sorcerer') { b.innerHTML = '✦ Trade'; b.className = 'sorcerer'; b.onclick = () => game.campTrade(); }
+    else { b.innerHTML = 'Descend ▾'; b.className = 'door'; b.onclick = () => game.campDescend(); }
+  },
+
+  // The sorcerer's trade panel — spend gold on forge upgrades & relics.
+  showShop(g) {
     const level = g.level;
     document.getElementById('camp-title').textContent =
-      level + 1 === 5 ? 'Camp — the Dark Knight awaits below'
-      : level + 1 === 10 ? 'Camp — the Demon Lord stirs below'
-      : 'The Camp';
-    const greetings = [
-      'A hooded figure waits by the fire…', '"Spend your gold, knight. The dark is patient."',
-      '"Steel and charms. What\'ll it be?"', '"You\'ll not survive below without me."',
-      '"Coin for your life. Fair trade."',
-    ];
-    document.getElementById('camp-sub').textContent = greetings[(Math.random() * greetings.length) | 0];
+      level + 1 === 5 ? 'The Sorcerer — the Dark Knight waits below'
+      : level + 1 === 10 ? 'The Sorcerer — the Demon Lord stirs'
+      : 'The Sorcerer';
 
     const render = () => {
       document.getElementById('camp-gold-n').textContent = g.gold;
@@ -42,10 +45,10 @@ const ui = {
         const afford = g.gold >= w.cost;
         const el = document.createElement('button');
         el.className = 'ware ' + w.kind + (owned ? ' sold' : afford ? '' : ' broke');
-        el.style.animationDelay = (i * 0.08) + 's';
+        el.style.animationDelay = (i * 0.07) + 's';
         const tag = w.kind === 'relic' ? 'RELIC' : (w.level > 0 ? 'Lv ' + w.next : 'NEW');
         el.innerHTML =
-          `<div class="ware-ico">${w.item.icon}</div>` +
+          `<img class="ware-ico-img" src="assets/icons/${w.id}.png" alt="" draggable="false">` +
           `<div class="ware-body">` +
             `<div class="ware-name">${w.item.name}<span class="tagchip ${w.kind}">${tag}</span></div>` +
             `<div class="ware-desc">${w.label}</div>` +
@@ -60,25 +63,25 @@ const ui = {
       });
     };
     render();
-    this._campRender = render;
 
     document.getElementById('reroll-btn').onclick = () => {
-      if (g.rerollShop()) { this._campMsg('New wares.'); render(); }
+      if (g.rerollShop()) { this._campMsg('The sorcerer lays out new wares.'); render(); }
       else this._campMsg('Not enough gold to reroll.');
     };
     document.getElementById('shrine-btn').onclick = () => {
       const r = g.gambleShrine();
       if (!r.ok) return this._campMsg('The shrine demands 30 gold.');
-      if (r.kind === 'relic') this._campMsg(`The shrine grants you ${r.icon} ${r.name}!`);
+      if (r.kind === 'relic') this._campMsg(`The shrine grants you a relic: ${r.name}!`);
       else if (r.kind === 'gold') this._campMsg('The shrine spits back a few coins.');
       else this._campMsg('The shrine takes your gold, and laughs.');
       render();
     };
-    document.getElementById('descend-btn').onclick = () => { this.showScreen(null); g.descend(); };
+    document.getElementById('shop-back').onclick = () => g.closeShop();
     document.getElementById('camp-msg').innerHTML = '&nbsp;';
-    this.showScreen('camp');
+    this.showScreen('shop');
   },
 
+  hideShop() { this.showScreen(null); },
   _campMsg(t) { const el = document.getElementById('camp-msg'); if (el) el.textContent = t; },
 
   gameOver(level) {
@@ -90,12 +93,20 @@ const ui = {
 
 async function boot() {
   const canvas = document.getElementById('game');
-  try {
-    await loadAssets();
-  } catch (err) {
+  // Cold loads (esp. mobile Safari) can drop a request; retry a couple of times
+  // so the title/start button is always wired up on first visit.
+  let loaded = false;
+  for (let attempt = 0; attempt < 3 && !loaded; attempt++) {
+    try { await loadAssets(); loaded = true; }
+    catch (err) {
+      console.error('asset load attempt failed', err);
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+    }
+  }
+  if (!loaded) {
     document.querySelector('#title-screen .tag').textContent =
-      'Could not load sprites — serve this folder over HTTP (see README).';
-    console.error(err);
+      'Could not load sprites — tap to retry…';
+    document.getElementById('start-btn').onclick = () => location.reload();
     return;
   }
 

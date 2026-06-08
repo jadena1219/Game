@@ -1,17 +1,20 @@
 {
   "size": 16,
   "icons": {
-    "fireball": "fireball.png",
-    "lightning": "lightning.png",
-    "frost": "frost.png",
-    "whirlwind": "whirlwind.png",
     "power": "power.png",
-    "haste": "haste.png",
+    "armor": "armor.png",
+    "whet": "whet.png",
+    "boots": "boots.png",
     "reach": "reach.png",
-    "swift": "swift.png",
-    "lifesteal": "lifesteal.png",
-    "fury": "fury.png",
-    "arcane": "arcane.png",
-    "dashmaster": "dashmaster.png"
+    "wrath": "wrath.png",
+    "vampire": "vampire.png",
+    "ember": "ember.png",
+    "thunder": "thunder.png",
+    "frost": "frost.png",
+    "stone": "stone.png",
+    "berserk": "berserk.png",
+    "idol": "idol.png",
+    "wind": "wind.png",
+    "exec": "exec.png"
   }
 }

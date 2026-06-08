@@ -24,6 +24,10 @@
       "file": "mage.png",
       "scale": 1
     },
+    "sorcerer": {
+      "file": "sorcerer.png",
+      "scale": 1
+    },
     "ogre": {
       "file": "ogre.png",
       "scale": 1.5

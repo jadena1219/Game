@@ -81,7 +81,8 @@ export class Game {
     // a contained arena ~1.5x the screen — room to roam, walls in view
     this.world = { w: Math.round(this.vw * 1.5), h: Math.round(this.vh * 1.5) };
     const m = 56;
-    this.bounds = { minX: m, minY: m, maxX: this.world.w - m, maxY: this.world.h - m };
+    this.worldBounds = { minX: m, minY: m, maxX: this.world.w - m, maxY: this.world.h - m };
+    this.bounds = this.worldBounds;
     this._applyBiome(this.level || 1);
   }
 
@@ -272,7 +273,7 @@ export class Game {
     ctx.fillStyle = aur; ctx.beginPath(); ctx.arc(s.x, s.y - 14, 40, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
     const frame = (t % 1.4) < 0.7 ? 'idle' : 'walkA';
-    drawSprite(ctx, 'mage', frame, s.x, s.y - Math.sin(t * 2) * 1.5, true, 1.5);
+    drawSprite(ctx, 'sorcerer', frame, s.x, s.y - Math.sin(t * 2) * 1.5, true, 1.5);
     // floating orb above his hand
     const ox = s.x - 12, oy = s.y - 22 + Math.sin(t * 3) * 2;
     ctx.save();
@@ -287,14 +288,13 @@ export class Game {
     ctx.save();
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const label = (text, x, y, col, glow) => {
-      ctx.font = 'bold 13px Trebuchet MS, sans-serif';
+      ctx.font = 'bold 13px "Pixelify Sans", sans-serif';
       ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,0.8)';
       ctx.strokeText(text, x, y); ctx.fillStyle = col; ctx.fillText(text, x, y);
     };
     const bob = Math.sin(t * 2.5) * 2;
-    label('The Sorcerer', c.sorcerer.x, c.sorcerer.y - 48 + bob, '#c8a8ff');
-    if (c.prompt === 'sorcerer') label('▲ trade', c.sorcerer.x, c.sorcerer.y - 34 + bob, '#fff');
-    label('Descend ▾', c.door.x, c.door.y - 40 + bob, '#bfe9ff');
+    label('The Sorcerer', c.sorcerer.x, c.sorcerer.y - 94 + bob, '#9af0ff');
+    label('Descend ▾', c.door.x, c.door.y - 42 + bob, '#bfe9ff');
     ctx.restore();
   }
 
@@ -323,6 +323,7 @@ export class Game {
 
     this.enemies = []; this.projectiles = []; this.allyProjectiles = []; this.effects = [];
     this.pickups = [];
+    this.bounds = this.worldBounds;                  // restore arena bounds (camp shrinks them)
     this.cam.x = this.player.x - this.vw / 2; this.cam.y = this.player.y - this.vh / 2;
     this.spawnTimer = 0;
     this._buildQueue(level);
@@ -632,6 +633,7 @@ export class Game {
 
   // Gentle camera that follows the hero but stays clamped inside the walls.
   _updateCamera(dt) {
+    if (this.state === 'camp') return;            // the camp camera is fixed (set in openCamp)
     let tx, ty;
     if (this.state === 'title' || !this.player) {
       tx = this.world.w / 2 - this.vw / 2; ty = this.world.h / 2 - this.vh / 2;
@@ -903,17 +905,52 @@ export class Game {
     this.enemies = []; this.projectiles = []; this.allyProjectiles = []; this.pickups = [];
     this.effects = [];                      // clear leftover swing arcs / damage numbers / death fx
     this.hitStop = 0; this.timeScale = 1;
-    const W = this.world.w, H = this.world.h;
-    this.player.x = W * 0.5; this.player.y = H * 0.30;
+    this._buildCampRoom();
+    // a small, contained room centred in the world; the camera stays put
+    const ox = Math.round(this.world.w / 2 - this.vw / 2);
+    const oy = Math.round(this.world.h / 2 - this.vh / 2);
+    this.cam.x = ox; this.cam.y = oy;
+    this.player.x = ox + this.vw * 0.5; this.player.y = oy + this.vh * 0.42;
     this.player.dashTimer = 0; this.player.swingTimer = 0; this.player.invuln = 0;
+    const b = this.biome;
     this.camp = {
-      sorcerer: { x: W * 0.76, y: H * 0.5 },
-      door: { x: W * 0.5, y: H - 58 },
+      sorcerer: { x: ox + this.vw * 0.74, y: oy + this.vh * 0.40 },
+      door: { x: ox + this.vw * 0.5, y: oy + this.vh * 0.80 },
+      torches: this._campTorchScreen.map(([x, y]) => ({ x: ox + x, y: oy + y, lava: !!b.lava, torch: b.torch })),
       prompt: null, t: 0,
     };
+    // keep the player inside the little room
+    this.bounds = { minX: ox + 46, minY: oy + 50, maxX: ox + this.vw - 46, maxY: oy + this.vh - 86 };
     this.state = 'camp';
     this.ui.showScreen(null);
     this.ui.setCampPrompt(null);
+  }
+
+  // torches active right now (camp room vs arena)
+  get _torches() { return (this.state === 'camp' && this.camp) ? this.camp.torches : (this.braziers || []); }
+
+  // Bake a small, screen-sized stone room for the camp (walls + torches + a rug).
+  _buildCampRoom() {
+    const W = this.vw, H = this.vh, b = this.biome;
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const g = c.getContext('2d');
+    const grd = g.createLinearGradient(0, 0, 0, H);
+    grd.addColorStop(0, b.ground[0]); grd.addColorStop(1, b.ground[1]);
+    g.fillStyle = grd; g.fillRect(0, 0, W, H);
+    if (b.detail) b.detail(g, W, H);
+    // a circular trade rug in the middle-right (toward the sorcerer)
+    g.save();
+    const rg = g.createRadialGradient(W * 0.5, H * 0.5, 10, W * 0.5, H * 0.5, H * 0.34);
+    rg.addColorStop(0, 'rgba(120,90,40,0.18)'); rg.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = rg; g.fillRect(0, 0, W, H); g.restore();
+    // torch posts at the four inner corners
+    this._campTorchScreen = [[52, 78], [W - 52, 78], [52, H - 96], [W - 52, H - 96]];
+    for (const [tx, ty] of this._campTorchScreen) this._bakeBrazierPost(g, tx, ty);
+    this._bakeWalls(g, b, W, H);
+    const v = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.62);
+    v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.5)');
+    g.fillStyle = v; g.fillRect(0, 0, W, H);
+    this.campBg = c;
   }
 
   _updateCamp(dt) {
@@ -1009,8 +1046,9 @@ export class Game {
     ctx.save();
     ctx.translate(-camx, -camy);
 
-    // baked arena (ground + nature + framed structures + walls) — one blit
-    if (this.bg) ctx.drawImage(this.bg, 0, 0);
+    // baked arena, or the small camp room — one blit
+    if (this.state === 'camp' && this.campBg) ctx.drawImage(this.campBg, this.cam.x, this.cam.y);
+    else if (this.bg) ctx.drawImage(this.bg, 0, 0);
     this._drawBrazierFlames(ctx);
     for (const pk of this.pickups) this._drawPickup(ctx, pk);
 
@@ -1071,7 +1109,7 @@ export class Game {
       ctx.globalAlpha = Math.max(0, a);
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       const size = 30 + prog * 14;
-      ctx.font = `bold ${size}px Trebuchet MS, sans-serif`;
+      ctx.font = `bold ${size}px "Pixelify Sans", sans-serif`;
       ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,0.65)';
       ctx.strokeText(fx.text, this.vw / 2, this.vh * 0.32);
       ctx.fillStyle = '#ffdd6a';
@@ -1093,8 +1131,7 @@ export class Game {
   }
 
   _drawBrazierFlames(ctx) {
-    if (!this.braziers) return;
-    for (const bz of this.braziers) {
+    for (const bz of this._torches) {
       if (!this._inView(bz.x, bz.y)) continue;
       const f = this.titleT * 12 + bz.x;
       const h = 12 + Math.sin(f) * 3 + Math.sin(f * 2.3) * 2;
@@ -1124,12 +1161,10 @@ export class Game {
       ctx.globalAlpha = a; ctx.fillStyle = g;
       ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
     };
-    if (this.braziers) {
-      for (const bz of this.braziers) {
-        if (!this._inView(bz.x, bz.y)) continue;
-        const fl = 0.8 + 0.2 * Math.sin(this.titleT * 11 + bz.x);
-        glow(bz.x, bz.y - 6, 130, bz.lava ? '#ff7a2a' : (bz.torch || '#ffb24a'), 0.6 * fl);
-      }
+    for (const bz of this._torches) {
+      if (!this._inView(bz.x, bz.y)) continue;
+      const fl = 0.8 + 0.2 * Math.sin(this.titleT * 11 + bz.x);
+      glow(bz.x, bz.y - 6, 130, bz.lava ? '#ff7a2a' : (bz.torch || '#ffb24a'), 0.6 * fl);
     }
     if (this.player) glow(this.player.x, this.player.y - 14, 64, '#cfe6ff', 0.16);
     for (const pr of this.projectiles) glow(pr.x, pr.y, 38, pr.boss ? '#ff7a2a' : '#b06bff', 0.55);
@@ -1142,6 +1177,7 @@ export class Game {
   _drawDarkness(ctx) {
     const b = this.biome; if (!b || !b.dark) return;
     if (this.flashScreen > 0.02) return;   // the ultimate floods the room with light
+    const darkLevel = this.state === 'camp' ? Math.min(b.dark, 0.34) : b.dark; // safe room is brighter
     const S = 0.5;                          // half-res shadow buffer (soft, cheap)
     const sw = Math.max(1, Math.round(this.vw * S)), sh = Math.max(1, Math.round(this.vh * S));
     let sc = this.shadowCanvas, g = this.shadowCtx;
@@ -1152,7 +1188,7 @@ export class Game {
     }
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, sw, sh);
-    g.fillStyle = `rgba(4,3,9,${b.dark})`;
+    g.fillStyle = `rgba(4,3,9,${darkLevel})`;
     g.fillRect(0, 0, sw, sh);
     g.globalCompositeOperation = 'destination-out';
     const hole = (wx, wy, r, soft) => {
@@ -1162,7 +1198,7 @@ export class Game {
       grd.addColorStop(0, 'rgba(0,0,0,1)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
       g.fillStyle = grd; g.beginPath(); g.arc(sx, sy, rr, 0, Math.PI * 2); g.fill();
     };
-    if (this.braziers) for (const bz of this.braziers) {
+    for (const bz of this._torches) {
       const fl = 0.85 + 0.15 * Math.sin(this.titleT * 11 + bz.x);
       hole(bz.x, bz.y - 6, 170 * fl, 0.18);
     }
@@ -1287,7 +1323,7 @@ export class Game {
     const x = cx - (1 - slideIn) * 60;
     ctx.globalAlpha *= slideIn;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = 'bold 40px Trebuchet MS, sans-serif';
+    ctx.font = 'bold 40px "Pixelify Sans", sans-serif';
     ctx.fillStyle = '#fff';
     ctx.fillText('LEVEL CLEARED', x, this.vh / 2);
     ctx.restore();
@@ -1313,19 +1349,19 @@ export class Game {
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       const y = this.vh * 0.38;
       if (it.kind === 'boss') {
-        ctx.font = 'bold 16px Trebuchet MS, sans-serif'; ctx.fillStyle = '#d8413a';
+        ctx.font = 'bold 16px "Pixelify Sans", sans-serif'; ctx.fillStyle = '#d8413a';
         ctx.fillText(it.sub, this.vw / 2, y - 34);
         const size = 34 + slide * 8;
-        ctx.font = `bold ${size}px Trebuchet MS, sans-serif`;
+        ctx.font = `bold ${size}px "Pixelify Sans", sans-serif`;
         ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,0.7)';
         ctx.strokeText(it.text, this.vw / 2, y);
         ctx.fillStyle = '#ffce4a'; ctx.fillText(it.text, this.vw / 2, y);
       } else {
         const x = this.vw / 2 + (1 - slide) * 80;
-        ctx.font = 'bold 38px Trebuchet MS, sans-serif';
+        ctx.font = 'bold 38px "Pixelify Sans", sans-serif';
         ctx.fillStyle = '#e9c84a';
         ctx.fillText(it.text, x, y);
-        if (it.sub) { ctx.font = 'italic 15px Trebuchet MS, sans-serif'; ctx.fillStyle = '#cfc6e6';
+        if (it.sub) { ctx.font = 'italic 15px "Pixelify Sans", sans-serif'; ctx.fillStyle = '#cfc6e6';
           ctx.fillText(it.sub, x, y + 28); }
       }
       ctx.restore();
@@ -1343,7 +1379,7 @@ export class Game {
       ctx.globalAlpha = Math.max(0.25, a);
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       const sz = (fight ? 60 : 84) * scale;
-      ctx.font = `bold ${sz}px Trebuchet MS, sans-serif`;
+      ctx.font = `bold ${sz}px "Pixelify Sans", sans-serif`;
       ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,0.6)';
       ctx.strokeText(label, this.vw / 2, this.vh * 0.5);
       ctx.fillStyle = fight ? '#d8413a' : '#fff';
@@ -1363,7 +1399,7 @@ export class Game {
       const sp = Math.min(1, (p - 0.35) / 0.25);
       ctx.globalAlpha = sp;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.font = `bold ${64 + (1 - sp) * 40}px Trebuchet MS, sans-serif`;
+      ctx.font = `bold ${64 + (1 - sp) * 40}px "Pixelify Sans", sans-serif`;
       ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,0.8)';
       ctx.strokeText('YOU FELL', this.vw / 2, this.vh * 0.45);
       ctx.fillStyle = '#d8413a';
@@ -1442,7 +1478,7 @@ export class Game {
     const a = 1 - fx.t / fx.dur;
     ctx.save();
     ctx.globalAlpha = a;
-    ctx.font = 'bold 15px Trebuchet MS, sans-serif';
+    ctx.font = 'bold 15px "Pixelify Sans", sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.7)';
     ctx.strokeText(fx.text, fx.x, fx.y);
@@ -1545,7 +1581,7 @@ export class Game {
     ctx.fillStyle = 'rgba(232,120,120,0.65)'; ctx.fillRect(bx, by, bw * ghostf, bh); // ghost
     ctx.fillStyle = col; ctx.fillRect(bx, by, bw * hpf, bh);
     ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1; ctx.strokeRect(bx, by, bw, bh);
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 13px Trebuchet MS, sans-serif';
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 13px "Pixelify Sans", sans-serif';
     ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
     ctx.fillText(`${Math.max(0, Math.ceil(p.hp))} / ${p.maxHP}`, bx + 8, by + bh / 2 + 1);
 
@@ -1557,7 +1593,7 @@ export class Game {
     const pulse = 0.7 + 0.3 * Math.sin(this.time * 10);
     ctx.fillStyle = ff >= 1 ? `rgba(255,220,90,${pulse})` : '#9a59e0';
     ctx.fillRect(bx, fy, bw * ff, fh);
-    ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = 'bold 9px Trebuchet MS, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = 'bold 9px "Pixelify Sans", sans-serif';
     ctx.textAlign = 'left'; ctx.fillText(ff >= 1 ? 'ULTIMATE!' : 'FURY', bx + 4, fy + fh / 2 + 1);
 
     // level medallion (centred, below the bars) + foes/gold on the right
@@ -1565,11 +1601,11 @@ export class Game {
     const remaining = this.enemies.length + this.spawnQueue.length;
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
-    ctx.font = 'bold 15px Trebuchet MS, sans-serif';
+    ctx.font = 'bold 15px "Pixelify Sans", sans-serif';
     ctx.fillStyle = '#e9c84a';
     ctx.fillText(`◆ ${this.gold}`, this.vw - 18, 26);
     if (this.state !== 'camp') {
-      ctx.fillStyle = '#cdbfe0'; ctx.font = 'bold 13px Trebuchet MS, sans-serif';
+      ctx.fillStyle = '#cdbfe0'; ctx.font = 'bold 13px "Pixelify Sans", sans-serif';
       ctx.fillText(`☠ ${remaining}`, this.vw - 18, 46);
     }
   }
@@ -1597,14 +1633,12 @@ export class Game {
     ctx.fillStyle = lg; ctx.fill();
     ctx.lineWidth = 3; ctx.strokeStyle = accent; ctx.stroke();
     dia(R - 5); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.stroke();
-    // text
+    // text — "LEVEL" header + big number (no fraction; fits inside the diamond)
     ctx.textAlign = 'center';
-    ctx.fillStyle = accent; ctx.font = 'bold 8px Trebuchet MS, sans-serif'; ctx.textBaseline = 'alphabetic';
-    ctx.fillText(bossType ? 'BOSS' : 'LEVEL', cx, cy - 11);
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 22px Georgia, serif'; ctx.textBaseline = 'middle';
-    ctx.fillText('' + this.level, cx, cy + 4);
-    ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.font = 'bold 8px Trebuchet MS, sans-serif';
-    ctx.fillText('/ ' + LEVELS.length, cx, cy + 16);
+    ctx.fillStyle = accent; ctx.font = '600 9px "Pixelify Sans", sans-serif'; ctx.textBaseline = 'middle';
+    ctx.fillText(bossType ? 'BOSS' : 'LEVEL', cx, cy - 9);
+    ctx.fillStyle = '#fff'; ctx.font = '700 26px "Pixelify Sans", sans-serif'; ctx.textBaseline = 'middle';
+    ctx.fillText('' + this.level, cx, cy + 8);
     ctx.restore();
   }
 }

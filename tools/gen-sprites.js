@@ -174,6 +174,12 @@ function drawHead(g, spec, skin, body, detail, eye, oy) {
       g.rect(6, hy0 + 2, 6, hy0 + 2, eye);            // eyes (shadowed)
       g.rect(9, hy0 + 2, 9, hy0 + 2, eye);
       g.rect(7, hy0 - 2, 8, hy0 - 1, robe);           // pointy hat tip
+      if (spec.beard) {                               // flowing beard (sorcerer)
+        const bd = hex(spec.beard);
+        g.rect(6, hy1, 9, hy1, bd);
+        g.rect(6, hy1 + 1, 9, hy1 + 1, bd);
+        g.px(7, hy1 + 2, bd); g.px(8, hy1 + 2, bd);
+      }
       break;
     }
     case 'horns':
@@ -269,6 +275,12 @@ const CHARACTERS = {
     skin: '#d9b08c', body: '#5e35a8', detail: '#3c2070', legs: '#4a2a86',
     head: 'hood', head_col: '#4a2580', belt: '#caa54a', weapon: 'staff',
     orb: '#ffd36b', eye: '#7df0ff', scale: 1.0,
+  },
+  sorcerer: { // friendly camp NPC — teal robe, white beard (NOT the enemy mage)
+    skin: '#e8c49a', body: '#1f6e7a', detail: '#11434c', legs: '#185560',
+    arms: '#1f6e7a', head: 'hood', head_col: '#1f6e7a', belt: '#e9c84a',
+    emblem: '#ffe27a', weapon: 'staff', orb: '#9af0ff', eye: '#eaffff',
+    beard: '#eceadf', scale: 1.0,
   },
   ogre: {
     skin: '#6a8f3c', body: '#7a5230', detail: '#4a3320', legs: '#5a6a8a',

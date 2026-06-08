@@ -1140,7 +1140,7 @@ export class Game {
     if (il.phase === 'in') {
       if (il.t >= 0.6 || this._tapped) { il.phase = 'type'; il.t = 0; this._tapped = false; }
     } else if (il.phase === 'type') {
-      il.shown = Math.min(il.line.length, il.shown + dt * 30);     // ~30 chars/sec
+      il.shown = Math.min(il.line.length, il.shown + dt * 13);     // ~13 chars/sec — slow & ominous
       if (this._tapped) { il.shown = il.line.length; this._tapped = false; }  // tap = finish line
       if (il.shown >= il.line.length) { il.phase = 'hold'; il.t = 0; }
     } else if (il.phase === 'hold') {
@@ -2000,11 +2000,11 @@ export class Game {
 
     const lines = il.line.split('\n');
     // fit the longest line to the screen width so layout stays put as it types
-    let size = 15;
+    let size = 24;
     ctx.font = `${size}px "Silkscreen", monospace`;
     const longest = lines.reduce((m, l) => Math.max(m, ctx.measureText(l).width), 0);
-    const maxW = W * 0.84;
-    if (longest > maxW) { size = Math.max(8, Math.floor(size * maxW / longest)); }
+    const maxW = W * 0.88;
+    if (longest > maxW) { size = Math.max(10, Math.floor(size * maxW / longest)); }
     ctx.font = `${size}px "Silkscreen", monospace`;
     const lh = size * 1.7, cy = H * 0.46 - (lines.length - 1) * lh / 2;
 

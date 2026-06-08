@@ -67,8 +67,8 @@ export const EVENTS = [
     id: 'cage', icon: 'vampire', color: '#9a6ce0', title: 'The Caged Wretch',
     flavor: 'A withered thing claws at iron bars, clutching something that glitters. Its eyes plead — or scheme.',
     choices: [
-      { label: 'Break the cage', risk: 'Gain a RELIC · it returns as a Vampiric elite next level',
-        apply: (g) => { const r = grantRelic(g); ambush(g, 1);
+      { label: 'Break the cage', risk: 'Gain a RELIC · 2 elite foes ambush you next level',
+        apply: (g) => { const r = grantRelic(g); ambush(g, 2);
           return r ? `It presses ${r.name} into your hand — then flees, cackling, to lie in wait below.`
             : 'It flees empty-handed, cackling, to lie in wait below.'; } },
       { label: 'Leave it caged', risk: 'Let it rot',
@@ -91,8 +91,8 @@ export const EVENTS = [
     id: 'fountain', icon: 'armor', color: '#d8413a', title: 'The Crimson Fountain',
     flavor: 'A fountain runs thick and red, warm against the dungeon chill. It could mend you — or mark you for what lurks below.',
     choices: [
-      { label: 'Drink deep', risk: 'Heal to FULL · the scent draws an elite next level',
-        apply: (g) => { healFull(g); ambush(g, 1); return 'Warmth knits your wounds whole — but something below has caught the scent of blood.'; } },
+      { label: 'Drink deep', risk: 'Heal to FULL · the scent draws an elite ambush next level',
+        apply: (g) => { healFull(g); ambush(g, 2); return 'Warmth knits your wounds whole — but something below has caught the scent of blood.'; } },
       { label: 'Bleed into it', risk: '−18 HP now · +75 gold',
         apply: (g) => { hurt(g, 18); addGold(g, 75); return 'You open a vein. The fountain drinks, and answers with a heavy glint of gold.'; } },
     ],
@@ -101,8 +101,8 @@ export const EVENTS = [
     id: 'champion', icon: 'whet', color: '#cfd6e0', title: 'The Fallen Champion',
     flavor: 'A dead knight slumps against the stone, armour still gleaming. A faint ghost-light flickers behind the visor.',
     choices: [
-      { label: 'Loot the armour', risk: 'A free forge upgrade · wakes its ghost (ambush)',
-        apply: (g) => { const f = grantForge(g); ambush(g, 1);
+      { label: 'Loot the armour', risk: 'A free forge upgrade · 2 elite foes ambush you next level',
+        apply: (g) => { const f = grantForge(g); ambush(g, 2);
           return f ? `You pry loose ${f.name}. The ghost-light snaps awake and gutters down the stair after you.`
             : 'The armour is spent — but the ghost-light snaps awake all the same.'; } },
       { label: 'Honour the dead', risk: 'Mend 40 HP · take nothing',
@@ -126,9 +126,9 @@ export const EVENTS = [
     id: 'coffer', icon: 'idol', color: '#e9c84a', title: 'The Sealed Coffer',
     flavor: 'An iron coffer bound in a flaking sigil. Treasure, surely — unless the sigil was never a lock, but a warning.',
     choices: [
-      { label: 'Force it open', risk: '55%: a relic · 45%: trapped (−30 HP + ambush)',
+      { label: 'Force it open', risk: '55%: a relic · 45%: trapped (−30 HP + elite ambush)',
         apply: (g) => { if (Math.random() < 0.55) { const r = grantRelic(g); return r ? `The lid groans wide — ${r.name} rests on the velvet within.` : 'The lid groans wide — but the velvet is bare.'; }
-          hurt(g, 30); ambush(g, 1); return 'The sigil flares crimson. Iron needles bite deep, and something below hears you scream.'; } },
+          hurt(g, 30); ambush(g, 2); return 'The sigil flares crimson. Iron needles bite deep, and something below hears you scream.'; } },
       { label: 'Leave it sealed', risk: 'Some locks are mercies',
         apply: () => 'You step over the coffer and leave its secret to the dark.' },
     ],

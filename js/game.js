@@ -580,6 +580,11 @@ export class Game {
       this.intro = { kind: 'boss', text: BOSS_NAMES[bossType], sub: this.biome.name, t: 0, dur: 3.0 };
       this.countdown = 4.8;
       this.shake = Math.max(this.shake, 14);
+    } else if (this.forceElite > 0) {
+      // something you woke in the camp followed you down — warn the player loudly
+      this.intro = { kind: 'ambush', text: 'AMBUSH', sub: 'Something followed you down…', t: 0, dur: 2.6 };
+      this.countdown = 3.8;
+      this.shake = Math.max(this.shake, 8);
     } else {
       this.intro = { kind: 'level', text: `LEVEL ${level}`, sub: this.biome.name, t: 0, dur: 2.0 };
     }
@@ -2138,6 +2143,20 @@ export class Game {
         ctx.shadowBlur = 0;
         ctx.font = 'italic 13px "Silkscreen", sans-serif'; ctx.fillStyle = 'rgba(207,160,160,0.8)';
         ctx.fillText(it.sub, this.vw / 2, y + size * 0.62 + 8);
+      } else if (it.kind === 'ambush') {
+        // a hard red warning that shakes/pulses — empowered foes came down with you
+        const jx = (Math.random() - 0.5) * 5 * a, jy = (Math.random() - 0.5) * 5 * a;
+        let size = 34 + slide * 4;
+        ctx.font = `bold ${size}px "Silkscreen", sans-serif`;
+        const maxW = this.vw * 0.9, tw = ctx.measureText(it.text).width;
+        if (tw > maxW) { size = Math.floor(size * maxW / tw); ctx.font = `bold ${size}px "Silkscreen", sans-serif`; }
+        ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+        ctx.strokeText(it.text, this.vw / 2 + jx, y + jy);
+        ctx.shadowColor = '#ff2a1e'; ctx.shadowBlur = 16 * a;
+        ctx.fillStyle = '#ff3326'; ctx.fillText(it.text, this.vw / 2 + jx, y + jy);
+        ctx.shadowBlur = 0;
+        ctx.font = 'italic 13px "Silkscreen", sans-serif'; ctx.fillStyle = 'rgba(220,160,150,0.85)';
+        ctx.fillText(it.sub, this.vw / 2, y + size * 0.6 + 8);
       } else {
         const x = this.vw / 2 + (1 - slide) * 80;
         ctx.font = '26px "Silkscreen", sans-serif';   // clear digits

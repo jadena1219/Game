@@ -19,8 +19,9 @@ export const META = [
     apply: (l) => ({ slots: l }),          desc: (l) => `+${l} ware${l > 1 ? 's' : ''} at the sorcerer` },
 ];
 
-// Relics that start LOCKED and are added to the shop pool once unlocked.
-export const LOCKED_RELICS = ['thunder', 'stone', 'exec'];
+// Meta-progression is DISABLED for now (the Sanctum is hidden). Nothing is
+// locked, and no permanent bonuses apply — every run starts from a clean slate.
+export const LOCKED_RELICS = [];
 export const RELIC_UNLOCK_COST = 70;
 
 const fresh = () => ({ souls: 0, up: {}, relics: [] });
@@ -34,15 +35,10 @@ export function saveMeta(m) { try { localStorage.setItem(KEY, JSON.stringify(m))
 export function metaCost(item, ownedLevel) { return item.base + item.step * ownedLevel; }
 
 // Roll up all owned upgrades into a flat bonus object applied at run start.
-export function metaBonuses(meta) {
-  const b = { hp: 0, dmg: 0, spd: 0, gold: 0, startGold: 0, slots: 0 };
-  for (const item of META) {
-    const l = meta.up[item.id] || 0;
-    if (!l) continue;
-    const a = item.apply(l);
-    for (const k in a) b[k] += a[k];
-  }
-  return b;
+// Disabled for now — always returns a neutral (zero) bonus so no permanent
+// upgrades affect a run.
+export function metaBonuses(_meta) {
+  return { hp: 0, dmg: 0, spd: 0, gold: 0, startGold: 0, slots: 0 };
 }
 
 // Souls earned from a run.

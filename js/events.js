@@ -3,7 +3,6 @@
 // thing. Each is a risk/reward decision that fits the gloom. Effects are applied
 // to the live run; some echo into the next level.
 import { recompute, RELICS, FORGE, relicById, forgeById } from './abilities.js';
-import { saveMeta } from './meta.js';
 
 // ---- helpers (operate on the live game) ----
 function grantRelic(g) {
@@ -25,7 +24,6 @@ function grantForge(g) {
 function hurt(g, n) { const p = g.player; p.hp = Math.max(1, p.hp - n); }
 function healFull(g) { g.player.hp = g.player.maxHP; }
 function addGold(g, n) { g.gold += n; if (n > 0) g.totalGold += n; }
-function addSouls(g, n) { g.meta.souls += n; saveMeta(g.meta); }
 function ambush(g, n = 1) { g.forceElite = (g.forceElite || 0) + n; }
 
 // ---- the event pool ----
@@ -107,17 +105,19 @@ export const EVENTS = [
         apply: (g) => { const f = grantForge(g); ambush(g, 1);
           return f ? `You pry loose ${f.name}. The ghost-light snaps awake and gutters down the stair after you.`
             : 'The armour is spent — but the ghost-light snaps awake all the same.'; } },
-      { label: 'Honour the dead', risk: '+40 souls · mend 25 HP',
-        apply: (g) => { addSouls(g, 40); g.player.hp = Math.min(g.player.maxHP, g.player.hp + 25);
-          return 'You bow your head. The ghost-light steadies, grateful, and lends you a measure of its old strength.'; } },
+      { label: 'Honour the dead', risk: 'Mend 40 HP · take nothing',
+        apply: (g) => { g.player.hp = Math.min(g.player.maxHP, g.player.hp + 40);
+          return 'You bow your head and close the visor. The ghost-light steadies, grateful, and mends your wounds.'; } },
     ],
   },
   {
     id: 'idol', icon: 'idol', color: '#b06bff', title: 'The Whispering Idol',
     flavor: 'A squat idol of black jade murmurs promises in a tongue you almost understand. It wants only a little of you.',
     choices: [
-      { label: 'Kneel and pray', risk: '+55 souls · −15 HP',
-        apply: (g) => { addSouls(g, 55); hurt(g, 15); return 'It whispers, and the souls of the fallen pour into your keeping. The price is a little of your own warmth.'; } },
+      { label: 'Kneel and pray', risk: 'A free forge upgrade · −15 HP',
+        apply: (g) => { const f = grantForge(g); hurt(g, 15);
+          return f ? `It whispers, and ${f.name} settles into your gear — the price is a little of your own warmth.`
+            : 'It whispers, but has nothing left to give — only takes a little of your warmth.'; } },
       { label: 'Smash it open', risk: 'It was hollow — pocket the coins',
         apply: (g) => { addGold(g, 40); return 'The idol shatters. A scatter of old coins spills across the flagstones.'; } },
     ],

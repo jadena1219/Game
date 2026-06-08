@@ -235,10 +235,8 @@ const ui = {
   hideShop() { this.showScreen(null); },
   _campMsg(t) { const el = document.getElementById('camp-msg'); if (el) el.textContent = t; },
 
-  gameOver(level, souls, total) {
+  gameOver(level) {
     document.getElementById('go-sub').innerHTML = numWrap(`You reached Level ${level} of 10`);
-    document.getElementById('go-souls').textContent = souls || 0;
-    document.getElementById('go-total').textContent = total || 0;
     this.showScreen('gameover');
   },
   victory(stats) {
@@ -247,8 +245,6 @@ const ui = {
         `<div class="vstat">Foes slain<span class="num">${stats.kills}</span></div>` +
         `<div class="vstat">Gold gathered<span class="num">${stats.gold}</span></div>` +
         `<div class="vstat">Relics claimed<span class="num">${stats.relics}</span></div>`;
-      document.getElementById('win-souls').textContent = stats.souls || 0;
-      document.getElementById('win-total').textContent = stats.total || 0;
     }
     this.showScreen('victory');
   },
@@ -280,9 +276,7 @@ async function boot() {
   document.getElementById('start-btn').addEventListener('click', () => game.beginIntro('knight'));
   document.getElementById('retry-btn').addEventListener('click', () => game.start('knight'));
   document.getElementById('win-btn').addEventListener('click', () => game.start('knight'));
-  document.getElementById('sanctum-btn').addEventListener('click', () => ui.showSanctum(game));
-  document.getElementById('sanctum-back').addEventListener('click', () => ui.showScreen('title'));
-  // return to the title (where the Sanctum lives) after a run
+  // return to the title after a run
   document.getElementById('go-menu-btn').addEventListener('click', () => ui.showScreen('title'));
   document.getElementById('win-menu-btn').addEventListener('click', () => ui.showScreen('title'));
 }

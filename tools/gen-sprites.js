@@ -162,13 +162,22 @@ function drawHead(g, spec, skin, body, detail, eye, oy) {
     case 'helmet': {
       const steel = body;
       g.rect(hx0, hy0, hx1, hy1, steel);
-      g.rect(hx0, hy0, hx0, hy1, shade(steel, 1.3));
-      g.rect(hx0, hy0 + 3, hx1, hy0 + 3, eye); // visor slit
+      g.rect(hx0, hy0, hx0, hy1, shade(steel, 1.3));   // left highlight
+      if (spec.helmHorns) {                            // dread-knight helm: brow, glowing visor, horns
+        g.rect(hx1, hy0, hx1, hy1, shade(steel, 0.7));            // right shadow
+        g.rect(hx0, hy0 + 2, hx1, hy0 + 2, shade(steel, 0.55));   // heavy brow ridge
+        g.rect(hx0 + 1, hy0 + 3, hx1 - 1, hy0 + 3, eye);         // glowing visor slit
+        const hn = hex(spec.horn || '#16161b');                   // jagged horns off the temples
+        g.px(hx0, hy0 - 1, hn); g.px(hx0 - 1, hy0 - 2, hn); g.px(hx0 - 1, hy0 - 3, hn); g.px(hx0 - 2, hy0 - 4, hn);
+        g.px(hx1, hy0 - 1, hn); g.px(hx1 + 1, hy0 - 2, hn); g.px(hx1 + 1, hy0 - 3, hn); g.px(hx1 + 2, hy0 - 4, hn);
+      } else {
+        g.rect(hx0, hy0 + 3, hx1, hy0 + 3, eye); // visor slit
+      }
       const crest = hex(spec.crest || '#c83737');
       if (spec.plume) {                         // tall feathered plume (paladin)
         g.rect(7, hy0 - 5, 8, hy0 - 1, crest);
         g.px(6, hy0 - 4, crest); g.px(9, hy0 - 3, crest); g.px(8, hy0 - 6, crest);
-      } else {
+      } else if (!spec.helmHorns) {
         g.rect(7, hy0 - 1, 8, hy0 - 1, crest); // small crest
       }
       break;
@@ -328,16 +337,16 @@ const CHARACTERS = {
     head: 'horns', horn: '#efe7d0', belt: '#3a2a18', weapon: 'club',
     club: '#5a3d22', eye: '#2a1810', scale: 1.5,
   },
-  miniboss: { // Dark Knight (level 5)
-    skin: '#bdbac4', body: '#33333d', detail: '#17171d', legs: '#26262e',
-    head: 'helmet', crest: '#b02828', emblem: '#b02828', weapon: 'greatsword',
-    blade: '#ff7a7a', guard: '#7a1818', eye: '#ff5050', scale: 1.8,
+  miniboss: { // Dark Knight (level 5) — a towering, horned dread-knight
+    skin: '#9a98a4', body: '#1b1b23', detail: '#0b0b10', legs: '#131318',
+    head: 'helmet', helmHorns: true, horn: '#0d0d12', crest: '#c01818', emblem: '#c01818',
+    weapon: 'greatsword', blade: '#ff5050', guard: '#5a0e0e', eye: '#ff3030', scale: 3.4,
   },
   boss: { // Demon Lord (level 10)
     skin: '#8e1f1f', body: '#5a1414', detail: '#2c0a0a', legs: '#3a0e0e',
-    head: 'horns', horn: '#2c0a0a', wings: '#33060a', belt: '#caa54a',
+    head: 'horns', horn: '#220607', wings: '#33060a', belt: '#caa54a',
     weapon: 'greatsword', blade: '#ff8a3a', guard: '#caa54a', eye: '#ffd84a',
-    scale: 2.6,
+    scale: 3.0,
   },
 };
 

@@ -840,7 +840,7 @@ export class Game {
       // empowered "elite" foe — forced by an event ambush, else rare & depth-scaled
       if (!e.boss) {
         if (this.forceElite > 0) { this.forceElite--; this._eliteify(e); }
-        else if (this.level >= 3 && Math.random() < Math.min(0.2, 0.03 + this.level * 0.02)) this._eliteify(e);
+        else if (this.level >= 3 && Math.random() < Math.min(0.32, 0.05 + this.level * 0.03)) this._eliteify(e);
       }
       this.enemies.push(e);
       if (type === 'boss' || type === 'miniboss') break; // a boss is its own batch
@@ -1571,6 +1571,7 @@ export class Game {
     this._drawSweep(ctx);          // "LEVEL CLEARED" banner sweep
     this._drawCountdownIntro(ctx); // level/boss intro + 3..2..1..FIGHT
     this._drawHUD(ctx);
+    this._drawBossBar(ctx);        // big top-of-screen boss health bar
     if (this.state === 'playing' || (this.state === 'camp' && !this.shopOpen)) this.input.draw(ctx);
     this._drawFuryButton(ctx);     // floating "unleash fury" button above the hero
     if (this.state === 'camp') this._drawCampToast(ctx);   // event outcome flavour
@@ -2432,8 +2433,25 @@ export class Game {
       ctx.beginPath(); ctx.arc(e.x, e.y, e.slamR * prog, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
     }
+    // boss menace: a heavy cast shadow + a slow roiling aura of dread
+    if (e.boss) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(0,0,0,0.42)';
+      ctx.beginPath(); ctx.ellipse(e.x, e.y + 6, e.r * 1.35, e.r * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      const col = e.sprite === 'boss' ? '#ff3a1e' : '#d81818';
+      const pulse = 0.5 + 0.5 * Math.sin(this.time * 3 + e.x * 0.01);
+      const rr = Math.round(e.r * 2.4);
+      const cache = this._glowCache || (this._glowCache = new Map());
+      const key = rr + '|' + col;
+      let g = cache.get(key);
+      if (!g) { g = ctx.createRadialGradient(0, 0, 0, 0, 0, rr); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)'); cache.set(key, g); }
+      ctx.save(); ctx.globalAlpha = 0.16 + 0.12 * pulse; ctx.fillStyle = g;
+      ctx.translate(e.x, e.y - e.r * 0.7); ctx.beginPath(); ctx.arc(0, 0, rr, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
     // elite aura + bomber fuse-glow
-    if (e.elite || e.type === 'bomber') {
+    if ((e.elite || e.type === 'bomber') && !e.boss) {
       const col = e.affix ? e.affix.color : '#ff7a2a';
       const pulse = 0.5 + 0.5 * Math.sin(this.time * (e.type === 'bomber' ? 9 : 4) + e.x);
       const rr = Math.round(e.r * 2.2);
@@ -2454,15 +2472,35 @@ export class Game {
       : (e.state === 'windup' || e.state === 'special' ? { color: '#ff4040', a: 0.5 }
       : (e.elite ? { color: e.affix.color, a: 0.28 } : null));
     drawSprite(ctx, e.sprite, frame, e.x, e.y, e.faceLeft, 1, tint);
-    // small HP bar for tanks, elites & bosses
-    if (e.boss || e.type === 'tank' || e.elite) {
-      const w = e.boss ? 60 : 34;
-      const hpf = e.hp / e.maxHP;
-      const hy = e.y - (e.boss ? 86 : 56);
+    // small floating HP bar for tanks & elites (bosses use the big top bar)
+    if (!e.boss && (e.type === 'tank' || e.elite)) {
+      const w = 34, hpf = e.hp / e.maxHP, hy = e.y - 56;
       ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(e.x - w / 2 - 1, hy - 1, w + 2, 6);
-      ctx.fillStyle = e.boss ? '#d8413a' : (e.elite ? e.affix.color : '#c9a23a');
+      ctx.fillStyle = e.elite ? e.affix.color : '#c9a23a';
       ctx.fillRect(e.x - w / 2, hy, w * hpf, 4);
     }
+  }
+
+  // A Souls-style boss bar pinned to the top of the screen while a boss lives.
+  _drawBossBar(ctx) {
+    if (this.state !== 'playing') return;
+    const boss = this.enemies.find((e) => e.boss && !e.dead);
+    if (!boss) return;
+    const W = this.vw, bw = Math.min(W * 0.74, 360), bx = (W - bw) / 2, by = 16;
+    const hpf = Math.max(0, boss.hp / boss.maxHP);
+    if (boss._hpShown == null) boss._hpShown = hpf;
+    boss._hpShown += (hpf - boss._hpShown) * Math.min(1, 0.016 * 8);   // smooth drain
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.65)'; this._roundRect(ctx, bx - 3, by - 3, bw + 6, 14, 4); ctx.fill();
+    ctx.fillStyle = '#2a0606'; ctx.fillRect(bx, by, bw, 8);
+    ctx.fillStyle = 'rgba(255,120,90,0.45)'; ctx.fillRect(bx, by, bw * boss._hpShown, 8);  // drain ghost
+    ctx.fillStyle = '#d8231a'; ctx.fillRect(bx, by, bw * hpf, 8);
+    ctx.fillStyle = 'rgba(255,150,120,0.6)'; ctx.fillRect(bx, by, bw * hpf, 2);
+    ctx.fillStyle = 'rgba(255,40,30,0.25)'; ctx.fillRect(bx - 1, by - 1, bw + 2, 10);  // edge bleed
+    ctx.font = '11px "Silkscreen", monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = '#000'; ctx.fillText((BOSS_NAMES[boss.type] || 'BOSS').toUpperCase(), W / 2 + 1, by + 27);
+    ctx.fillStyle = '#e9b8b2'; ctx.fillText((BOSS_NAMES[boss.type] || 'BOSS').toUpperCase(), W / 2, by + 26);
+    ctx.restore();
   }
 
   _rgba(hex, a) {

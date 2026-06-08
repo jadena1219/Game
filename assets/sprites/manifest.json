@@ -46,11 +46,11 @@
     },
     "miniboss": {
       "file": "miniboss.png",
-      "scale": 1.8
+      "scale": 3.4
     },
     "boss": {
       "file": "boss.png",
-      "scale": 2.6
+      "scale": 3
     }
   }
 }

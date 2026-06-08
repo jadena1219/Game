@@ -1,133 +1,111 @@
-// Biome definitions for the heroic high-fantasy journey. Each act of the run
-// gets its own lush, distinct setting: ground palette, framing props, lighting,
-// and weather. Painters draw scattered ground detail onto the baked background.
+// Dark dungeon biomes — the descent. Cohesive stone-and-shadow vibe throughout,
+// lit by torches against the dark. Each act shifts the tint & hazards, but the
+// mood stays grim and torch-lit. Painters draw flagstone floors + grime.
 
 function rngFrom(seed) {
   return () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
 }
 
-// ---- ground-detail painters (drawn once into the background canvas) ----
-function grassDetail(g, W, H) {
-  const R = rngFrom(101);
-  // grass tufts
-  for (let i = 0; i < 520; i++) {
-    const x = R() * W, y = R() * H;
-    const c = R() < 0.5 ? 'rgba(90,160,70,0.5)' : 'rgba(60,120,50,0.5)';
-    g.strokeStyle = c; g.lineWidth = 1;
-    g.beginPath(); g.moveTo(x, y); g.lineTo(x + (R() - 0.5) * 4, y - 3 - R() * 3); g.stroke();
+// Shared flagstone floor: tiled stone with seams, shading, cracks, then extras.
+function flagstones(g, W, H, seed, seam, extra) {
+  const R = rngFrom(seed);
+  const tile = 62;
+  // per-stone subtle shading so the floor isn't flat
+  for (let y = 0; y < H; y += tile) {
+    for (let x = 0; x < W; x += tile) {
+      const sh = (R() - 0.5) * 0.12;
+      g.fillStyle = sh > 0 ? `rgba(255,255,255,${sh})` : `rgba(0,0,0,${-sh})`;
+      g.fillRect(x, y, tile, tile);
+    }
   }
-  // flowers
-  const petals = ['#ff6f7a', '#ffd24a', '#ffffff', '#c58bff'];
-  for (let i = 0; i < 70; i++) {
+  // recessed seams
+  g.strokeStyle = seam; g.lineWidth = 3;
+  for (let x = tile; x < W; x += tile) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); }
+  for (let y = tile; y < H; y += tile) { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); }
+  g.strokeStyle = 'rgba(255,255,255,0.04)'; g.lineWidth = 1;
+  for (let x = tile; x < W; x += tile) { g.beginPath(); g.moveTo(x + 1, 0); g.lineTo(x + 1, H); g.stroke(); }
+  // cracks + grime speckle
+  for (let i = 0; i < (W * H) / 5000; i++) { g.fillStyle = 'rgba(0,0,0,0.22)'; g.fillRect(R() * W, R() * H, 1 + R() * 3, 1); }
+  for (let i = 0; i < (W * H) / 7000; i++) { g.fillStyle = 'rgba(255,255,255,0.03)'; g.fillRect(R() * W, R() * H, 2, 2); }
+  if (extra) extra(g, W, H, R);
+}
+
+const detailCatacomb = (g, W, H) => flagstones(g, W, H, 101, 'rgba(0,0,0,0.4)', (G, W, H, R) => {
+  // scattered bones & skulls embedded in the floor
+  for (let i = 0; i < (W * H) / 60000; i++) {
     const x = 30 + R() * (W - 60), y = 30 + R() * (H - 60);
-    const col = petals[(R() * petals.length) | 0];
-    g.fillStyle = '#3c7a38'; g.fillRect(x, y, 1, 3);
-    g.fillStyle = col;
-    g.fillRect(x - 1, y - 2, 1, 1); g.fillRect(x + 1, y - 2, 1, 1);
-    g.fillRect(x, y - 3, 1, 1); g.fillRect(x, y - 1, 1, 1);
-    g.fillStyle = '#ffe9a0'; g.fillRect(x, y - 2, 1, 1);
+    G.fillStyle = 'rgba(200,194,176,0.5)';
+    if (R() < 0.5) { G.fillRect(x, y, 8, 2); G.fillRect(x - 1, y - 1, 2, 4); G.fillRect(x + 7, y - 1, 2, 4); }
+    else { G.beginPath(); G.arc(x, y, 3, 0, Math.PI * 2); G.fill(); G.fillRect(x - 3, y, 6, 2); }
   }
-}
+});
 
-function forestDetail(g, W, H) {
-  const R = rngFrom(202);
-  // mossy patches
-  for (let i = 0; i < 60; i++) {
-    const x = R() * W, y = R() * H, r = 14 + R() * 30;
-    g.fillStyle = `rgba(40,90,45,${0.1 + R() * 0.12})`;
-    g.beginPath(); g.ellipse(x, y, r, r * 0.7, 0, 0, Math.PI * 2); g.fill();
+const detailCrypt = (g, W, H) => flagstones(g, W, H, 202, 'rgba(0,0,0,0.45)', (G, W, H, R) => {
+  // moss patches + water sheen
+  for (let i = 0; i < (W * H) / 26000; i++) {
+    const x = R() * W, y = R() * H, r = 10 + R() * 26;
+    G.fillStyle = `rgba(40,90,60,${0.08 + R() * 0.12})`;
+    G.beginPath(); G.ellipse(x, y, r, r * 0.7, 0, 0, Math.PI * 2); G.fill();
   }
-  // roots / fallen leaves
-  for (let i = 0; i < 260; i++) {
-    const x = R() * W, y = R() * H;
-    g.fillStyle = R() < 0.5 ? 'rgba(150,90,40,0.5)' : 'rgba(190,140,50,0.45)';
-    g.fillRect(x, y, 2, 1);
+  for (let i = 0; i < (W * H) / 50000; i++) {
+    G.fillStyle = 'rgba(90,150,150,0.12)';
+    G.beginPath(); G.ellipse(R() * W, R() * H, 18, 7, 0, 0, Math.PI * 2); G.fill();
   }
-  // glowing mushrooms
-  for (let i = 0; i < 24; i++) {
-    const x = 30 + R() * (W - 60), y = 40 + R() * (H - 80);
-    g.fillStyle = '#6b4a2a'; g.fillRect(x, y, 1, 3);
-    g.fillStyle = '#7fe8ff'; g.fillRect(x - 1, y - 1, 3, 1); g.fillRect(x, y - 2, 1, 1);
-  }
-}
+});
 
-function stoneDetail(g, W, H) {
-  const R = rngFrom(303);
-  // flagstone seams
-  g.strokeStyle = 'rgba(0,0,0,0.18)'; g.lineWidth = 2;
-  const tile = 58;
-  for (let x = tile; x < W; x += tile) { g.beginPath(); g.moveTo(x + (R() - 0.5) * 6, 0); g.lineTo(x + (R() - 0.5) * 6, H); g.stroke(); }
-  for (let y = tile; y < H; y += tile) { g.beginPath(); g.moveTo(0, y + (R() - 0.5) * 6); g.lineTo(W, y + (R() - 0.5) * 6); g.stroke(); }
-  // golden inlay highlights + cracks
-  for (let i = 0; i < 200; i++) { const x = R() * W, y = R() * H; g.fillStyle = 'rgba(233,200,74,0.08)'; g.fillRect(x, y, 2, 2); }
-  for (let i = 0; i < 90; i++) { const x = R() * W, y = R() * H; g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(x, y, 1 + R() * 3, 1); }
-}
+const detailKeep = (g, W, H) => flagstones(g, W, H, 303, 'rgba(0,0,0,0.5)', (G, W, H, R) => {
+  // iron rivets + old bloodstains
+  for (let i = 0; i < (W * H) / 30000; i++) {
+    G.fillStyle = 'rgba(120,110,120,0.5)';
+    G.beginPath(); G.arc(R() * W, R() * H, 2, 0, Math.PI * 2); G.fill();
+  }
+  for (let i = 0; i < (W * H) / 70000; i++) {
+    G.fillStyle = 'rgba(80,16,16,0.3)';
+    G.beginPath(); G.ellipse(R() * W, R() * H, 14, 9, R() * 3, 0, Math.PI * 2); G.fill();
+  }
+});
 
-function throneDetail(g, W, H) {
-  const R = rngFrom(404);
-  // obsidian speckle
-  for (let i = 0; i < 400; i++) { const x = R() * W, y = R() * H; g.fillStyle = 'rgba(255,255,255,0.03)'; g.fillRect(x, y, 2, 2); }
-  // glowing lava cracks (branching)
-  g.lineCap = 'round';
-  for (let i = 0; i < 16; i++) {
+const detailThrone = (g, W, H) => flagstones(g, W, H, 404, 'rgba(0,0,0,0.6)', (G, W, H, R) => {
+  // molten cracks bleeding through the obsidian floor
+  G.lineCap = 'round';
+  for (let i = 0; i < (W * H) / 90000; i++) {
     let x = R() * W, y = R() * H; const len = 4 + (R() * 6 | 0);
-    g.strokeStyle = 'rgba(255,120,30,0.55)'; g.shadowColor = '#ff7a1e'; g.shadowBlur = 8; g.lineWidth = 2;
-    g.beginPath(); g.moveTo(x, y);
-    for (let s = 0; s < len; s++) { x += (R() - 0.5) * 40; y += (R() - 0.5) * 40; g.lineTo(x, y); }
-    g.stroke();
+    G.strokeStyle = 'rgba(255,90,20,0.5)'; G.shadowColor = '#ff6a1e'; G.shadowBlur = 8; G.lineWidth = 2;
+    G.beginPath(); G.moveTo(x, y);
+    for (let s = 0; s < len; s++) { x += (R() - 0.5) * 44; y += (R() - 0.5) * 44; G.lineTo(x, y); }
+    G.stroke();
   }
-  g.shadowBlur = 0;
-}
+  G.shadowBlur = 0;
+});
 
 export const BIOMES = [
   {
-    id: 'gardens', name: 'The Kingdom Gardens', act: 'I', levels: [1, 2, 3],
-    ground: ['#5aa24a', '#3f7c39'], border: 'rgba(20,50,18,0.55)',
-    grade: 'rgba(255,238,170,0.07)', lightAmbient: 0.12,
-    particle: 'pollen', pcol: ['#fff6c0', '#ffe9a0', '#ffffff'],
-    detail: grassDetail,
-    props: [
-      { t: 'brazier', x: 0.1, y: 0.26 }, { t: 'brazier', x: 0.9, y: 0.26 },
-      { t: 'banner', x: 0.28, y: 0.12, c: '#c0392b' }, { t: 'banner', x: 0.72, y: 0.12, c: '#2c6fb0' },
-      { t: 'pillar', x: 0.07, y: 0.84 }, { t: 'pillar', x: 0.93, y: 0.84 },
-    ],
+    id: 'catacomb', name: 'The Catacombs', act: 'I', levels: [1, 2, 3],
+    ground: ['#2a2433', '#15101d'], wall: '#211b2c', cap: '#332a44',
+    grade: 'rgba(40,40,90,0.10)', dark: 0.6, torch: '#9fc6ff', lava: false,
+    particle: 'pollen', pcol: ['#7a7a96', '#56566e'],   // cold dust motes
+    detail: detailCatacomb,
   },
   {
-    id: 'forest', name: 'The Enchanted Forest', act: 'II', levels: [4, 5, 6],
-    ground: ['#3e6f3a', '#274d2a'], border: 'rgba(8,28,12,0.7)',
-    grade: 'rgba(120,200,140,0.08)', lightAmbient: 0.3,
-    particle: 'leaves', pcol: ['#e0a23a', '#d8d24a', '#6fae54'],
-    detail: forestDetail,
-    props: [
-      { t: 'tree', x: 0.08, y: 0.22 }, { t: 'tree', x: 0.92, y: 0.2 },
-      { t: 'tree', x: 0.14, y: 0.9 }, { t: 'tree', x: 0.88, y: 0.92 },
-      { t: 'brazier', x: 0.5, y: 0.14 },
-    ],
+    id: 'crypt', name: 'The Flooded Crypt', act: 'II', levels: [4, 5, 6],
+    ground: ['#1d2a28', '#0e1816'], wall: '#172422', cap: '#243a34',
+    grade: 'rgba(40,90,80,0.10)', dark: 0.66, torch: '#7fe8c0', lava: false,
+    particle: 'pollen', pcol: ['#5f8a78', '#3c5a4e'],   // damp green dust
+    detail: detailCrypt,
   },
   {
-    id: 'citadel', name: 'The Citadel Ramparts', act: 'III', levels: [7, 8, 9],
-    ground: ['#8a8597', '#5a5468'], border: 'rgba(20,16,30,0.72)',
-    grade: 'rgba(255,200,120,0.09)', lightAmbient: 0.34,
-    particle: 'embers', pcol: ['#ff8a3a', '#e9c84a', '#ffd36b'],
-    detail: stoneDetail,
-    props: [
-      { t: 'brazier', x: 0.12, y: 0.2 }, { t: 'brazier', x: 0.88, y: 0.2 },
-      { t: 'brazier', x: 0.12, y: 0.86 }, { t: 'brazier', x: 0.88, y: 0.86 },
-      { t: 'banner', x: 0.3, y: 0.1, c: '#caa54a' }, { t: 'banner', x: 0.7, y: 0.1, c: '#caa54a' },
-      { t: 'statue', x: 0.5, y: 0.12 },
-    ],
+    id: 'keep', name: 'The Iron Keep', act: 'III', levels: [7, 8, 9],
+    ground: ['#28202a', '#140d14'], wall: '#1f1820', cap: '#352b33',
+    grade: 'rgba(120,60,40,0.10)', dark: 0.62, torch: '#ffb24a', lava: false,
+    particle: 'embers', pcol: ['#ff8a3a', '#c0502a', '#ffce6a'],
+    detail: detailKeep,
   },
   {
     id: 'throne', name: 'Throne of the Demon Lord', act: 'IV', levels: [10],
-    ground: ['#2a1622', '#160a12'], border: 'rgba(0,0,0,0.85)',
-    grade: 'rgba(255,90,40,0.1)', lightAmbient: 0.55,
+    ground: ['#241320', '#10070d'], wall: '#180a12', cap: '#2c1420',
+    grade: 'rgba(255,70,30,0.12)', dark: 0.55, torch: '#ff7a2a', lava: true,
     particle: 'embers', pcol: ['#ff5a2a', '#ff9a3a', '#ffce6a'],
-    detail: throneDetail,
-    props: [
-      { t: 'brazier', x: 0.16, y: 0.22, lava: true }, { t: 'brazier', x: 0.84, y: 0.22, lava: true },
-      { t: 'brazier', x: 0.16, y: 0.85, lava: true }, { t: 'brazier', x: 0.84, y: 0.85, lava: true },
-      { t: 'statue', x: 0.5, y: 0.1 },
-    ],
+    detail: detailThrone,
   },
 ];
 

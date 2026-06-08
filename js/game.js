@@ -104,56 +104,61 @@ export class Game {
 
     // intentional structures, framed along the arena — never random clutter
     this.braziers = [];
-    const lava = biome.id === 'throne';
+    const lava = !!biome.lava, torch = biome.torch || '#ffb24a';
     // a brazier in each corner for light + framing
     const ci = 64;
     for (const [bx, by] of [[ci, ci], [W - ci, ci], [ci, H - ci], [W - ci, H - ci]]) {
-      this._bakeBrazierPost(g, bx, by); this.braziers.push({ x: bx, y: by, lava });
+      this._bakeBrazierPost(g, bx, by); this.braziers.push({ x: bx, y: by, lava, torch });
     }
     this._bakeBiomeDecor(g, biome, W, H);
     this._bakeWalls(g, biome, W, H);
 
-    // vignette
-    const v = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.28, W / 2, H / 2, Math.max(W, H) * 0.62);
-    v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.42)');
+    // vignette (heavier — this is a dungeon)
+    const v = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.22, W / 2, H / 2, Math.max(W, H) * 0.6);
+    v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.55)');
     g.fillStyle = v; g.fillRect(0, 0, W, H);
     this.bg = c;
-    this.voidColor = '#070510';
+    this.voidColor = '#050308';
   }
 
   // Biome-specific framed decoration (placed deliberately, not scattered).
   _bakeBiomeDecor(g, biome, W, H) {
-    if (biome.id === 'gardens') {
-      this._bakeBanner(g, W * 0.32, 40, '#c0392b'); this._bakeBanner(g, W * 0.68, 40, '#2c6fb0');
-      this._bakePillar(g, 40, H * 0.5); this._bakePillar(g, W - 40, H * 0.5);
-    } else if (biome.id === 'forest') {
-      // a treeline hugging the walls
-      for (let i = 0; i < 7; i++) { this._bakeTree(g, 30 + (W - 60) * i / 6, 34); this._bakeTree(g, 30 + (W - 60) * i / 6, H - 22); }
-      for (let i = 1; i < 5; i++) { this._bakeTree(g, 26, 60 + (H - 120) * i / 5); this._bakeTree(g, W - 26, 60 + (H - 120) * i / 5); }
-    } else if (biome.id === 'citadel') {
-      this._bakeStatue(g, W * 0.5, 46);
-      this._bakeBanner(g, W * 0.28, 40, '#caa54a'); this._bakeBanner(g, W * 0.72, 40, '#caa54a');
+    if (biome.id === 'catacomb') {
+      this._bakeStatue(g, W * 0.5, 44);
+      this._bakePillar(g, 40, H * 0.32); this._bakePillar(g, 40, H * 0.68);
+      this._bakePillar(g, W - 40, H * 0.32); this._bakePillar(g, W - 40, H * 0.68);
+    } else if (biome.id === 'crypt') {
+      this._bakePillar(g, 40, H * 0.3); this._bakePillar(g, 40, H * 0.7);
+      this._bakePillar(g, W - 40, H * 0.3); this._bakePillar(g, W - 40, H * 0.7);
+      this._bakeBanner(g, W * 0.5, 38, '#2f5a4a');
+    } else if (biome.id === 'keep') {
+      this._bakeStatue(g, W * 0.5, 44);
+      this._bakeBanner(g, W * 0.27, 38, '#7a2222'); this._bakeBanner(g, W * 0.73, 38, '#7a2222');
       this._bakePillar(g, 42, H * 0.32); this._bakePillar(g, 42, H * 0.68);
       this._bakePillar(g, W - 42, H * 0.32); this._bakePillar(g, W - 42, H * 0.68);
     } else if (biome.id === 'throne') {
-      this._bakeStatue(g, W * 0.32, 46); this._bakeStatue(g, W * 0.68, 46);
+      this._bakeStatue(g, W * 0.3, 44); this._bakeStatue(g, W * 0.7, 44);
+      this._bakeBanner(g, W * 0.5, 36, '#5a1414');
     }
   }
 
-  // A wall band hugging the arena rim, styled per biome.
+  // A wall band hugging the arena rim, dark dungeon stone.
   _bakeWalls(g, biome, W, H) {
-    const t = 26;
-    const wall = { gardens: '#2f5d2a', forest: '#1c3a1e', citadel: '#4a4456', throne: '#1a0d14' }[biome.id] || '#333';
-    const cap = { gardens: '#3e7a36', forest: '#27502a', citadel: '#615a72', throne: '#2a1420' }[biome.id] || '#555';
+    const t = 28;
+    const wall = biome.wall || '#211b2c', cap = biome.cap || '#332a44';
     g.fillStyle = wall;
     g.fillRect(0, 0, W, t); g.fillRect(0, H - t, W, t); g.fillRect(0, 0, t, H); g.fillRect(W - t, 0, t, H);
+    // block courses on the wall
+    g.strokeStyle = 'rgba(0,0,0,0.4)'; g.lineWidth = 2;
+    for (let x = 0; x < W; x += 46) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, t); g.moveTo(x + 23, H - t); g.lineTo(x + 23, H); g.stroke(); }
     g.fillStyle = cap;
     g.fillRect(0, t - 5, W, 5); g.fillRect(0, H - t, W, 5); g.fillRect(t - 5, 0, 5, H); g.fillRect(W - t, 0, 5, H);
-    // inner shadow so the floor reads as sunken
-    g.fillStyle = 'rgba(0,0,0,0.22)';
-    g.fillRect(t, t, W - 2 * t, 6); g.fillRect(t, t, 6, H - 2 * t);
-    if (biome.id === 'throne') { // lava trim
-      g.fillStyle = 'rgba(255,110,30,0.5)';
+    // inner shadow so the floor reads as sunken below the walls
+    g.fillStyle = 'rgba(0,0,0,0.35)';
+    g.fillRect(t, t, W - 2 * t, 8); g.fillRect(t, t, 8, H - 2 * t);
+    g.fillRect(t, H - t - 8, W - 2 * t, 8); g.fillRect(W - t - 8, t, 8, H - 2 * t);
+    if (biome.lava) { // molten trim
+      g.fillStyle = 'rgba(255,90,20,0.55)';
       g.fillRect(t, t, W - 2 * t, 2); g.fillRect(t, H - t - 2, W - 2 * t, 2);
     }
   }
@@ -840,10 +845,14 @@ export class Game {
     for (const fx of this.effects) if (fx.kind === 'spark') this._drawSpark(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'dmg') this._drawDamage(ctx, fx);
 
-    this._drawLights(ctx);          // additive warm glow (world space)
     this._drawEmbers(ctx);          // death/title/victory embers (world space)
     ctx.restore();                  // ===== end world space =====
     ctx.restore();                  // end shake
+
+    this._drawDarkness(ctx);        // dungeon shadow with torch-lit pools
+    ctx.save(); ctx.translate(-this.cam.x, -this.cam.y);
+    this._drawLights(ctx);          // additive light cores, on top of the dark
+    ctx.restore();
 
     this._drawAtmos(ctx);           // biome weather (screen overlay)
     this._drawGrade(ctx);           // biome colour grade (screen overlay)
@@ -925,12 +934,54 @@ export class Game {
       for (const bz of this.braziers) {
         if (!this._inView(bz.x, bz.y)) continue;
         const fl = 0.8 + 0.2 * Math.sin(this.titleT * 11 + bz.x);
-        glow(bz.x, bz.y - 6, 120, bz.lava ? '#ff7a2a' : '#ffb24a', 0.5 * fl);
+        glow(bz.x, bz.y - 6, 130, bz.lava ? '#ff7a2a' : (bz.torch || '#ffb24a'), 0.6 * fl);
       }
     }
-    if (this.state !== 'title' && this.player) glow(this.player.x, this.player.y - 14, 70, '#bfe9ff', 0.18);
-    for (const pr of this.projectiles) glow(pr.x, pr.y, 36, pr.boss ? '#ff7a2a' : '#b06bff', 0.5);
-    for (const fb of this.allyProjectiles) glow(fb.x, fb.y, 40, '#ff8a3a', 0.6);
+    if (this.player) glow(this.player.x, this.player.y - 14, 64, '#cfe6ff', 0.16);
+    for (const pr of this.projectiles) glow(pr.x, pr.y, 38, pr.boss ? '#ff7a2a' : '#b06bff', 0.55);
+    for (const fb of this.allyProjectiles) glow(fb.x, fb.y, 42, '#ff8a3a', 0.65);
+    ctx.restore();
+  }
+
+  // Dungeon darkness: overlay shadow over everything, then cut light "pools" out
+  // of it at the torches, the hero and any spell flashes. This is the vibe.
+  _drawDarkness(ctx) {
+    const b = this.biome; if (!b || !b.dark) return;
+    if (this.flashScreen > 0.02) return;   // the ultimate floods the room with light
+    const S = 0.5;                          // half-res shadow buffer (soft, cheap)
+    const sw = Math.max(1, Math.round(this.vw * S)), sh = Math.max(1, Math.round(this.vh * S));
+    let sc = this.shadowCanvas, g = this.shadowCtx;
+    if (!sc || sc.width !== sw || sc.height !== sh) {
+      sc = this.shadowCanvas = document.createElement('canvas');
+      sc.width = sw; sc.height = sh;
+      g = this.shadowCtx = sc.getContext('2d');
+    }
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, sw, sh);
+    g.fillStyle = `rgba(4,3,9,${b.dark})`;
+    g.fillRect(0, 0, sw, sh);
+    g.globalCompositeOperation = 'destination-out';
+    const hole = (wx, wy, r, soft) => {
+      const sx = (wx - this.cam.x) * S, sy = (wy - this.cam.y) * S, rr = r * S;
+      if (sx < -rr || sx > sw + rr || sy < -rr || sy > sh + rr) return;
+      const grd = g.createRadialGradient(sx, sy, rr * soft, sx, sy, rr);
+      grd.addColorStop(0, 'rgba(0,0,0,1)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = grd; g.beginPath(); g.arc(sx, sy, rr, 0, Math.PI * 2); g.fill();
+    };
+    if (this.braziers) for (const bz of this.braziers) {
+      const fl = 0.85 + 0.15 * Math.sin(this.titleT * 11 + bz.x);
+      hole(bz.x, bz.y - 6, 170 * fl, 0.18);
+    }
+    const hx = this.player ? this.player.x : this.world.w / 2;
+    const hy = this.player ? this.player.y - 8 : this.world.h / 2 + this.vh * 0.16;
+    hole(hx, hy, 175, 0.25);     // the hero carries the light
+    for (const fb of this.allyProjectiles) hole(fb.x, fb.y, 90, 0.15);
+    for (const pr of this.projectiles) hole(pr.x, pr.y, 52, 0.15);
+    for (const pk of this.pickups) hole(pk.x, pk.y, 30, 0.1);   // loot glints in the dark
+    for (const fx of this.effects) { if (fx.kind === 'boom' || fx.kind === 'ult') hole(fx.x, fx.y, (fx.r || 80) * 1.1, 0.1); }
+    g.globalCompositeOperation = 'source-over';
+    ctx.save(); ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(sc, 0, 0, this.vw, this.vh);
     ctx.restore();
   }
 

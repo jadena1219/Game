@@ -50,6 +50,7 @@ export class Game {
     this.world = { w: 2600, h: 2600 };
     this.pickups = [];          // walk-over gold / health
     this.gold = 0;
+    this.totalGold = 0;
 
     this.bg = null;
     this._resize();
@@ -303,7 +304,7 @@ export class Game {
   start() {
     this._slashWipe(() => {
       this.player = new Player(this.world.w / 2, this.world.h / 2);
-      this.kills = 0; this.level = 1; this.gold = 0;
+      this.kills = 0; this.level = 1; this.gold = 0; this.totalGold = 0;
       this.hpDisplay = this.hpGhost = this.player.maxHP;
       this.timeScale = 1; this.dying = 0;
       this._startLevel(1, true);
@@ -453,7 +454,7 @@ export class Game {
   }
 
   _collect(pk) {
-    if (pk.type === 'gold') { this.gold += Math.ceil(pk.value * this.player.mods.goldMult); }
+    if (pk.type === 'gold') { const g = Math.ceil(pk.value * this.player.mods.goldMult); this.gold += g; this.totalGold += g; }
     else if (pk.type === 'health') {
       this.player.hp = Math.min(this.player.maxHP, this.player.hp + pk.value);
       this.effects.push({ kind: 'dmg', x: this.player.x, y: this.player.y - 30, text: '+' + pk.value,
@@ -631,13 +632,14 @@ export class Game {
     }
   }
 
-  // Keep the floating Fury button parked just above the hero's head.
+  // Park the Fury rune beside the hero (by his sword), not over him.
   _updateFuryButton() {
     const ib = this.input.furyBtn || (this.input.furyBtn = { x: 0, y: 0, r: 0, visible: false });
     if (this.furyReady && this.state === 'playing' && this.countdown <= 0) {
-      ib.x = this.player.x - this.cam.x;
-      ib.y = this.player.y - this.cam.y - 60;
-      ib.r = 30; ib.visible = true;
+      const side = this.player.faceLeft ? -1 : 1;
+      ib.x = this.player.x - this.cam.x + 40 * side;
+      ib.y = this.player.y - this.cam.y - 16;
+      ib.r = 26; ib.visible = true;
     } else { ib.visible = false; }
   }
 
@@ -855,7 +857,7 @@ export class Game {
     }
     if (this.wonT >= 3.6) {
       this.state = 'victory';
-      this.ui.victory({ kills: this.kills, gold: this.gold, relics: this.player.relics.size });
+      this.ui.victory({ kills: this.kills, gold: this.totalGold, relics: this.player.relics.size });
     }
   }
 
@@ -924,7 +926,7 @@ export class Game {
     } else {
       // "LEVEL CLEARED" sweep, then the camp shop
       this.player.hp = Math.min(this.player.maxHP, this.player.hp + CONFIG.hpRestorePerLevel);
-      this.gold += 10 + this.level * 4;       // steady clear bonus so the shop is always useful
+      { const b = 10 + this.level * 4; this.gold += b; this.totalGold += b; }   // steady clear bonus
       this.state = 'clearing';
       this.sweep = { t: 0, dur: 1.5 };
       this.pendingReward = { heal: CONFIG.hpRestorePerLevel };
@@ -1048,7 +1050,7 @@ export class Game {
       p.relics.add(relic.id); recompute(p);
       return { ok: true, kind: 'relic', name: relic.name, icon: relic.icon };
     }
-    if (r < 0.85) { this.gold += 12; return { ok: true, kind: 'gold', amount: 12 }; }
+    if (r < 0.85) { this.gold += 12; this.totalGold += 12; return { ok: true, kind: 'gold', amount: 12 }; }
     return { ok: true, kind: 'nothing' };
   }
 
@@ -1165,43 +1167,44 @@ export class Game {
     if (this.state !== 'playing') return;
     const b = this.input.furyBtn;
     if (!b.visible) return;
-    const x = b.x, y = b.y, r = b.r, t = this.time;
-    const pulse = 0.5 + 0.5 * Math.sin(t * 6);
+    const t = this.time;
+    const pulse = 0.5 + 0.5 * Math.sin(t * 5);
+    const cx = b.x, cy = b.y + Math.sin(t * 3) * 1.5;
+    const PXS = 4, N = 9, half = N * PXS / 2;          // a 9x9 chunky-pixel rune tile
+    const x0 = Math.round(cx - half), y0 = Math.round(cy - half);
     ctx.save();
-    // aura
-    const g = ctx.createRadialGradient(x, y, 2, x, y, r + 20 + pulse * 8);
-    g.addColorStop(0, 'rgba(190,130,255,0.65)');
-    g.addColorStop(0.55, 'rgba(140,80,230,0.32)');
+    // soft arcane glow behind the stone
+    const g = ctx.createRadialGradient(cx, cy, 2, cx, cy, half + 14 + pulse * 6);
+    g.addColorStop(0, `rgba(180,120,255,${0.5 + 0.3 * pulse})`);
     g.addColorStop(1, 'rgba(120,60,200,0)');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r + 20 + pulse * 8, 0, Math.PI * 2); ctx.fill();
-    // rotating rune ticks
-    ctx.strokeStyle = `rgba(220,190,255,${0.4 + 0.5 * pulse})`; ctx.lineWidth = 2;
-    for (let i = 0; i < 10; i++) {
-      const a = t * 1.6 + i * (Math.PI * 2 / 10);
-      const r0 = r + 6, r1 = r + 11;
-      ctx.beginPath();
-      ctx.moveTo(x + Math.cos(a) * r0, y + Math.sin(a) * r0);
-      ctx.lineTo(x + Math.cos(a) * r1, y + Math.sin(a) * r1);
-      ctx.stroke();
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, half + 16 + pulse * 6, 0, Math.PI * 2); ctx.fill();
+    // pixel helper
+    const px = (gx, gy, col) => { ctx.fillStyle = col; ctx.fillRect(x0 + gx * PXS, y0 + gy * PXS, PXS, PXS); };
+    const dark = '#140a1e', rim = '#7a3fd0', rimHi = '#a368ff', face = '#2a1745', faceHi = '#36205a';
+    for (let gy = 0; gy < N; gy++) for (let gx = 0; gx < N; gx++) {
+      const edge = gx === 0 || gy === 0 || gx === N - 1 || gy === N - 1;
+      const ring = gx <= 1 || gy <= 1 || gx >= N - 2 || gy >= N - 2;
+      if (edge) px(gx, gy, dark);
+      else if (ring) px(gx, gy, (gx + gy) % 2 ? rim : rimHi);
+      else px(gx, gy, (gx + gy) % 2 ? face : faceHi);
     }
-    // button body
-    const br = r * (1 + pulse * 0.05);
-    const bg = ctx.createRadialGradient(x, y - r * 0.4, 2, x, y, br);
-    bg.addColorStop(0, '#d6b3ff'); bg.addColorStop(0.5, '#8a44e0'); bg.addColorStop(1, '#46198a');
-    ctx.fillStyle = bg; ctx.beginPath(); ctx.arc(x, y, br, 0, Math.PI * 2); ctx.fill();
-    ctx.lineWidth = 3; ctx.strokeStyle = '#efe0ff'; ctx.stroke();
-    // lightning glyph
-    ctx.fillStyle = '#fff'; ctx.shadowColor = '#e9d8ff'; ctx.shadowBlur = 8;
-    ctx.beginPath();
-    ctx.moveTo(x + 4, y - 13); ctx.lineTo(x - 7, y + 2); ctx.lineTo(x - 1, y + 2);
-    ctx.lineTo(x - 4, y + 13); ctx.lineTo(x + 8, y - 3); ctx.lineTo(x + 1, y - 3);
-    ctx.closePath(); ctx.fill();
-    ctx.shadowBlur = 0;
-    // label
+    // lightning rune (flickers bright on the pulse)
+    const bolt = '#fff7c0', boltDim = '#ffd23a';
+    const col = pulse > 0.45 ? bolt : boltDim;
+    for (const [gx, gy] of [[5, 1], [4, 2], [5, 2], [4, 3], [3, 4], [4, 4], [5, 4], [4, 5], [3, 6], [4, 6], [3, 7]]) px(gx, gy, col);
+    // a few orbiting pixel sparks
+    for (let i = 0; i < 3; i++) {
+      const a = t * 2 + i * 2.1, rr = half + 7;
+      ctx.fillStyle = `rgba(220,190,255,${0.5 + 0.5 * pulse})`;
+      ctx.fillRect(Math.round(cx + Math.cos(a) * rr) - 1, Math.round(cy + Math.sin(a) * rr) - 1, 3, 3);
+    }
+    // FURY label above (pixel font, gold glow)
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = '600 8px "Press Start 2P", monospace';
-    ctx.fillStyle = '#efe0ff';
-    ctx.fillText('FURY', x, y + r + 12);
+    ctx.font = '8px "Press Start 2P", monospace';
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(20,10,30,0.85)';
+    ctx.strokeText('FURY', cx, y0 - 9);
+    ctx.fillStyle = `rgba(216,184,255,${0.7 + 0.3 * pulse})`;
+    ctx.fillText('FURY', cx, y0 - 9);
     ctx.restore();
   }
 
@@ -1440,11 +1443,13 @@ export class Game {
         ctx.fillStyle = '#ffce4a'; ctx.fillText(it.text, this.vw / 2, y);
       } else {
         const x = this.vw / 2 + (1 - slide) * 80;
-        ctx.font = 'bold 38px "Pixelify Sans", sans-serif';
+        ctx.font = '26px "Press Start 2P", monospace';   // clear digits
+        ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+        ctx.strokeText(it.text, x, y);
         ctx.fillStyle = '#e9c84a';
         ctx.fillText(it.text, x, y);
         if (it.sub) { ctx.font = 'italic 15px "Pixelify Sans", sans-serif'; ctx.fillStyle = '#cfc6e6';
-          ctx.fillText(it.sub, x, y + 28); }
+          ctx.fillText(it.sub, x, y + 30); }
       }
       ctx.restore();
     }
@@ -1703,9 +1708,9 @@ export class Game {
     ctx.fillStyle = 'rgba(232,120,120,0.65)'; ctx.fillRect(bx, by, bw * ghostf, bh); // ghost
     ctx.fillStyle = col; ctx.fillRect(bx, by, bw * hpf, bh);
     ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1; ctx.strokeRect(bx, by, bw, bh);
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 13px "Pixelify Sans", sans-serif';
+    ctx.fillStyle = '#fff'; ctx.font = '9px "Press Start 2P", monospace';
     ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
-    ctx.fillText(`${Math.max(0, Math.ceil(p.hp))} / ${p.maxHP}`, bx + 8, by + bh / 2 + 1);
+    ctx.fillText(`${Math.max(0, Math.ceil(p.hp))}/${p.maxHP}`, bx + 7, by + bh / 2 + 1);
 
     // fury bar (under health)
     const fy = by + bh + 5, fh = 9;

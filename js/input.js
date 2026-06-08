@@ -158,29 +158,30 @@ export class Input {
       ctx.beginPath(); ctx.arc(this.stick.x, this.stick.y, this.maxStick * 0.45, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
     }
-    // swing button
+    // swing button — a dark rune disc with a pixel sword
     ctx.save();
-    ctx.globalAlpha = this.btn.active ? 0.85 : 0.5;
-    const grd = ctx.createRadialGradient(this.btn.x, this.btn.y, 4, this.btn.x, this.btn.y, this.btn.r);
-    grd.addColorStop(0, '#ffe9a0');
-    grd.addColorStop(1, '#b5841d');
+    const bx = this.btn.x, by = this.btn.y, r = this.btn.r;
+    ctx.globalAlpha = this.btn.active ? 0.95 : 0.62;
+    const grd = ctx.createRadialGradient(bx, by - r * 0.3, 3, bx, by, r);
+    grd.addColorStop(0, '#3a3142'); grd.addColorStop(1, '#1c1626');
     ctx.fillStyle = grd;
-    ctx.beginPath(); ctx.arc(this.btn.x, this.btn.y, this.btn.r, 0, Math.PI * 2); ctx.fill();
-    ctx.lineWidth = 3; ctx.strokeStyle = '#6b5212';
+    ctx.beginPath(); ctx.arc(bx, by, r, 0, Math.PI * 2); ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = '#caa54a';
     ctx.stroke();
-    // little sword glyph
-    ctx.globalAlpha = 0.9;
-    ctx.strokeStyle = '#2a1d06'; ctx.lineWidth = 4; ctx.lineCap = 'round';
-    const r = this.btn.r;
-    ctx.beginPath();
-    ctx.moveTo(this.btn.x - r * 0.3, this.btn.y + r * 0.32);
-    ctx.lineTo(this.btn.x + r * 0.34, this.btn.y - r * 0.34);
-    ctx.stroke();
-    ctx.lineWidth = 6;
-    ctx.beginPath();
-    ctx.moveTo(this.btn.x - r * 0.42, this.btn.y + r * 0.18);
-    ctx.lineTo(this.btn.x - r * 0.18, this.btn.y + r * 0.42);
-    ctx.stroke();
+    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.beginPath(); ctx.arc(bx, by, r - 4, 0, Math.PI * 2); ctx.stroke();
+    // pixel greatsword (diagonal), drawn from chunky blocks
+    const u = Math.max(4, r * 0.13);
+    ctx.translate(bx, by); ctx.rotate(-Math.PI / 4);   // point up-right
+    const blk = (gx, gy, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(gx * u, gy * u, w * u, h * u); };
+    const steel = '#d6dde8', edge = '#ffffff', shade = '#8a93a4', gold = '#e9c84a', grip = '#6b4a2a';
+    blk(-0.7, -3.7, 1.4, 4.4, steel);        // blade
+    blk(-0.7, -3.7, 0.6, 4.4, edge);         // highlight
+    blk(0.2, -3.7, 0.5, 4.4, shade);         // shade
+    blk(-0.7, -4.0, 1.4, 0.4, edge);         // tip
+    blk(-1.9, 0.7, 3.8, 0.9, gold);          // crossguard
+    blk(-0.6, 1.6, 1.2, 1.5, grip);          // grip
+    blk(-1.0, 3.1, 2.0, 0.9, gold);          // pommel
     ctx.restore();
   }
 }

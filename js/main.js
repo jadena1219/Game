@@ -11,6 +11,9 @@ const screens = {
 
 let game = null;
 
+// wrap digit runs so numbers render in the clear Press Start 2P font
+const numWrap = (s) => String(s).replace(/(\d+)/g, '<span class="num">$1</span>');
+
 const ui = {
   showScreen(name) {
     for (const [k, el] of Object.entries(screens)) {
@@ -51,7 +54,7 @@ const ui = {
           `<img class="ware-ico-img" src="assets/icons/${w.id}.png" alt="" draggable="false">` +
           `<div class="ware-body">` +
             `<div class="ware-name">${w.item.name}<span class="tagchip ${w.kind}">${tag}</span></div>` +
-            `<div class="ware-desc">${w.label}</div>` +
+            `<div class="ware-desc">${numWrap(w.label)}</div>` +
             (w.kind === 'relic' ? `<div class="ware-flavor">${w.item.flavor}</div>` : '') +
           `</div>` +
           `<div class="ware-cost">${owned ? '✓' : '◆ <span class="num">' + w.cost + '</span>'}</div>`;
@@ -85,7 +88,7 @@ const ui = {
   _campMsg(t) { const el = document.getElementById('camp-msg'); if (el) el.textContent = t; },
 
   gameOver(level) {
-    document.getElementById('go-sub').textContent = `You reached Level ${level} of 10`;
+    document.getElementById('go-sub').innerHTML = numWrap(`You reached Level ${level} of 10`);
     this.showScreen('gameover');
   },
   victory(stats) {

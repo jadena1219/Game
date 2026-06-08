@@ -11,6 +11,16 @@ import { pickEvent } from './events.js';
 
 const BOSS_NAMES = { miniboss: 'The Dark Knight', boss: 'The Demon Lord' };
 
+// The Demon Lord's voice — cryptic, threatening, escalating. Keyed by the level
+// you just cleared; the screen blacks out and these type across it in blood red.
+const DEMON_LINES = {
+  1: 'ONE DOOR OPENED. NINE REMAIN.\nI HAVE COUNTED THEM SINCE BEFORE YOUR BIRTH.',
+  3: 'DO YOU FEEL THE COLD DEEPEN?\nTHAT IS ME — BREATHING ON YOUR NECK.',
+  5: 'MY CHAMPION LIES BROKEN AT YOUR FEET.\nGOOD. I HAD GROWN BORED OF HIM.',
+  7: 'EVERY STEP DOWN, I HAVE ALREADY WALKED.\nTHE THRONE IS PATIENT. SO AM I.',
+  9: 'THE LAST DOOR IS OPEN, LITTLE KNIGHT.\nI SET TWO CHAIRS. YOU WILL NOT SIT.',
+};
+
 export class Game {
   constructor(canvas, ui) {
     this.canvas = canvas;
@@ -50,7 +60,11 @@ export class Game {
     this.titleT = 0;           // title-scene animation clock
     this.tunnelScroll = 0;     // how far the title corridor has scrolled past
     this.introCut = null;      // iris-to-black blink from the corridor into Level 1
+    this.interlude = null;     // Demon Lord taunt (black screen + red typewriter)
+    this.interludeFade = null; // black fading out of the taunt into the camp
+    this._tapped = false;      // a screen tap (used to advance/skip the taunt)
     this.wipeEl = document.getElementById('wipe');
+    canvas.addEventListener('pointerdown', () => { this._tapped = true; });
 
     // --- Phase 3b: open world ---
     this.cam = { x: 0, y: 0 };  // top-left of the view in world space (locked to player)
@@ -101,6 +115,8 @@ export class Game {
   _applyBiome(level) {
     const biome = biomeForLevel(level);
     this.biome = biome;
+    const bossKind = (LEVELS[level - 1].boss && 'boss') || (LEVELS[level - 1].miniboss && 'miniboss');
+    this.bossKind = bossKind;
     this.atmos = this.atmos || [];
     const W = this.world.w, H = this.world.h;
     const c = document.createElement('canvas'); c.width = W; c.height = H;
@@ -121,15 +137,127 @@ export class Game {
     for (const [bx, by] of [[ci, ci], [W - ci, ci], [ci, H - ci], [W - ci, H - ci]]) {
       this._bakeBrazierPost(g, bx, by); this.braziers.push({ x: bx, y: by, lava, torch });
     }
-    this._bakeBiomeDecor(g, biome, W, H);
+    if (bossKind) this._bakeBossRoom(g, biome, W, H, bossKind, lava, torch);
+    else this._bakeBiomeDecor(g, biome, W, H);
     this._bakeWalls(g, biome, W, H);
 
-    // vignette (heavier — this is a dungeon)
-    const v = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.22, W / 2, H / 2, Math.max(W, H) * 0.6);
-    v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.55)');
+    // vignette (heavier — this is a dungeon; bloodier and tighter in a boss room)
+    const v = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * (bossKind ? 0.16 : 0.22), W / 2, H / 2, Math.max(W, H) * 0.6);
+    v.addColorStop(0, 'rgba(0,0,0,0)');
+    v.addColorStop(1, bossKind === 'boss' ? 'rgba(26,0,2,0.72)' : (bossKind ? 'rgba(10,2,18,0.7)' : 'rgba(0,0,0,0.55)'));
     g.fillStyle = v; g.fillRect(0, 0, W, H);
     this.bg = c;
-    this.voidColor = '#050308';
+    this.voidColor = bossKind === 'boss' ? '#0a0103' : (bossKind ? '#070210' : '#050308');
+  }
+
+  // A dedicated boss chamber: a great scorched ritual circle, a ring of braziers,
+  // and a centrepiece at the head of the room (a throne for the Demon Lord, a
+  // shrine of broken weapons for his Dark Knight). Threatening, ceremonial, lit.
+  _bakeBossRoom(g, biome, W, H, kind, lava, torch) {
+    const cx = W / 2, cy = H / 2;
+    // a blood / shadow wash pooling toward the centre
+    const wash = g.createRadialGradient(cx, cy, 40, cx, cy, Math.max(W, H) * 0.6);
+    wash.addColorStop(0, kind === 'boss' ? 'rgba(64,6,10,0.5)' : 'rgba(26,10,40,0.45)');
+    wash.addColorStop(1, 'rgba(0,0,0,0.1)');
+    g.fillStyle = wash; g.fillRect(0, 0, W, H);
+    // the great ritual circle scorched into the floor (centred on the spawn)
+    const r = Math.min(W, H) * 0.29;
+    this._bakeRitualCircle(g, cx, cy, r, kind === 'boss' ? '#b81810' : '#6a2ea0');
+    // braziers set on the ring like ritual candles — ceremonial, and they light it
+    for (let i = 0; i < 6; i++) {
+      const a = Math.PI * 2 * i / 6 + Math.PI / 6;
+      const bx = Math.round(cx + Math.cos(a) * r), by = Math.round(cy + Math.sin(a) * r);
+      this._bakeBrazierPost(g, bx, by);
+      this.braziers.push({ x: bx, y: by, lava, torch: kind === 'boss' ? '#ff5a2a' : torch });
+    }
+    // the head of the room
+    if (kind === 'boss') this._bakeThrone(g, cx, 78);
+    else this._bakeWeaponShrine(g, cx, 78);
+  }
+
+  // A scorched summoning circle: concentric rings, radial spokes & runes, and a
+  // faint hexagram — glowing dim red/violet.
+  _bakeRitualCircle(g, cx, cy, r, col) {
+    g.save();
+    g.translate(cx, cy);
+    // a dark scorch under the whole sigil
+    const sc = g.createRadialGradient(0, 0, r * 0.2, 0, 0, r * 1.05);
+    sc.addColorStop(0, 'rgba(0,0,0,0)'); sc.addColorStop(0.8, 'rgba(0,0,0,0.28)'); sc.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = sc; g.beginPath(); g.arc(0, 0, r * 1.05, 0, Math.PI * 2); g.fill();
+    g.shadowColor = col; g.shadowBlur = 10; g.strokeStyle = col; g.globalAlpha = 0.6;
+    g.lineWidth = 3; g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.stroke();
+    g.beginPath(); g.arc(0, 0, r * 0.74, 0, Math.PI * 2); g.stroke();
+    g.lineWidth = 2; g.beginPath(); g.arc(0, 0, r * 0.4, 0, Math.PI * 2); g.stroke();
+    // radial spokes + rune ticks between the two outer rings
+    const n = 12;
+    for (let i = 0; i < n; i++) {
+      const a = Math.PI * 2 * i / n;
+      g.beginPath(); g.moveTo(Math.cos(a) * r * 0.74, Math.sin(a) * r * 0.74); g.lineTo(Math.cos(a) * r, Math.sin(a) * r); g.stroke();
+      g.globalAlpha = 0.5; g.fillStyle = col;
+      g.fillRect(Math.cos(a) * r * 0.87 - 2, Math.sin(a) * r * 0.87 - 2, 4, 4);
+      g.globalAlpha = 0.6;
+    }
+    // a faint hexagram inside the inner ring
+    g.lineWidth = 2; g.globalAlpha = 0.4;
+    for (let t = 0; t < 2; t++) {
+      g.beginPath();
+      for (let i = 0; i < 3; i++) {
+        const a = Math.PI * 2 * i / 3 + t * Math.PI / 3 - Math.PI / 2;
+        const x = Math.cos(a) * r * 0.4, y = Math.sin(a) * r * 0.4;
+        if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+      }
+      g.closePath(); g.stroke();
+    }
+    g.restore();
+  }
+
+  // The Demon Lord's throne: jagged black stone, a smouldering cushion, a skull
+  // set at its crown. Drawn at the head of the room (x centred, y near the wall).
+  _bakeThrone(g, x, y) {
+    g.save();
+    g.translate(x, y);
+    const stone = '#1b1016', stoneHi = '#2c1c28', stoneDk = '#0d070b';
+    // backrest with jagged spires
+    g.fillStyle = stone; g.fillRect(-30, 0, 60, 84);
+    g.fillStyle = stoneHi; g.fillRect(-30, 0, 4, 84);
+    g.fillStyle = stoneDk; g.fillRect(26, 0, 4, 84);
+    g.fillStyle = stone;
+    for (const sx of [-30, -14, 14, 22]) { g.beginPath(); g.moveTo(sx, 0); g.lineTo(sx + 8, -18); g.lineTo(sx + 16, 0); g.closePath(); g.fill(); }
+    // smouldering cushion
+    g.shadowColor = '#ff3a1e'; g.shadowBlur = 14; g.fillStyle = '#5a0c10'; g.fillRect(-22, 30, 44, 30); g.shadowBlur = 0;
+    g.fillStyle = '#7a1216'; g.fillRect(-22, 30, 44, 4);
+    // arms & seat
+    g.fillStyle = stone; g.fillRect(-38, 44, 12, 40); g.fillRect(26, 44, 12, 40);
+    g.fillStyle = stoneDk; g.fillRect(-38, 80, 76, 6);
+    // a skull set at the crown
+    g.fillStyle = '#d8d0c0'; g.beginPath(); g.arc(0, -6, 8, 0, Math.PI * 2); g.fill();
+    g.fillRect(-6, -2, 12, 7);
+    g.fillStyle = '#1b1016'; g.fillRect(-4, -8, 3, 4); g.fillRect(2, -8, 3, 4); g.fillRect(-1, -2, 2, 4);
+    g.restore();
+  }
+
+  // The Dark Knight's shrine: a banner and a fan of broken blades driven into a
+  // mound — the trophies of those who came before.
+  _bakeWeaponShrine(g, x, y) {
+    g.save();
+    g.translate(x, y);
+    // tattered banner
+    g.fillStyle = '#2a0c2c'; g.fillRect(-22, 0, 44, 64);
+    g.fillStyle = '#3c1240'; g.fillRect(-22, 0, 44, 5);
+    g.fillStyle = '#160616'; for (let i = -18; i < 22; i += 10) g.fillRect(i, 58, 5, 8);
+    // a fan of broken blades stabbed into the ground
+    const blade = (ang, len) => {
+      g.save(); g.rotate(ang);
+      g.fillStyle = '#5a5e6a'; g.fillRect(-2, -len, 4, len);                 // blade
+      g.fillStyle = '#7e828e'; g.fillRect(-2, -len, 1, len);
+      g.fillStyle = '#2a2a30'; g.fillRect(-5, -6, 10, 3);                    // guard
+      g.fillStyle = '#3a2a18'; g.fillRect(-1.5, -3, 3, 9);                   // grip
+      g.restore();
+    };
+    g.translate(0, 70);
+    blade(-0.5, 40); blade(-0.2, 52); blade(0.15, 46); blade(0.5, 38); blade(0.0, 30);
+    g.fillStyle = '#100a0e'; g.beginPath(); g.ellipse(0, 2, 30, 8, 0, 0, Math.PI * 2); g.fill();   // mound
+    g.restore();
   }
 
   // Biome-specific framed decoration (placed deliberately, not scattered).
@@ -437,18 +565,21 @@ export class Game {
     this.cam.x = this.player.x - this.vw / 2; this.cam.y = this.player.y - this.vh / 2;
     this.spawnTimer = 0;
     this._buildQueue(level);
-    // swap to this level's biome (only rebuilds art when the biome changes)
-    if (!this.biome || !this.biome.levels.includes(level)) this._applyBiome(level);
+    // swap to this level's art. Rebuild when the biome changes — and ALWAYS for a
+    // boss level (its room is special) or right after one (restore the normal room),
+    // even when the biome itself didn't change (e.g. L5 shares the crypt with L4/L6).
+    const wasBoss = this.bossKind;
+    const bossType = (LEVELS[level - 1].boss && 'boss') || (LEVELS[level - 1].miniboss && 'miniboss');
+    if (!this.biome || !this.biome.levels.includes(level) || bossType || wasBoss) this._applyBiome(level);
     this.state = 'playing';
     this.ui.showScreen(null);
 
-    // pre-level countdown + intro card (boss intro on 5 & 10)
+    // pre-level countdown + intro card (boss reveal on 5 & 10)
     this.countdown = 3.6;
-    const bossType = (LEVELS[level - 1].boss && 'boss') || (LEVELS[level - 1].miniboss && 'miniboss');
     if (bossType) {
-      this.intro = { kind: 'boss', text: BOSS_NAMES[bossType], sub: this.biome.name, t: 0, dur: 2.4 };
-      this.countdown = 4.2;
-      this.shake = Math.max(this.shake, 8);
+      this.intro = { kind: 'boss', text: BOSS_NAMES[bossType], sub: this.biome.name, t: 0, dur: 3.0 };
+      this.countdown = 4.8;
+      this.shake = Math.max(this.shake, 14);
     } else {
       this.intro = { kind: 'level', text: `LEVEL ${level}`, sub: this.biome.name, t: 0, dur: 2.0 };
     }
@@ -851,6 +982,7 @@ export class Game {
     if (this.state === 'won') return this._updateWon(dt);
     if (this.state === 'camp') return this._updateCamp(dt);
     if (this.state === 'intro') return this._updateIntro(dt);
+    if (this.state === 'interlude') return this._updateInterlude(dt);
     if (this.state !== 'playing') return;
 
     // brief hit-pause freezes the simulation for weight
@@ -936,6 +1068,10 @@ export class Game {
       }
       if (this.introCut.t >= this.introCut.dur) this.introCut = null;
     }
+    if (this.interludeFade) {
+      this.interludeFade.t += dt;
+      if (this.interludeFade.t >= this.interludeFade.dur) this.interludeFade = null;
+    }
     // smoothed health bar
     if (this.player) {
       const hp = Math.max(0, this.player.hp);
@@ -968,14 +1104,50 @@ export class Game {
       if (tr.t >= tr.dur) this.transition = null;
     }
     // intro card timer
-    if (this.intro) { this.intro.t += dt; if (this.intro.t >= this.intro.dur) this.intro = null; }
+    if (this.intro) {
+      this.intro.t += dt;
+      // a low, building rumble through the boss reveal
+      if (this.intro.kind === 'boss' && this.intro.t < this.intro.dur * 0.82) {
+        this.shake = Math.max(this.shake, 2.5 + 2.5 * (this.intro.t / this.intro.dur));
+      }
+      if (this.intro.t >= this.intro.dur) this.intro = null;
+    }
     // "level cleared" sweep -> then the camp shop
     if (this.sweep) {
       this.sweep.t += dt;
       if (this.sweep.t >= this.sweep.dur) {
         this.sweep = null;
         this.pendingReward = null;
-        this._slashWipe(() => this.openCamp());   // wipe into the camp room
+        const taunt = DEMON_LINES[this.level];    // the Demon Lord speaks on odd floors
+        if (taunt) this._beginInterlude(taunt);
+        else this._slashWipe(() => this.openCamp());   // wipe into the camp room
+      }
+    }
+  }
+
+  // The Demon Lord's voice: black out, type his words in blood red, then fade
+  // back into the dungeon (the camp). Runs as its own state, the field frozen.
+  _beginInterlude(line) {
+    this.interlude = { line, shown: 0, phase: 'in', t: 0 };
+    this.state = 'interlude';
+    this._tapped = false;
+    this.ui.showScreen(null);
+  }
+
+  _updateInterlude(dt) {
+    const il = this.interlude; if (!il) return;
+    il.t += dt;
+    if (il.phase === 'in') {
+      if (il.t >= 0.6 || this._tapped) { il.phase = 'type'; il.t = 0; this._tapped = false; }
+    } else if (il.phase === 'type') {
+      il.shown = Math.min(il.line.length, il.shown + dt * 30);     // ~30 chars/sec
+      if (this._tapped) { il.shown = il.line.length; this._tapped = false; }  // tap = finish line
+      if (il.shown >= il.line.length) { il.phase = 'hold'; il.t = 0; }
+    } else if (il.phase === 'hold') {
+      if (il.t >= 2.0 || this._tapped) {
+        this.interlude = null; this._tapped = false;
+        this.interludeFade = { t: 0, dur: 0.7 };
+        this.openCamp();                                            // built under black; the fade reveals it
       }
     }
   }
@@ -1352,6 +1524,7 @@ export class Game {
     this._drawAtmos(ctx);           // biome weather (screen overlay)
     this._drawGrade(ctx);           // biome colour grade (screen overlay)
     this._drawIntroCut(ctx);        // iris opening back up inside Level 1
+    this._drawInterludeFade(ctx);   // black fading out of a Demon Lord taunt into the camp
     this._drawDeathOverlay(ctx);    // desaturate + "YOU FELL" during dying/gameover lead-in
     this._drawVictory(ctx);         // golden celebration during the 'won' sequence
 
@@ -1386,6 +1559,7 @@ export class Game {
     this._drawHUD(ctx);
     if (this.state === 'playing' || (this.state === 'camp' && !this.shopOpen)) this.input.draw(ctx);
     this._drawFuryButton(ctx);     // floating "unleash fury" button above the hero
+    this._drawInterlude(ctx);      // Demon Lord taunt: blacks out the whole screen + red typewriter
     this._drawTransition(ctx);     // slash-wipe on the very top
   }
 
@@ -1803,6 +1977,68 @@ export class Game {
     ctx.save(); ctx.fillStyle = grd; ctx.fillRect(0, 0, W, H); ctx.restore();
   }
 
+  // The black veil fading out of a taunt, revealing the camp beneath.
+  _drawInterludeFade(ctx) {
+    if (!this.interludeFade) return;
+    const a = Math.max(0, 1 - this.interludeFade.t / this.interludeFade.dur);
+    ctx.save(); ctx.fillStyle = `rgba(0,0,0,${a})`; ctx.fillRect(0, 0, this.vw, this.vh); ctx.restore();
+  }
+
+  // The Demon Lord's taunt: black out the field, then type his words across it
+  // in blood red with a blinking cursor and a low red glow. Tap advances it.
+  _drawInterlude(ctx) {
+    const il = this.interlude; if (!il) return;
+    const W = this.vw, H = this.vh;
+    const cover = il.phase === 'in' ? Math.min(1, il.t / 0.6) : 1;
+    ctx.save();
+    ctx.fillStyle = `rgba(0,0,0,${cover})`; ctx.fillRect(0, 0, W, H);
+    if (il.phase === 'in') { ctx.restore(); return; }      // still fading to black; no text yet
+    // a faint red breath of light behind the words
+    const rg = ctx.createRadialGradient(W / 2, H * 0.46, 10, W / 2, H * 0.46, W * 0.7);
+    rg.addColorStop(0, 'rgba(60,4,4,0.5)'); rg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H);
+
+    const lines = il.line.split('\n');
+    // fit the longest line to the screen width so layout stays put as it types
+    let size = 15;
+    ctx.font = `${size}px "Silkscreen", monospace`;
+    const longest = lines.reduce((m, l) => Math.max(m, ctx.measureText(l).width), 0);
+    const maxW = W * 0.84;
+    if (longest > maxW) { size = Math.max(8, Math.floor(size * maxW / longest)); }
+    ctx.font = `${size}px "Silkscreen", monospace`;
+    const lh = size * 1.7, cy = H * 0.46 - (lines.length - 1) * lh / 2;
+
+    const shownN = Math.floor(il.shown);
+    let counted = 0, cursorPlaced = false;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (let i = 0; i < lines.length; i++) {
+      const full = lines[i];
+      // how many chars of this line are revealed (account for the newline char)
+      const start = counted, end = start + full.length;
+      let vis = full;
+      if (shownN <= start) vis = '';
+      else if (shownN < end) vis = full.slice(0, shownN - start);
+      counted = end + 1;                                   // +1 for the '\n'
+      // blinking cursor at the tip of the line currently being typed
+      let text = vis;
+      if (!cursorPlaced && il.phase === 'type' && shownN < end && (vis.length || i === 0)) {
+        if (Math.floor(this.time * 2.5) % 2 === 0) text = vis + '█';
+        cursorPlaced = true;
+      }
+      if (il.phase === 'hold' && i === lines.length - 1 && Math.floor(this.time * 2.5) % 2 === 0) text = full + '█';
+      const y = cy + i * lh;
+      ctx.shadowColor = '#ff2a1e'; ctx.shadowBlur = 12;
+      ctx.fillStyle = '#e2231a'; ctx.fillText(text, W / 2, y);
+      ctx.shadowBlur = 0;
+    }
+    // a quiet hint to move on
+    if (il.phase === 'hold') {
+      ctx.font = '9px "Silkscreen", monospace'; ctx.fillStyle = 'rgba(180,40,30,0.5)';
+      ctx.fillText('tap to continue', W / 2, H * 0.82);
+    }
+    ctx.restore();
+  }
+
   _drawDeathFx(ctx, fx) {
     const prog = fx.t / fx.dur;
     ctx.save();
@@ -1853,14 +2089,27 @@ export class Game {
   }
 
   _drawCountdownIntro(ctx) {
-    // boss letterbox
+    // boss reveal: a pulsing red vignette + heavy letterbox closing the room in
     if (this.intro && this.intro.kind === 'boss') {
       const p = this.intro.t / this.intro.dur;
-      const barH = (p < 0.85 ? 1 : 1 - (p - 0.85) / 0.15) * 64;
+      const W = this.vw, H = this.vh;
+      // dread-red vignette, throbbing like a slow heartbeat, easing out at the end
+      const fade = p > 0.82 ? 1 - (p - 0.82) / 0.18 : 1;
+      const pulse = 0.42 + 0.30 * Math.sin(this.intro.t * 7);
+      ctx.save();
+      const rg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.18, W / 2, H / 2, Math.max(W, H) * 0.62);
+      rg.addColorStop(0, 'rgba(0,0,0,0)');
+      rg.addColorStop(1, `rgba(150,8,8,${(0.55 * pulse * fade).toFixed(3)})`);
+      ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+      const barH = (p < 0.85 ? 1 : 1 - (p - 0.85) / 0.15) * 78;
       ctx.save();
       ctx.fillStyle = '#000';
-      ctx.fillRect(0, 0, this.vw, barH);
-      ctx.fillRect(0, this.vh - barH, this.vw, barH);
+      ctx.fillRect(0, 0, W, barH);
+      ctx.fillRect(0, H - barH, W, barH);
+      // a thin blood line along the letterbox edge
+      ctx.fillStyle = `rgba(180,20,16,${(0.7 * fade).toFixed(3)})`;
+      ctx.fillRect(0, barH - 2, W, 2); ctx.fillRect(0, H - barH, W, 2);
       ctx.restore();
     }
     if (this.intro) {
@@ -1872,16 +2121,23 @@ export class Game {
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       const y = this.vh * 0.38;
       if (it.kind === 'boss') {
-        ctx.font = 'bold 16px "Silkscreen", sans-serif'; ctx.fillStyle = '#d8413a';
-        ctx.fillText(it.sub, this.vw / 2, y - 34);
-        let size = 30 + slide * 6;
+        // small dread label above
+        ctx.font = 'bold 13px "Silkscreen", sans-serif'; ctx.fillStyle = 'rgba(180,40,30,0.85)';
+        ctx.fillText('THE WAY IS BARRED BY', this.vw / 2, y - 38);
+        // the name SLAMS in big, then settles — blood red with a red glow
+        const slam = 1 + (1 - slide) * 0.6;             // overshoot → settle
+        let size = (30 + slide * 4) * slam;
         ctx.font = `bold ${size}px "Silkscreen", sans-serif`;
-        const maxW = this.vw * 0.88;                    // scale down so it never overflows
+        const maxW = this.vw * 0.9;                     // scale down so it never overflows
         const tw = ctx.measureText(it.text).width;
         if (tw > maxW) { size = Math.floor(size * maxW / tw); ctx.font = `bold ${size}px "Silkscreen", sans-serif`; }
-        ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+        ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,0.85)';
         ctx.strokeText(it.text, this.vw / 2, y);
-        ctx.fillStyle = '#ffce4a'; ctx.fillText(it.text, this.vw / 2, y);
+        ctx.shadowColor = '#ff2a1e'; ctx.shadowBlur = 18 * a;
+        ctx.fillStyle = '#e5251c'; ctx.fillText(it.text, this.vw / 2, y);
+        ctx.shadowBlur = 0;
+        ctx.font = 'italic 13px "Silkscreen", sans-serif'; ctx.fillStyle = 'rgba(207,160,160,0.8)';
+        ctx.fillText(it.sub, this.vw / 2, y + size * 0.62 + 8);
       } else {
         const x = this.vw / 2 + (1 - slide) * 80;
         ctx.font = '26px "Silkscreen", sans-serif';   // clear digits

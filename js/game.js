@@ -19,8 +19,8 @@ const DEMON_LINES = {
   5: 'YOU CLIMB DOWN SO EAGERLY.\nEVERY STEP IS ONE I HAVE ALREADY WALKED.',
   7: 'MY CHAMPION SHARPENS HIS BLADE BELOW.\nHE HAS NEVER LEFT A ROOM UNQUIET.',
   9: 'THE DARK KNIGHT WAITS AT THE TENTH GATE.\nKNEEL, AND I MAY YET SPARE THE REST.',
-  11: 'MY CHAMPION LIES BROKEN AT YOUR FEET.\nGOOD. I HAD GROWN BORED OF HIM.',
-  13: 'HALFWAY IS NOT VICTORY, LITTLE KNIGHT.\nIT IS MERELY WHERE I BEGIN TO WATCH.',
+  10: 'MY CHAMPION LIES BROKEN AT YOUR FEET.\nGOOD. I HAD GROWN BORED OF HIM.',
+  13: 'PAST THE HALF NOW — AND SLOWING.\nI FEEL EACH BREATH GROW HEAVIER THAN THE LAST.',
   15: 'THE WALLS REMEMBER EVERY NAME.\nI WILL CARVE YOURS WHERE IT FITS.',
   17: 'YOUR WOUNDS OUTNUMBER YOUR VICTORIES.\nYET STILL YOU DESCEND. HOW LOVELY.',
   19: 'THE LAST DOOR IS OPEN, LITTLE KNIGHT.\nI SET TWO CHAIRS. YOU WILL NOT SIT.',
@@ -743,14 +743,84 @@ export class Game {
     }
   }
 
-  _spawnDeathFx(e) {
-    // dissolving sprite + rising embers / soul-wisp
-    this.effects.push({ kind: 'death', sprite: e.sprite, x: e.x, y: e.y,
-      faceLeft: e.faceLeft, boss: e.boss, t: 0, dur: e.boss ? 0.7 : 0.4 });
-    const n = e.boss ? 22 : 6;
+  // flying debris chunks (bone, ash, stone, wisp) — gravity + spin, then fade
+  _gib(x, y, color, n, power, opts = {}) {
     for (let i = 0; i < n; i++) {
-      this.embers.push({ x: e.x + (Math.random() - 0.5) * e.r * 1.5,
-        y: e.y - e.r * 0.5 + (Math.random() - 0.5) * e.r,
+      const a = Math.random() * Math.PI * 2, s = 40 + Math.random() * power;
+      this.effects.push({ kind: 'gib', x, y,
+        vx: Math.cos(a) * s, vy: Math.sin(a) * s - (30 + Math.random() * 70),
+        g: opts.g ?? 540, size: opts.size ?? (2 + Math.random() * 3),
+        rot: Math.random() * Math.PI, vr: (Math.random() - 0.5) * 16,
+        color, shape: opts.shape || 'rect', t: 0, dur: opts.dur ?? (0.4 + Math.random() * 0.4) });
+    }
+  }
+
+  // soft expanding smoke/ash puffs
+  _puff(x, y, color, n, spread, opts = {}) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, d = Math.random() * spread;
+      this.effects.push({ kind: 'puff', x: x + Math.cos(a) * d, y: y + Math.sin(a) * d,
+        vx: Math.cos(a) * (10 + Math.random() * 26), vy: -(10 + Math.random() * 38),
+        r0: opts.r0 ?? (3 + Math.random() * 5), r1: opts.r1 ?? (14 + Math.random() * 14),
+        color, t: 0, dur: opts.dur ?? (0.4 + Math.random() * 0.3) });
+    }
+  }
+
+  // Per-archetype death: each foe dies in its own characterful way.
+  _spawnDeathFx(e) {
+    const x = e.x, y = e.y, r = e.r, type = e.type;
+    let style = 'collapse', dur = 0.4;
+
+    if (e.boss) {                              // bosses: a violent, ringing death
+      style = 'collapse'; dur = 0.95;
+      const hot = type === 'boss';
+      this.addEffect({ kind: 'boom', x, y, r: r * 2.0, t: 0, dur: 0.6 });
+      this.addEffect({ kind: 'ring', x, y, r: r * 2.6, color: '#ffffff', t: 0, dur: 0.5 });
+      this.addEffect({ kind: 'ring', x, y, r: r * 3.6, color: hot ? '#ff7a3a' : '#cbd6ff', t: 0, dur: 0.75 });
+      this._gib(x, y, hot ? '#7a2230' : '#4a4a5e', 28, 340, { dur: 1.0, size: 3 + Math.random() * 4 });
+      this._puff(x, y, hot ? '#2a0e10' : '#14101e', 16, r, { r1: r * 1.5, dur: 0.9 });
+      this.shake = Math.max(this.shake, 12);
+    } else if (type === 'chaser') {            // skeleton: clatters apart into bones
+      this._gib(x, y, '#ddd6c2', 9, 190, { dur: 0.6, size: 2 + Math.random() * 3, shape: 'bone' });
+      this._puff(x, y - 2, '#b6b09c', 3, r * 0.5, { r1: r * 0.8, dur: 0.35 });
+    } else if (type === 'swarmer') {           // imp: bursts into a puff of foul ash
+      style = 'poof'; dur = 0.28;
+      this._puff(x, y - 2, '#7a3a96', 5, r * 0.4, { r0: 3, r1: r * 1.2, dur: 0.42 });
+      this._gib(x, y, '#c060e0', 5, 160, { dur: 0.34, size: 2 });
+    } else if (type === 'tank') {              // ogre: topples with a heavy dust-burst
+      style = 'topple'; dur = 0.62;
+      this._puff(x, y + r * 0.4, '#5a5048', 9, r * 0.9, { r0: 6, r1: r * 1.7, dur: 0.6 });
+      this._gib(x, y, '#7a6a58', 13, 210, { dur: 0.7, size: 3 + Math.random() * 4 });
+      this.addEffect({ kind: 'ring', x, y: y + r * 0.5, r: r * 1.9, color: 'rgba(150,135,110,0.6)', t: 0, dur: 0.4 });
+      this.shake = Math.max(this.shake, 6);
+    } else if (type === 'caster') {            // mage: arcane implosion + scattering wisps
+      style = 'implode'; dur = 0.46;
+      this.addEffect({ kind: 'ring', x, y, r: r * 2.2, color: '#9fd0ff', t: 0, dur: 0.4 });
+      this._gib(x, y, '#7fd0ff', 10, 230, { dur: 0.55, size: 2 + Math.random() * 2, shape: 'wisp' });
+      this._puff(x, y, '#5a8adf', 4, r * 0.3, { r1: r * 0.9, dur: 0.5 });
+    } else if (type === 'bomber') {            // bomber: the blast does the talking; toss fire bits
+      style = 'poof'; dur = 0.24;
+      this._gib(x, y, '#ff9a3a', 8, 250, { dur: 0.5, size: 2 + Math.random() * 3 });
+    } else {
+      this._gib(x, y, '#cfd0da', 7, 180, { dur: 0.5 });
+    }
+
+    // elites pop a bright shock in their affix colour
+    if (e.elite) {
+      const col = (ELITE_AFFIXES[e.elite] && ELITE_AFFIXES[e.elite].color) || '#fff';
+      this.addEffect({ kind: 'ring', x, y, r: r * 2.4, color: col, t: 0, dur: 0.45 });
+      this._gib(x, y, col, 8, 240, { dur: 0.6, size: 2 + Math.random() * 2 });
+    }
+
+    // the dissolving / animating corpse sprite
+    this.effects.push({ kind: 'death', sprite: e.sprite, x, y, r, style,
+      faceLeft: e.faceLeft, boss: e.boss, t: 0, dur });
+
+    // rising soul embers / wisps
+    const n = e.boss ? 24 : 4;
+    for (let i = 0; i < n; i++) {
+      this.embers.push({ x: x + (Math.random() - 0.5) * r * 1.5,
+        y: y - r * 0.5 + (Math.random() - 0.5) * r,
         vx: (Math.random() - 0.5) * 40, vy: -(40 + Math.random() * 70),
         r: 1 + Math.random() * 2, life: 0, dur: 0.5 + Math.random() * 0.7,
         hue: e.boss ? '#ff5a3a' : '#cfe0ff' });
@@ -1105,7 +1175,8 @@ export class Game {
       fx.t += sdt;
       if (fx.kind === 'spark') { fx.x += fx.vx * sdt; fx.y += fx.vy * sdt; fx.vx *= 0.9; fx.vy *= 0.9; }
       else if (fx.kind === 'dmg') { fx.y += fx.vy * sdt; fx.vy *= 0.9; }
-      else if (fx.kind === 'death') { fx.vy += 260 * sdt; }
+      else if (fx.kind === 'gib') { fx.vy += (fx.g || 540) * sdt; fx.x += fx.vx * sdt; fx.y += fx.vy * sdt; fx.vx *= 0.985; fx.rot += fx.vr * sdt; }
+      else if (fx.kind === 'puff') { fx.x += fx.vx * sdt; fx.y += fx.vy * sdt; fx.vx *= 0.92; fx.vy *= 0.92; }
     }
     this.effects = this.effects.filter((f) => f.t < f.dur);
   }
@@ -1556,6 +1627,7 @@ export class Game {
     for (const fx of this.effects) if (fx.kind === 'ghost') this._drawGhost(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'dashstreak') this._drawDashStreak(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'swing') this._drawSwing(ctx, fx);
+    for (const fx of this.effects) if (fx.kind === 'puff') this._drawPuff(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'death') this._drawDeathFx(ctx, fx);
 
     if (this.state === 'camp') this._drawCampFloor(ctx);   // door + table (on the floor)
@@ -1575,6 +1647,7 @@ export class Game {
     for (const pr of this.projectiles) this._drawProjectile(ctx, pr);
     for (const fb of this.allyProjectiles) this._drawFireball(ctx, fb);
     for (const fx of this.effects) this._drawAbilityFx(ctx, fx);
+    for (const fx of this.effects) if (fx.kind === 'gib') this._drawGib(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'slash') this._drawSlashMark(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'hitring') this._drawHitRing(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'spark') this._drawSpark(ctx, fx);
@@ -2154,15 +2227,54 @@ export class Game {
     ctx.restore();
   }
 
-  _drawDeathFx(ctx, fx) {
-    const prog = fx.t / fx.dur;
+  _drawGib(ctx, fx) {
+    const a = 1 - fx.t / fx.dur;
     ctx.save();
-    ctx.globalAlpha = (1 - prog) * 0.9;
-    // squash as it dissolves, tinted bright
-    const sx = 1 + prog * 0.4, sy = 1 - prog * 0.5;
-    ctx.translate(fx.x, fx.y); ctx.scale(sx, sy); ctx.translate(-fx.x, -fx.y);
-    drawSprite(ctx, fx.sprite, 'idle', fx.x, fx.y, fx.faceLeft, 1,
-      { color: fx.boss ? '#ff8a5a' : '#dff0ff', a: 0.5 + prog * 0.5 });
+    ctx.globalAlpha = Math.max(0, a);
+    ctx.translate(fx.x, fx.y); ctx.rotate(fx.rot || 0);
+    ctx.fillStyle = fx.color;
+    const s = fx.size || 3;
+    if (fx.shape === 'bone') { ctx.fillRect(-s, -1, s * 2, 2); ctx.fillRect(-s - 1, -2, 2, 4); ctx.fillRect(s - 1, -2, 2, 4); }
+    else if (fx.shape === 'wisp') { ctx.beginPath(); ctx.ellipse(0, 0, s * 0.7, s * 1.8, 0, 0, Math.PI * 2); ctx.fill(); }
+    else ctx.fillRect(-s / 2, -s / 2, s, s);
+    ctx.restore();
+  }
+
+  _drawPuff(ctx, fx) {
+    const prog = fx.t / fx.dur;
+    const r = (fx.r0 || 4) + ((fx.r1 || 16) - (fx.r0 || 4)) * prog;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, (1 - prog) * 0.5);
+    ctx.fillStyle = fx.color;
+    ctx.beginPath(); ctx.arc(fx.x, fx.y, r, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  _drawDeathFx(ctx, fx) {
+    const prog = fx.t / fx.dur, style = fx.style || 'collapse';
+    ctx.save();
+    let tint;
+    ctx.translate(fx.x, fx.y);
+    if (style === 'poof') {                    // imps/bombers: balloon out into smoke
+      const s = 1 + prog * 0.45;
+      ctx.globalAlpha = (1 - prog) * 0.85; ctx.scale(s, s);
+      tint = { color: '#caa0e0', a: 0.4 + prog * 0.6 };
+    } else if (style === 'topple') {           // ogres: lean over and fall
+      ctx.translate(0, fx.r * 0.45 * prog);
+      ctx.rotate(prog * 0.8 * (fx.faceLeft ? 1 : -1));
+      ctx.scale(1 + prog * 0.2, 1 - prog * 0.4);
+      ctx.globalAlpha = 1 - prog * 0.85; tint = { color: '#8a7a66', a: 0.3 + prog * 0.5 };
+    } else if (style === 'implode') {          // mages: collapse to a bright point
+      const s = Math.max(0.05, 1 - prog * 0.92);
+      ctx.scale(s, s); ctx.globalAlpha = 1 - prog * prog;
+      tint = { color: '#cfeaff', a: 0.5 + prog * 0.5 };
+    } else {                                   // collapse: squash + dissolve (skeletons/boss/default)
+      ctx.scale(1 + prog * 0.4, 1 - prog * 0.55);
+      ctx.globalAlpha = (1 - prog) * 0.9;
+      tint = { color: fx.boss ? '#ff8a5a' : '#dff0ff', a: 0.5 + prog * 0.5 };
+    }
+    ctx.translate(-fx.x, -fx.y);
+    drawSprite(ctx, fx.sprite, 'idle', fx.x, fx.y, fx.faceLeft, 1, tint);
     ctx.restore();
   }
 

@@ -373,105 +373,76 @@ export class Game {
   }
 
   // ---- camp room props ----
-  // The way down: a stone STAIRCASE cut into the floor, steps descending in
-  // perspective into the black, flanked by torches, a faint glow from the depths.
-  // Reads unmistakably as "stairs going down" — intimidating, not a portal.
+  // The way down: a black arched gateway smashed INTO the bottom wall, breathing
+  // a hot red glow from the depths. Simple, embedded in the wall, and menacing.
   _drawDescentPit(ctx, d, t) {
     const p = this.player;
     const near = p ? Math.max(0, 1 - Math.hypot(p.x - d.x, p.y - d.y) / 150) : 0;
-    const flick = 0.8 + 0.2 * Math.sin(t * 9) + 0.1 * Math.sin(t * 21 + 1.3);
-    const cx = d.x;
-    const nearY = d.y + 36, farY = d.y - 46;          // front (bottom) -> back (deep)
-    const nearHalf = 64, farHalf = 22;
-    const Y = (f) => nearY + (farY - nearY) * f;
-    const Hf = (f) => nearHalf + (farHalf - nearHalf) * f;
-    const lip = (f) => [cx - Hf(f), Y(f), cx + Hf(f), Y(f)];
+    const pulse = 0.5 + 0.5 * Math.sin(t * 2.6);
+    const cx = d.x, baseY = d.y + 44, topY = d.y - 58, hw = 52;
+    // trace the arched-doorway outline (rect sides + semicircle top), with inset
+    const arch = (inset) => {
+      const w = hw - inset, by = baseY - inset, acy = (topY + inset) + w;
+      ctx.beginPath();
+      ctx.moveTo(cx - w, by);
+      ctx.lineTo(cx - w, acy);
+      ctx.arc(cx, acy, w, Math.PI, Math.PI * 2);
+      ctx.lineTo(cx + w, by);
+      ctx.closePath();
+    };
     ctx.save();
     ctx.lineJoin = 'round';
 
-    // 1) carved stone surround framing the mouth (a thick raised lintel)
-    ctx.fillStyle = '#2a2535';
-    ctx.beginPath();
-    ctx.moveTo(cx - nearHalf - 14, nearY + 12);
-    ctx.lineTo(cx + nearHalf + 14, nearY + 12);
-    ctx.lineTo(cx + farHalf + 8, farY - 8);
-    ctx.lineTo(cx - farHalf - 8, farY - 8);
-    ctx.closePath(); ctx.fill();
-    // a couple of cracks splitting out of the frame
-    ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 2; ctx.lineCap = 'round';
-    for (const [sx, sy, ex, ey] of [[cx - nearHalf - 14, nearY + 4, cx - nearHalf - 34, nearY + 16],
-      [cx + nearHalf + 14, nearY + 6, cx + nearHalf + 32, nearY - 4]]) {
-      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo((sx + ex) / 2 + 4, (sy + ey) / 2); ctx.lineTo(ex, ey); ctx.stroke();
-    }
-
-    // 2) the black shaft (whole opening), so any step gaps read as pure dark
-    ctx.fillStyle = '#050409';
-    const [nlx, , nrx] = lip(0), [flx, , frx] = lip(1);
-    ctx.beginPath();
-    ctx.moveTo(nlx, nearY); ctx.lineTo(nrx, nearY); ctx.lineTo(frx, farY); ctx.lineTo(flx, farY);
-    ctx.closePath(); ctx.fill();
-
-    // 3) the descending steps — trapezoid treads, near = wide/light, far = small/dark.
-    //    Drawn far-to-near so closer steps overlap the ones behind them.
-    const N = 8;
-    for (let s = N - 1; s >= 0; s--) {
-      const f0 = s / N, f1 = (s + 0.74) / N;          // tread top (deeper) .. tread front lip
-      const yT = Y(f0), yF = Y(f1), hT = Hf(f0), hF = Hf(f1);
-      const shade = Math.round(7 + 30 * (1 - f1));     // deeper steps darker
-      ctx.fillStyle = `rgb(${shade + 5},${shade + 4},${shade + 9})`;
+    // 1) a heavy carved stone arch reinforcing the opening in the wall
+    arch(-13);
+    ctx.fillStyle = '#231d2e'; ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 3; ctx.stroke();
+    // voussoir block lines + a keystone for that gateway look
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1.5;
+    for (const a of [Math.PI * 1.15, Math.PI * 1.35, Math.PI * 1.5, Math.PI * 1.65, Math.PI * 1.85]) {
+      const acy = topY + hw;
       ctx.beginPath();
-      ctx.moveTo(cx - hF, yF); ctx.lineTo(cx + hF, yF);
-      ctx.lineTo(cx + hT, yT); ctx.lineTo(cx - hT, yT); ctx.closePath(); ctx.fill();
-      // worn highlight along the front lip of the tread
-      ctx.strokeStyle = `rgba(150,150,175,${0.12 + 0.32 * (1 - f1)})`; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.moveTo(cx - hF, yF); ctx.lineTo(cx + hF, yF); ctx.stroke();
+      ctx.moveTo(cx + Math.cos(a) * hw, acy + Math.sin(a) * hw);
+      ctx.lineTo(cx + Math.cos(a) * (hw + 13), acy + Math.sin(a) * (hw + 13));
+      ctx.stroke();
     }
 
-    // 4) the glow from far below, framed by the narrowing stairs (not a blob —
-    //    a warm shaft of light rising up the steps). Brighter as you approach.
+    // 2) the pitch-black mouth
+    arch(0); ctx.fillStyle = '#040207'; ctx.fill();
+
+    // 3) the hot glow bleeding up from far below, clipped inside the mouth.
+    //    Hotter and brighter the closer you stand.
+    ctx.save();
+    arch(2); ctx.clip();
     ctx.globalCompositeOperation = 'lighter';
-    const gA = 0.12 + 0.06 * Math.sin(t * 2.4) + 0.3 * near;
-    const gx = cx, gy = farY + 6;
-    const rg = ctx.createRadialGradient(gx, gy, 0, gx, gy, 60);
-    rg.addColorStop(0, `rgba(255,120,40,${gA})`);
-    rg.addColorStop(0.5, `rgba(200,40,16,${gA * 0.5})`);
-    rg.addColorStop(1, 'rgba(120,10,0,0)');
-    ctx.fillStyle = rg;
-    ctx.beginPath(); ctx.ellipse(gx, gy + 6, 46, 30, 0, 0, Math.PI * 2); ctx.fill();
-    if (near > 0.15) for (let i = 0; i < 3; i++) {     // embers drifting up the shaft
-      const ph = (t * 0.45 + i * 0.34) % 1;
-      ctx.globalAlpha = (1 - ph) * near;
+    const gA = 0.32 + 0.16 * pulse + 0.42 * near;
+    const gy = baseY - 4;
+    const rg = ctx.createRadialGradient(cx, gy, 2, cx, gy, 150);
+    rg.addColorStop(0, `rgba(255,110,40,${gA})`);
+    rg.addColorStop(0.4, `rgba(200,28,14,${gA * 0.7})`);
+    rg.addColorStop(1, 'rgba(40,0,0,0)');
+    ctx.fillStyle = rg; ctx.fillRect(cx - hw, topY - 4, hw * 2, baseY - topY + 8);
+    // embers rising out of the depths
+    for (let i = 0; i < 6; i++) {
+      const ph = (t * 0.4 + i * 0.17) % 1;
+      ctx.globalAlpha = (1 - ph) * (0.45 + 0.55 * near);
       ctx.fillStyle = i % 2 ? '#ff8a2a' : '#ffd36b';
-      ctx.fillRect(gx - 8 + Math.sin(t * 2 + i) * 6, gy + 4 - ph * 46, 2, 2);
+      ctx.fillRect(cx - 24 + ((i * 17 + t * 22) % 48), gy - ph * (baseY - topY + 4), 2, 2);
     }
+    ctx.restore();
+
+    // 4) faint top-lit rim on the stone arch
+    arch(0);
+    ctx.strokeStyle = 'rgba(150,140,165,0.45)'; ctx.lineWidth = 2; ctx.stroke();
+
+    // 5) cold mist spilling out of the gate onto the floor
     ctx.globalCompositeOperation = 'source-over';
-    ctx.globalAlpha = 1;
-
-    // 5) two torches flanking the entrance — warm light, flickering flame
-    for (const sgn of [-1, 1]) {
-      const tx = cx + sgn * (nearHalf + 16), ty = nearY - 2;
-      // post
-      ctx.fillStyle = '#1c1722'; ctx.fillRect(tx - 3, ty - 18, 6, 26);
-      // flame (layered teardrops)
-      const h = 14 + 3 * Math.sin(t * 12 + sgn);
-      ctx.save(); ctx.globalCompositeOperation = 'lighter';
-      const fg = ctx.createRadialGradient(tx, ty - 22, 1, tx, ty - 22, 26);
-      fg.addColorStop(0, `rgba(255,210,120,${0.7 * flick})`); fg.addColorStop(0.5, `rgba(255,120,40,${0.4 * flick})`); fg.addColorStop(1, 'rgba(120,30,0,0)');
-      ctx.fillStyle = fg; ctx.beginPath(); ctx.arc(tx, ty - 22, 26, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = `rgba(255,180,70,${flick})`;
-      ctx.beginPath(); ctx.moveTo(tx, ty - 20 - h); ctx.quadraticCurveTo(tx + 5, ty - 20, tx, ty - 16); ctx.quadraticCurveTo(tx - 5, ty - 20, tx, ty - 20 - h); ctx.fill();
-      ctx.fillStyle = `rgba(255,240,200,${0.9 * flick})`;
-      ctx.beginPath(); ctx.moveTo(tx, ty - 20 - h * 0.6); ctx.quadraticCurveTo(tx + 2.5, ty - 20, tx, ty - 17); ctx.quadraticCurveTo(tx - 2.5, ty - 20, tx, ty - 20 - h * 0.6); ctx.fill();
-      ctx.restore();
-    }
-
-    // 6) cold mist drifting low across the mouth
-    for (let i = 0; i < 3; i++) {
-      const ph = (t * 0.22 + i * 0.34) % 1;
-      ctx.globalAlpha = (1 - ph) * 0.12;
-      ctx.fillStyle = 'rgba(180,200,215,1)';
+    for (let i = 0; i < 4; i++) {
+      const ph = (t * 0.3 + i * 0.25) % 1;
+      ctx.globalAlpha = (1 - ph) * 0.14;
+      ctx.fillStyle = 'rgba(190,200,215,1)';
       ctx.beginPath();
-      ctx.ellipse(cx + Math.sin(t * 0.7 + i * 2.1) * 22, nearY - 4 - ph * 16, 30 - ph * 8, 6, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.ellipse(cx + Math.sin(t * 0.8 + i * 2) * 26, baseY + ph * 12, 32 - ph * 8, 7, 0, 0, Math.PI * 2); ctx.fill();
     }
     ctx.globalAlpha = 1;
     ctx.restore();
@@ -1655,7 +1626,7 @@ export class Game {
     if (event) this._eventsRecent = [event.id, ...(this._eventsRecent || [])].slice(0, 3);
     this.camp = {
       sorcerer: { x: ox + this.vw * 0.74, y: oy + this.vh * 0.42 },
-      door: { x: ox + this.vw * 0.5, y: oy + this.vh * 0.82 },
+      door: { x: ox + this.vw * 0.5, y: oy + this.vh - 70 },   // set into the bottom wall
       shrine: event ? { x: ox + this.vw * 0.26, y: oy + this.vh * 0.46 } : null,
       event, eventUsed: false,
       torches: this._campTorchScreen.map(([x, y]) => ({ x: ox + x, y: oy + y, lava: !!b.lava, torch: b.torch })),

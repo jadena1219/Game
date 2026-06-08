@@ -373,85 +373,107 @@ export class Game {
   }
 
   // ---- camp room props ----
-  // The way down: a yawning pit smashed through the floor, worn steps funnelling
-  // into a red-lit abyss far below, breathing cold mist. Descending is a big deal.
+  // The way down: a stone STAIRCASE cut into the floor, steps descending in
+  // perspective into the black, flanked by torches, a faint glow from the depths.
+  // Reads unmistakably as "stairs going down" — intimidating, not a portal.
   _drawDescentPit(ctx, d, t) {
     const p = this.player;
     const near = p ? Math.max(0, 1 - Math.hypot(p.x - d.x, p.y - d.y) / 150) : 0;
-    const pulse = 0.5 + 0.5 * Math.sin(t * 2.4);
-    const rx = 58, ry = 38;
+    const flick = 0.8 + 0.2 * Math.sin(t * 9) + 0.1 * Math.sin(t * 21 + 1.3);
+    const cx = d.x;
+    const nearY = d.y + 36, farY = d.y - 46;          // front (bottom) -> back (deep)
+    const nearHalf = 64, farHalf = 22;
+    const Y = (f) => nearY + (farY - nearY) * f;
+    const Hf = (f) => nearHalf + (farHalf - nearHalf) * f;
+    const lip = (f) => [cx - Hf(f), Y(f), cx + Hf(f), Y(f)];
     ctx.save();
+    ctx.lineJoin = 'round';
 
-    // jagged cracks clawing out across the floor from the rim
-    ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
-    for (const ca of [0.3, 1.1, 1.9, 2.7, 3.5, 4.2, 5.0, 5.8]) {
-      const jx = Math.cos(ca), jy = Math.sin(ca) * 0.66;
+    // 1) carved stone surround framing the mouth (a thick raised lintel)
+    ctx.fillStyle = '#2a2535';
+    ctx.beginPath();
+    ctx.moveTo(cx - nearHalf - 14, nearY + 12);
+    ctx.lineTo(cx + nearHalf + 14, nearY + 12);
+    ctx.lineTo(cx + farHalf + 8, farY - 8);
+    ctx.lineTo(cx - farHalf - 8, farY - 8);
+    ctx.closePath(); ctx.fill();
+    // a couple of cracks splitting out of the frame
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    for (const [sx, sy, ex, ey] of [[cx - nearHalf - 14, nearY + 4, cx - nearHalf - 34, nearY + 16],
+      [cx + nearHalf + 14, nearY + 6, cx + nearHalf + 32, nearY - 4]]) {
+      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo((sx + ex) / 2 + 4, (sy + ey) / 2); ctx.lineTo(ex, ey); ctx.stroke();
+    }
+
+    // 2) the black shaft (whole opening), so any step gaps read as pure dark
+    ctx.fillStyle = '#050409';
+    const [nlx, , nrx] = lip(0), [flx, , frx] = lip(1);
+    ctx.beginPath();
+    ctx.moveTo(nlx, nearY); ctx.lineTo(nrx, nearY); ctx.lineTo(frx, farY); ctx.lineTo(flx, farY);
+    ctx.closePath(); ctx.fill();
+
+    // 3) the descending steps — trapezoid treads, near = wide/light, far = small/dark.
+    //    Drawn far-to-near so closer steps overlap the ones behind them.
+    const N = 8;
+    for (let s = N - 1; s >= 0; s--) {
+      const f0 = s / N, f1 = (s + 0.74) / N;          // tread top (deeper) .. tread front lip
+      const yT = Y(f0), yF = Y(f1), hT = Hf(f0), hF = Hf(f1);
+      const shade = Math.round(7 + 30 * (1 - f1));     // deeper steps darker
+      ctx.fillStyle = `rgb(${shade + 5},${shade + 4},${shade + 9})`;
       ctx.beginPath();
-      ctx.moveTo(d.x + jx * rx * 0.92, d.y + jy * ry * 0.92);
-      let cx = d.x + jx * rx * 1.0, cy = d.y + jy * ry * 1.0;
-      for (let s = 0; s < 3; s++) {
-        cx += jx * (10 + Math.random() * 6) + (Math.random() - 0.5) * 8;
-        cy += jy * (10 + Math.random() * 6) + (Math.random() - 0.5) * 8;
-        ctx.lineTo(cx, cy);
-      }
-      ctx.stroke();
+      ctx.moveTo(cx - hF, yF); ctx.lineTo(cx + hF, yF);
+      ctx.lineTo(cx + hT, yT); ctx.lineTo(cx - hT, yT); ctx.closePath(); ctx.fill();
+      // worn highlight along the front lip of the tread
+      ctx.strokeStyle = `rgba(150,150,175,${0.12 + 0.32 * (1 - f1)})`; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(cx - hF, yF); ctx.lineTo(cx + hF, yF); ctx.stroke();
     }
 
-    // recessed rim shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.beginPath(); ctx.ellipse(d.x, d.y + 3, rx + 6, ry + 5, 0, 0, Math.PI * 2); ctx.fill();
-
-    // funnel of descending stone steps — each smaller, higher (further back), darker
-    const N = 6;
-    for (let i = 0; i < N; i++) {
-      const f = i / N;
-      const sx = rx * (1 - f * 0.8), sy = ry * (1 - f * 0.72);
-      const cy = d.y - f * ry * 0.55;
-      const sh = Math.round(34 * (1 - f));
-      ctx.fillStyle = `rgb(${sh + 8},${sh + 7},${sh + 12})`;
-      ctx.beginPath(); ctx.ellipse(d.x, cy, sx, sy, 0, 0, Math.PI * 2); ctx.fill();
-      // worn tread highlight on the near lip of each step
-      ctx.strokeStyle = `rgba(140,140,165,${0.22 * (1 - f)})`; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.ellipse(d.x, cy, sx, sy, 0, 0.18 * Math.PI, 0.82 * Math.PI); ctx.stroke();
-    }
-
-    // the black throat at the bottom
-    const bx = d.x, by = d.y - ry * 0.55;
-    ctx.fillStyle = '#000';
-    ctx.beginPath(); ctx.ellipse(bx, by, rx * 0.2, ry * 0.24, 0, 0, Math.PI * 2); ctx.fill();
-
-    // the Demon Lord's light, bleeding up from far below (brighter as you near)
+    // 4) the glow from far below, framed by the narrowing stairs (not a blob —
+    //    a warm shaft of light rising up the steps). Brighter as you approach.
     ctx.globalCompositeOperation = 'lighter';
-    const glow = 0.22 + 0.16 * pulse + 0.35 * near;
-    const rg = ctx.createRadialGradient(bx, by, 0, bx, by, rx * 0.7);
-    rg.addColorStop(0, `rgba(255,46,22,${glow})`);
-    rg.addColorStop(0.5, `rgba(150,16,8,${glow * 0.5})`);
-    rg.addColorStop(1, 'rgba(80,0,0,0)');
+    const gA = 0.12 + 0.06 * Math.sin(t * 2.4) + 0.3 * near;
+    const gx = cx, gy = farY + 6;
+    const rg = ctx.createRadialGradient(gx, gy, 0, gx, gy, 60);
+    rg.addColorStop(0, `rgba(255,120,40,${gA})`);
+    rg.addColorStop(0.5, `rgba(200,40,16,${gA * 0.5})`);
+    rg.addColorStop(1, 'rgba(120,10,0,0)');
     ctx.fillStyle = rg;
-    ctx.beginPath(); ctx.ellipse(bx, by, rx * 0.7, ry * 0.7, 0, 0, Math.PI * 2); ctx.fill();
-    // a few embers floating up from the abyss when you stand close
-    if (near > 0.2) for (let i = 0; i < 3; i++) {
-      const ph = (t * 0.5 + i * 0.33) % 1;
-      ctx.globalAlpha = (1 - ph) * near * 0.9;
-      ctx.fillStyle = i % 2 ? '#ff7a2a' : '#ffd36b';
-      ctx.fillRect(bx - 10 + ((i * 11 + t * 18) % 22), by - ph * 36, 2, 2);
+    ctx.beginPath(); ctx.ellipse(gx, gy + 6, 46, 30, 0, 0, Math.PI * 2); ctx.fill();
+    if (near > 0.15) for (let i = 0; i < 3; i++) {     // embers drifting up the shaft
+      const ph = (t * 0.45 + i * 0.34) % 1;
+      ctx.globalAlpha = (1 - ph) * near;
+      ctx.fillStyle = i % 2 ? '#ff8a2a' : '#ffd36b';
+      ctx.fillRect(gx - 8 + Math.sin(t * 2 + i) * 6, gy + 4 - ph * 46, 2, 2);
     }
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
 
-    // broken flagstone rim around the mouth
-    ctx.strokeStyle = 'rgba(150,150,175,0.4)'; ctx.lineWidth = 2.5;
-    ctx.beginPath(); ctx.ellipse(d.x, d.y, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
+    // 5) two torches flanking the entrance — warm light, flickering flame
+    for (const sgn of [-1, 1]) {
+      const tx = cx + sgn * (nearHalf + 16), ty = nearY - 2;
+      // post
+      ctx.fillStyle = '#1c1722'; ctx.fillRect(tx - 3, ty - 18, 6, 26);
+      // flame (layered teardrops)
+      const h = 14 + 3 * Math.sin(t * 12 + sgn);
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      const fg = ctx.createRadialGradient(tx, ty - 22, 1, tx, ty - 22, 26);
+      fg.addColorStop(0, `rgba(255,210,120,${0.7 * flick})`); fg.addColorStop(0.5, `rgba(255,120,40,${0.4 * flick})`); fg.addColorStop(1, 'rgba(120,30,0,0)');
+      ctx.fillStyle = fg; ctx.beginPath(); ctx.arc(tx, ty - 22, 26, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = `rgba(255,180,70,${flick})`;
+      ctx.beginPath(); ctx.moveTo(tx, ty - 20 - h); ctx.quadraticCurveTo(tx + 5, ty - 20, tx, ty - 16); ctx.quadraticCurveTo(tx - 5, ty - 20, tx, ty - 20 - h); ctx.fill();
+      ctx.fillStyle = `rgba(255,240,200,${0.9 * flick})`;
+      ctx.beginPath(); ctx.moveTo(tx, ty - 20 - h * 0.6); ctx.quadraticCurveTo(tx + 2.5, ty - 20, tx, ty - 17); ctx.quadraticCurveTo(tx - 2.5, ty - 20, tx, ty - 20 - h * 0.6); ctx.fill();
+      ctx.restore();
+    }
 
-    // cold mist breathing up over the rim
-    for (let i = 0; i < 5; i++) {
-      const ph = (t * 0.28 + i * 0.21) % 1;
-      ctx.globalAlpha = (1 - ph) * 0.16;
+    // 6) cold mist drifting low across the mouth
+    for (let i = 0; i < 3; i++) {
+      const ph = (t * 0.22 + i * 0.34) % 1;
+      ctx.globalAlpha = (1 - ph) * 0.12;
       ctx.fillStyle = 'rgba(180,200,215,1)';
       ctx.beginPath();
-      ctx.ellipse(d.x + Math.sin(t * 0.8 + i * 2) * 18, d.y + ry * 0.3 - ph * 34,
-        24 - ph * 6, 9, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.ellipse(cx + Math.sin(t * 0.7 + i * 2.1) * 22, nearY - 4 - ph * 16, 30 - ph * 8, 6, 0, 0, Math.PI * 2); ctx.fill();
     }
+    ctx.globalAlpha = 1;
     ctx.restore();
   }
 
@@ -543,7 +565,7 @@ export class Game {
     };
     const bob = Math.sin(t * 2.5) * 2;
     label('The Sorcerer', c.sorcerer.x, c.sorcerer.y - 94 + bob, '#9af0ff');
-    label('Descend ▾', c.door.x, c.door.y - 42 + bob, '#bfe9ff');
+    label('Descend ▾', c.door.x, c.door.y - 72 + bob, '#ffb487');
     if (c.shrine && !c.eventUsed) label('? ? ?', c.shrine.x, c.shrine.y - 52 + bob, c.event.color || '#c8a8ff');
     ctx.restore();
   }

@@ -300,6 +300,10 @@ const CHARACTERS = {
     arms: '#e0c24a', head: 'helmet', crest: '#f4f7ff', emblem: '#fff6c8', plume: true,
     belt: '#7a5a16', weapon: 'hammer', hammerHead: '#cfd6e0', eye: '#fff0a0', scale: 1.12,
   },
+  bomber: { // squat dark goblin clutching a bomb — glows before it blows
+    skin: '#33291f', body: '#2a2228', detail: '#15110f', legs: '#1f1a16',
+    head: 'horns', horn: '#15110f', eye: '#ff9a2a', belt: '#c0392b', scale: 0.92,
+  },
   skeleton: {
     skin: '#e7e6da', body: '#cfcdbe', detail: '#9a9788', legs: '#cfcdbe',
     head: 'skull', ribs: true, eye: '#161018', scale: 1.0,

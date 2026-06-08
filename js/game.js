@@ -1,5 +1,5 @@
 // Core game: state machine, wave spawning, collisions, rendering, HUD.
-import { CONFIG, LEVELS } from './config.js';
+import { CONFIG, LEVELS, ELITE_AFFIXES } from './config.js';
 import { Player, Enemy, inSwingArc } from './entities.js';
 import { drawSprite, pickFrame } from './sprite.js';
 import { Input } from './input.js';
@@ -80,7 +80,9 @@ export class Game {
     this.input.layout(this.vw, this.vh);
 
     // a contained arena ~1.5x the screen — room to roam, walls in view
-    this.world = { w: Math.round(this.vw * 1.5), h: Math.round(this.vh * 1.5) };
+    // bigger arena so the camera follows (player stays centred) far more than it
+    // clamps at the edges — that edge-clamp + smoothing was the perceived-speed bug.
+    this.world = { w: Math.round(this.vw * 2.4), h: Math.round(this.vh * 2.4) };
     const m = 56;
     this.worldBounds = { minX: m, minY: m, maxX: this.world.w - m, maxY: this.world.h - m };
     this.bounds = this.worldBounds;
@@ -407,9 +409,11 @@ export class Game {
     this.kills++;
     // hit-pause on meaningful kills (skip trash so swarms stay fluid)
     if (e.boss) this.hitStop = Math.max(this.hitStop, 0.14);
-    else if (e.type === 'tank') this.hitStop = Math.max(this.hitStop, 0.06);
+    else if (e.type === 'tank' || e.elite) this.hitStop = Math.max(this.hitStop, 0.06);
     this._spawnDeathFx(e);
     this._dropLoot(e);
+    // bombers + Explosive elites detonate when slain
+    if (e.type === 'bomber' || e.elite === 'explosive') this._explodeEnemy(e);
     // Ember Crown: the slain erupt, scorching nearby foes (no chain-recursion)
     if (p.relics.has('ember') && !this._inEmber) {
       this._inEmber = true;
@@ -428,12 +432,28 @@ export class Game {
     const drop = (type, value) => this.pickups.push({ type, value, x: e.x + (Math.random() - 0.5) * 14,
       y: e.y + (Math.random() - 0.5) * 14, vx: (Math.random() - 0.5) * 80, vy: -(40 + Math.random() * 60),
       t: 0, dead: false });
-    // gold: most enemies drop a little; bosses/tanks drop a lot
-    const coins = e.boss ? 12 : (e.type === 'tank' ? 4 : (Math.random() < 0.8 ? 1 : 0));
+    // gold: most enemies drop a little; bosses/tanks/elites drop a lot
+    const coins = e.boss ? 12 : (e.elite ? 6 : (e.type === 'tank' ? 4 : (Math.random() < 0.8 ? 1 : 0)));
     for (let i = 0; i < coins; i++) drop('gold', e.boss ? 6 : (1 + (Math.random() < 0.3 ? 1 : 0)));
-    // health: rare from trash, guaranteed-ish from elites/bosses
-    if (e.boss || (e.type === 'tank' && Math.random() < 0.5) || Math.random() < 0.05) {
-      drop('health', e.boss ? 30 : 12);
+    // health: rare from trash, guaranteed from elites/bosses
+    if (e.boss || e.elite || (e.type === 'tank' && Math.random() < 0.5) || Math.random() < 0.05) {
+      drop('health', e.boss ? 30 : 14);
+    }
+  }
+
+  // bomber / explosive-elite detonation
+  _explodeEnemy(e) {
+    const cfg = (e.spec && e.spec.explode) || (e.affix && e.affix.explode) || { r: 74, dmg: 24 };
+    const lvlDmg = cfg.dmg * (1 + CONFIG.scaling.dmgPerLevel * (this.level - 1));
+    this.addEffect({ kind: 'boom', x: e.x, y: e.y, r: cfg.r, t: 0, dur: 0.34 });
+    this.shake = Math.max(this.shake, 7);
+    const p = this.player;
+    if (Math.hypot(p.x - e.x, p.y - e.y) < cfg.r + p.r) { if (p.takeHit(lvlDmg)) this.shake = 9; }
+    // also harms other enemies caught in the blast
+    for (const o of this.enemiesInRadius(e.x, e.y, cfg.r)) {
+      if (o === e) continue;
+      const a = Math.atan2(o.y - e.y, o.x - e.x);
+      this.hitEnemy(o, lvlDmg * 0.6, Math.cos(a) * 120, Math.sin(a) * 120, 'ability');
     }
   }
 
@@ -574,7 +594,14 @@ export class Game {
     for (let i = 0; i < n; i++) {
       const type = this.spawnQueue.shift();
       const pos = this._spawnPos();   // bosses also stride in from off-screen
-      this.enemies.push(new Enemy(type, pos[0], pos[1], this.level));
+      const e = new Enemy(type, pos[0], pos[1], this.level);
+      // rare empowered "elite" foe (never bosses; ramps with depth)
+      if (!e.boss && this.level >= 3 && Math.random() < Math.min(0.2, 0.03 + this.level * 0.02)) {
+        const keys = Object.keys(ELITE_AFFIXES);
+        const key = keys[(Math.random() * keys.length) | 0];
+        e.applyElite(key, ELITE_AFFIXES[key]);
+      }
+      this.enemies.push(e);
       if (type === 'boss' || type === 'miniboss') break; // a boss is its own batch
     }
   }
@@ -661,7 +688,9 @@ export class Game {
     } else { ib.visible = false; }
   }
 
-  // Gentle camera that follows the hero but stays clamped inside the walls.
+  // Camera locked exactly on the hero (no smoothing lag), clamped to the walls.
+  // Exact-follow = the world scrolls at precisely the player's speed in every
+  // direction, so movement reads as one constant speed.
   _updateCamera(dt) {
     if (this.state === 'camp') return;            // the camp camera is fixed (set in openCamp)
     let tx, ty;
@@ -670,11 +699,8 @@ export class Game {
     } else {
       tx = this.player.x - this.vw / 2; ty = this.player.y - this.vh / 2;
     }
-    tx = Math.max(0, Math.min(this.world.w - this.vw, tx));
-    ty = Math.max(0, Math.min(this.world.h - this.vh, ty));
-    const k = Math.min(1, (dt || 0.016) * 9);   // light smoothing
-    this.cam.x += (tx - this.cam.x) * k;
-    this.cam.y += (ty - this.cam.y) * k;
+    this.cam.x = Math.max(0, Math.min(this.world.w - this.vw, tx));
+    this.cam.y = Math.max(0, Math.min(this.world.h - this.vh, ty));
   }
 
   // ---------- update ----------
@@ -735,7 +761,11 @@ export class Game {
     for (const e of this.enemies) {
       const dx = p.x - e.x, dy = p.y - e.y;
       if (Math.hypot(dx, dy) < p.r + e.r) {
-        if (p.takeHit(e.cdmg || e.damage)) { this.shake = Math.max(this.shake, 6); }
+        if (p.takeHit(e.cdmg || e.damage)) {
+          this.shake = Math.max(this.shake, 6);
+          if (e.elite === 'icy') p.slowT = 1.3;                 // Frostbound chills you
+          if (e.type === 'bomber') { e.dead = true; this._explodeEnemy(e); } // detonates on contact
+        }
       }
     }
     // collisions: projectiles vs player
@@ -1657,24 +1687,62 @@ export class Game {
     if (p.invuln > 0 && Math.floor(this.time * 20) % 2 === 0 && p.flash <= 0) {
       ctx.globalAlpha = 0.6;   // blink during i-frames
     }
-    const tint = p.flash > 0 ? { color: '#ff5a5a', a: 0.6 } : null;
+    const tint = p.flash > 0 ? { color: '#ff5a5a', a: 0.6 }
+      : (p.slowT > 0 ? { color: '#9fe0ff', a: 0.45 } : null);
     drawSprite(ctx, p.sprite, frame, p.x, p.y, p.faceLeft, 1, tint);
     ctx.globalAlpha = 1;
   }
 
   _drawEnemy(ctx, e) {
+    const frame = pickFrame(e, this.time + e.x * 0.01);
+    // CHARGE telegraph: a red lance showing where the bruiser is about to rush
+    if (e.state === 'windup' && e.spec.charge && this.player) {
+      const a = Math.atan2(this.player.y - e.y, this.player.x - e.x);
+      ctx.save();
+      ctx.strokeStyle = `rgba(255,60,40,${0.4 + 0.3 * Math.sin(this.time * 20)})`;
+      ctx.lineWidth = 6; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(e.x + Math.cos(a) * 230, e.y + Math.sin(a) * 230); ctx.stroke();
+      ctx.restore();
+    }
+    // boss SLAM telegraph: a growing red danger ring you must leave
+    if (e.state === 'special' && e.pendingSpecial === 'slam') {
+      const prog = 1 - e.stateT / (e.specMax || 0.95);
+      ctx.save();
+      ctx.strokeStyle = `rgba(255,70,50,${0.4 + 0.5 * prog})`; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(e.x, e.y, e.slamR, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = `rgba(255,60,40,${0.12 * prog})`;
+      ctx.beginPath(); ctx.arc(e.x, e.y, e.slamR * prog, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+    // elite aura + bomber fuse-glow
+    if (e.elite || e.type === 'bomber') {
+      const col = e.affix ? e.affix.color : '#ff7a2a';
+      const pulse = 0.5 + 0.5 * Math.sin(this.time * (e.type === 'bomber' ? 9 : 4) + e.x);
+      ctx.save();
+      const g = ctx.createRadialGradient(e.x, e.y - e.r * 0.5, 2, e.x, e.y - e.r * 0.5, e.r * 2.2);
+      g.addColorStop(0, this._rgba(col, 0.32 + 0.22 * pulse));
+      g.addColorStop(1, this._rgba(col, 0));
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(e.x, e.y - e.r * 0.5, e.r * 2.2, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
     const tint = e.flash > 0 ? { color: '#ffffff', a: 0.7 }
-      : (e.state === 'windup' ? { color: '#ff4040', a: 0.5 } : null);
-    drawSprite(ctx, e.sprite, pickFrame(e, this.time + e.x * 0.01), e.x, e.y, e.faceLeft, 1, tint);
-    // small HP bar for tanks & bosses
-    if (e.boss || e.type === 'tank') {
+      : (e.state === 'windup' || e.state === 'special' ? { color: '#ff4040', a: 0.5 }
+      : (e.elite ? { color: e.affix.color, a: 0.28 } : null));
+    drawSprite(ctx, e.sprite, frame, e.x, e.y, e.faceLeft, 1, tint);
+    // small HP bar for tanks, elites & bosses
+    if (e.boss || e.type === 'tank' || e.elite) {
       const w = e.boss ? 60 : 34;
       const hpf = e.hp / e.maxHP;
       const hy = e.y - (e.boss ? 86 : 56);
       ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(e.x - w / 2 - 1, hy - 1, w + 2, 6);
-      ctx.fillStyle = e.boss ? '#d8413a' : '#c9a23a';
+      ctx.fillStyle = e.boss ? '#d8413a' : (e.elite ? e.affix.color : '#c9a23a');
       ctx.fillRect(e.x - w / 2, hy, w * hpf, 4);
     }
+  }
+
+  _rgba(hex, a) {
+    const h = hex.replace('#', '');
+    return `rgba(${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)},${a})`;
   }
 
   _drawProjectile(ctx, pr) {

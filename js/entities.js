@@ -35,13 +35,14 @@ export class Player {
     this.relics = new Set();           // owned relic ids
     this.abilities = [];               // (kept empty: the knight is the core)
     this.fury = 0; this.furyMax = 100;
+    this.slowT = 0;                    // >0 while chilled by a Frostbound elite
   }
 
   get facingAngle() { return Math.atan2(this.fy, this.fx); }
   get dashing() { return this.dashTimer > 0; }
   get maxHP() { return this.hero.maxHP + (this.mods ? this.mods.bonusHP : 0); }
   // effective stats after upgrades (per-hero base)
-  get moveSpeed() { return this.hero.speed * this.mods.moveSpeedMult; }
+  get moveSpeed() { return this.hero.speed * this.mods.moveSpeedMult * (this.slowT > 0 ? 0.55 : 1); }
   get swordDamage() { return this.hero.swordDamage * this.mods.swordDamageMult; }
   get reach() { return this.hero.swordReach * this.mods.reachMult; }
   get arcDeg() { return this.hero.swordArcDeg + this.mods.arcBonusDeg; }
@@ -108,6 +109,7 @@ export class Player {
     if (this.swingCD > 0) this.swingCD -= dt;
     if (this.attackAnim > 0) this.attackAnim -= dt;
     if (this.invuln > 0) this.invuln -= dt;
+    if (this.slowT > 0) this.slowT -= dt;
     if (this.flash > 0) this.flash -= dt;
     if (this.swingTimer > 0) {
       this.swingTimer -= dt;
@@ -178,14 +180,26 @@ export class Enemy {
     // AI timers
     this.fireCD = base.ranged ? Math.random() * 1.2 + 0.6 : 0;
     this.chargeCD = base.charge ? base.charge.cooldown * (0.5 + Math.random() * 0.5) : 0;
-    this.state = 'walk';               // walk | windup | charging
+    this.specialCD = base.specials ? base.specials.interval * (0.6 + Math.random() * 0.4) : 0;
+    this.state = 'walk';               // walk | windup | charging | special
     this.stateT = 0;
     this.cdmg = this.damage;           // current contact damage (boosted while charging)
     this.slowT = 0;                    // >0 while chilled (frost)
+    this.elite = null; this.affix = null; this.armor = 0;
+  }
+
+  // Empower a regular enemy with an elite affix.
+  applyElite(key, def) {
+    this.elite = key; this.affix = def;
+    this.maxHP = Math.round(this.maxHP * (def.hp || 2.2)); this.hp = this.maxHP;
+    this.damage *= 1.25; this.cdmg = this.damage;
+    this.r = Math.round(this.r * 1.16);
+    if (def.speed) this.speed *= def.speed;
+    if (def.armor) this.armor = def.armor;
   }
 
   takeHit(dmg, kx, ky) {
-    this.hp -= dmg;
+    this.hp -= dmg * (1 - this.armor);
     this.flash = 0.12;
     this.kbx += kx; this.kby += ky;
     if (this.hp <= 0) { this.hp = 0; this.dead = true; }
@@ -209,6 +223,27 @@ export class Enemy {
 
     const ranged = this.spec.ranged;
     const charge = this.spec.charge;
+    const specials = this.spec.specials;
+
+    // vampiric elites slowly knit themselves back together
+    if (this.affix && this.affix.regen) this.hp = Math.min(this.maxHP, this.hp + this.maxHP * this.affix.regen * dt);
+
+    // ---- boss special attacks: telegraphed SLAM / SUMMON ----
+    if (specials) {
+      if (this.state === 'special') {
+        this.stateT -= dt; this.moving = false; this.attackAnim = 0.2;
+        if (this.stateT <= 0) { this._doSpecial(game); this.state = 'walk'; }
+        return this._finish(game);
+      }
+      this.specialCD -= dt;
+      if (this.specialCD <= 0 && this.state === 'walk' && dist < 560) {
+        this.pendingSpecial = Math.random() < 0.5 ? 'slam' : 'summon';
+        this.slamR = specials.slam.r;
+        this.state = 'special'; this.stateT = 0.95; this.specMax = 0.95;
+        this.specialCD = specials.interval;
+        return this._finish(game);
+      }
+    }
 
     // ---- charge attack (miniboss/boss) ----
     if (charge) {
@@ -260,6 +295,23 @@ export class Enemy {
     this._step(nx, ny, dt);
     this.moving = true;
     return this._finish(game);
+  }
+
+  _doSpecial(game) {
+    const sp = this.spec.specials;
+    if (this.pendingSpecial === 'slam') {
+      const p = game.player, R = sp.slam.r;
+      game.addEffect({ kind: 'boom', x: this.x, y: this.y, r: R, t: 0, dur: 0.4 });
+      game.shake = Math.max(game.shake, 11);
+      if (Math.hypot(p.x - this.x, p.y - this.y) < R + p.r) { if (p.takeHit(this.damage * sp.slam.dmg)) game.shake = 13; }
+    } else {
+      const s = sp.summon;
+      for (let i = 0; i < s.count; i++) {
+        const a = Math.random() * TAU;
+        game.enemies.push(new Enemy(s.type, this.x + Math.cos(a) * 64, this.y + Math.sin(a) * 64, game.level));
+      }
+      game.addEffect({ kind: 'ring', x: this.x, y: this.y, r: 74, color: '#b06bff', t: 0, dur: 0.45 });
+    }
   }
 
   _step(nx, ny, dt) {

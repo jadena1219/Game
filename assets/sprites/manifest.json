@@ -20,6 +20,10 @@
       "file": "paladin.png",
       "scale": 1.12
     },
+    "bomber": {
+      "file": "bomber.png",
+      "scale": 0.92
+    },
     "skeleton": {
       "file": "skeleton.png",
       "scale": 1

@@ -355,6 +355,7 @@ export class Game {
       this.shopSlots = 4 + (mb.slots || 0);
       this.kills = 0; this.level = 1; this.gold = mb.startGold || 0; this.totalGold = 0;
       this.runSouls = 0;
+      this._campsSinceEvent = 0; this._eventsRecent = [];   // event pacing (see openCamp)
       this.hpDisplay = this.hpGhost = this.player.maxHP;
       this.timeScale = 1; this.dying = 0;
       this._startLevel(1, true);
@@ -1096,8 +1097,14 @@ export class Game {
     this.player.dashTimer = 0; this.player.swingTimer = 0; this.player.invuln = 0;
     this.forceElite = 0;                    // reset any pending event-ambush
     const b = this.biome;
-    // a third path may open: a risk/reward event shrine (not every camp)
-    const event = Math.random() < 0.7 ? pickEvent(this) : null;
+    // A fork in the dark is the signature of the descent, so it almost always
+    // opens — but never the same one twice running (pickEvent skips the recent),
+    // and never two blank camps in a row (pity). Variety keeps it special; the
+    // reliability lets the player build a run around the gambles.
+    const forced = (this._campsSinceEvent || 0) >= 1;
+    const event = (forced || Math.random() < 0.82) ? pickEvent(this) : null;
+    this._campsSinceEvent = event ? 0 : (this._campsSinceEvent || 0) + 1;
+    if (event) this._eventsRecent = [event.id, ...(this._eventsRecent || [])].slice(0, 3);
     this.camp = {
       sorcerer: { x: ox + this.vw * 0.74, y: oy + this.vh * 0.42 },
       door: { x: ox + this.vw * 0.5, y: oy + this.vh * 0.82 },

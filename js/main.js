@@ -218,14 +218,6 @@ const ui = {
       if (g.rerollShop()) { this._campMsg('The sorcerer lays out new wares.'); render(); }
       else this._campMsg('Not enough gold to reroll.');
     };
-    document.getElementById('shrine-btn').onclick = () => {
-      const r = g.gambleShrine();
-      if (!r.ok) return this._campMsg('The shrine demands 30 gold.');
-      if (r.kind === 'relic') this._campMsg(`The shrine grants you a relic: ${r.name}!`);
-      else if (r.kind === 'gold') this._campMsg('The shrine spits back a few coins.');
-      else this._campMsg('The shrine takes your gold, and laughs.');
-      render();
-    };
     document.getElementById('shop-back').onclick = () => g.closeShop();
     document.getElementById('camp-msg').innerHTML = '&nbsp;';
     this.showScreen('shop');

@@ -39,6 +39,7 @@ export class Player {
     this.slowT = 0;                    // >0 while chilled by a Frostbound elite
     this.eventDmg = 1;                 // run-scoped multipliers from dungeon events
     this.eventHP = 0;
+    this.eventVuln = 1;                // incoming-damage multiplier (demon pacts, etc.)
   }
 
   get facingAngle() { return Math.atan2(this.fy, this.fx); }
@@ -131,7 +132,7 @@ export class Player {
   takeHit(dmg) {
     if (this.invuln > 0 || this.dead) return false;
     const dr = Math.min(0.85, this.mods.damageReduction + (this.hero.damageReduction || 0));
-    this.hp -= dmg * (1 - dr);
+    this.hp -= dmg * (1 - dr) * this.eventVuln;
     this.invuln = CONFIG.player.invuln;
     this.flash = 0.25;
     if (this.hp <= 0) { this.hp = 0; this.dead = true; }

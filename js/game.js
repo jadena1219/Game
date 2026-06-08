@@ -691,9 +691,11 @@ export class Game {
     const drop = (type, value) => this.pickups.push({ type, value, x: e.x + (Math.random() - 0.5) * 14,
       y: e.y + (Math.random() - 0.5) * 14, vx: (Math.random() - 0.5) * 80, vy: -(40 + Math.random() * 60),
       t: 0, dead: false });
-    // gold: most enemies drop a little; bosses/tanks/elites drop a lot
-    const coins = e.boss ? 12 : (e.elite ? 6 : (e.type === 'tank' ? 4 : (Math.random() < 0.8 ? 1 : 0)));
-    for (let i = 0; i < coins; i++) drop('gold', e.boss ? 6 : (1 + (Math.random() < 0.3 ? 1 : 0)));
+    // gold: most enemies drop a little; bosses/tanks/elites drop more. Odds are
+    // deliberately low — there are a LOT of mobs, and you shouldn't afford the
+    // whole catalogue in one run. Spend choices should hurt a little.
+    const coins = e.boss ? 12 : (e.elite ? 4 : (e.type === 'tank' ? 3 : (Math.random() < 0.45 ? 1 : 0)));
+    for (let i = 0; i < coins; i++) drop('gold', e.boss ? 5 : 1);
     // health: bosses always; otherwise scarce, so big waves don't flood you with heals
     if (e.boss || (e.elite && Math.random() < 0.4) || (e.type === 'tank' && Math.random() < 0.22) || Math.random() < 0.012) {
       drop('health', e.boss ? 30 : 14);
@@ -1345,7 +1347,7 @@ export class Game {
     } else {
       // "LEVEL CLEARED" sweep, then the camp shop
       this.player.hp = Math.min(this.player.maxHP, this.player.hp + CONFIG.hpRestorePerLevel);
-      { const b = 10 + this.level * 4; this.gold += b; this.totalGold += b; }   // steady clear bonus
+      { const b = 4 + Math.round(this.level * 1.5); this.gold += b; this.totalGold += b; }   // modest clear bonus
       this.state = 'clearing';
       this.sweep = { t: 0, dur: 1.5 };
       this.pendingReward = { heal: CONFIG.hpRestorePerLevel };

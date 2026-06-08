@@ -1163,7 +1163,7 @@ export class Game {
     if (il.phase === 'in') {
       if (il.t >= 0.6 || this._tapped) { il.phase = 'type'; il.t = 0; this._tapped = false; }
     } else if (il.phase === 'type') {
-      il.shown = Math.min(il.totalChars, il.shown + dt * 9);      // ~9 chars/sec — slow & ominous
+      il.shown = Math.min(il.totalChars, il.shown + dt * 11);     // ~11 chars/sec — slow & ominous
       if (this._tapped && il.t > 0.25) { il.shown = il.totalChars; this._tapped = false; }  // tap = finish line
       if (il.shown >= il.totalChars) { il.phase = 'hold'; il.t = 0; this._tapped = false; }
     } else if (il.phase === 'hold') {
@@ -1834,7 +1834,9 @@ export class Game {
   _buildTunnel() {
     const W = this.vw, H = this.vh, SEG = 200;
     const b = biomeForLevel(1);                       // catacomb palette → matches Level 1
-    const top = Math.round(H * 0.26), bot = Math.round(H * 0.80);
+    // band sits a touch low so the title text never overlaps the knight, who is
+    // centred within it
+    const top = Math.round(H * 0.34), bot = Math.round(H * 0.86);
     this._tunnel = { SEG, top, bot, torchY: { top, bot } };
     const c = document.createElement('canvas'); c.width = SEG; c.height = H;
     const g = c.getContext('2d');

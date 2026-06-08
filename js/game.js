@@ -635,7 +635,7 @@ export class Game {
     const wasAlive = !e.dead;
     e.takeHit(dmg, kx, ky);
     this.spawnDamageNumber(e.x, e.y - e.r - 6, Math.round(dmg), source);
-    if (source === 'sword') { this._spark(e.x, e.y); this._relicOnHit(e, dmg); }
+    if (source === 'sword') this._relicOnHit(e, dmg);   // sparks/feedback handled in _applySwingDamage
     if (e.boss && wasAlive) this.hitStop = Math.max(this.hitStop, 0.05); // weight on boss hits
     if (wasAlive && e.dead) this.onEnemyKilled(e, source);
   }
@@ -761,9 +761,10 @@ export class Game {
   }
 
   spawnDamageNumber(x, y, amount, source) {
+    const big = source === 'ultimate';   // crits & the ultimate land BIG and gold
     const color = source === 'sword' ? '#ffffff' : source === 'ultimate' ? '#ffd36b' : '#bfe3ff';
     this.effects.push({ kind: 'dmg', x: x + (Math.random() - 0.5) * 10, y, text: '' + amount,
-      vy: -42, color, t: 0, dur: 0.7 });
+      vy: big ? -56 : -42, color, big, t: 0, dur: big ? 0.8 : 0.6 });
   }
 
   spawnFireball(x, y, ang, lvl) {
@@ -919,7 +920,14 @@ export class Game {
         if (p.hero.crit && Math.random() < p.hero.crit) { dmg *= p.hero.critMult; crit = true; }
         this.hitEnemy(e, dmg, kx * kb, ky * kb, crit ? 'ultimate' : 'sword');
         p.hitThisSwing.add(e);
-        this.shake = Math.max(this.shake, e.boss ? 5 : (crit ? 5 : 3.5));
+        // --- the "fuck yeah" impact: directional sparks, a flash ring, a slash
+        // mark across the foe, crunchy hitstop + shake scaled to the blow ---
+        const ix = e.x, iy = e.y - e.r * 0.35, power = crit ? 1.7 : 1;
+        this._hitBurst(ix, iy, p.facingAngle, power);
+        this.addEffect({ kind: 'hitring', x: ix, y: iy, r: (e.boss ? 40 : 24) * power, t: 0, dur: 0.18 });
+        this.addEffect({ kind: 'slash', x: ix, y: iy, angle: p.facingAngle + Math.PI / 2, len: e.r * 2.0 + 14, t: 0, dur: 0.14 });
+        this.hitStop = Math.max(this.hitStop, e.boss ? 0.08 : (e.type === 'tank' || e.elite) ? 0.06 : (crit ? 0.06 : 0.035));
+        this.shake = Math.max(this.shake, e.boss ? 7 : (crit ? 7 : 4.5));
         // Paladin: crushing blows ripple out a shockwave
         if (p.hero.shockwave) {
           this.addEffect({ kind: 'ring', x: e.x, y: e.y, r: 48, color: '#e9c84a', t: 0, dur: 0.3 });
@@ -953,6 +961,25 @@ export class Game {
       const a = Math.random() * Math.PI * 2, s = 60 + Math.random() * 120;
       this.effects.push({ kind: 'spark', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s,
         t: 0, dur: 0.3 });
+    }
+  }
+
+  // A directional shower of hot streak-sparks fired out along `ang` — the spray
+  // that sells a clean sword hit. `power` scales count + speed (crits hit harder).
+  _hitBurst(x, y, ang, power = 1) {
+    const n = Math.round(7 * power);
+    for (let i = 0; i < n; i++) {
+      const a = ang + (Math.random() - 0.5) * 1.2;
+      const s = (150 + Math.random() * 240) * power;
+      this.effects.push({ kind: 'spark', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s,
+        t: 0, dur: 0.2 + Math.random() * 0.14, streak: true,
+        col: Math.random() < 0.5 ? '#ffffff' : '#cfeaff' });
+    }
+    // a stubby cluster of slow embers at the point of impact
+    for (let i = 0; i < 3; i++) {
+      const a = ang + (Math.random() - 0.5) * 2.4, s = 30 + Math.random() * 50;
+      this.effects.push({ kind: 'spark', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s,
+        t: 0, dur: 0.16 + Math.random() * 0.1, col: '#9fd0ff' });
     }
   }
 
@@ -1536,6 +1563,8 @@ export class Game {
     for (const pr of this.projectiles) this._drawProjectile(ctx, pr);
     for (const fb of this.allyProjectiles) this._drawFireball(ctx, fb);
     for (const fx of this.effects) this._drawAbilityFx(ctx, fx);
+    for (const fx of this.effects) if (fx.kind === 'slash') this._drawSlashMark(ctx, fx);
+    for (const fx of this.effects) if (fx.kind === 'hitring') this._drawHitRing(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'spark') this._drawSpark(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'dmg') this._drawDamage(ctx, fx);
 
@@ -2387,15 +2416,18 @@ export class Game {
   }
 
   _drawDamage(ctx, fx) {
-    const a = 1 - fx.t / fx.dur;
+    const p = fx.t / fx.dur, a = 1 - p * p;
+    const pop = p < 0.16 ? p / 0.16 : 1;                 // snap up on appear, then settle
+    const scale = (fx.big ? 1.5 : 1) * (0.55 + 0.5 * pop) * (fx.big ? 1 + 0.12 * (1 - pop) : 1);
     ctx.save();
-    ctx.globalAlpha = a;
+    ctx.globalAlpha = Math.max(0, a);
+    ctx.translate(fx.x, fx.y); ctx.scale(scale, scale);
     ctx.font = '11px "Silkscreen", sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-    ctx.strokeText(fx.text, fx.x, fx.y);
+    ctx.lineWidth = fx.big ? 4 : 3; ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+    ctx.strokeText(fx.text, 0, 0);
     ctx.fillStyle = fx.color;
-    ctx.fillText(fx.text, fx.x, fx.y);
+    ctx.fillText(fx.text, 0, 0);
     ctx.restore();
   }
 
@@ -2568,8 +2600,38 @@ export class Game {
     const a = 1 - fx.t / fx.dur;
     ctx.save();
     ctx.globalAlpha = a;
-    ctx.fillStyle = fx.col || '#fff3c0';
-    ctx.fillRect(fx.x - 1.5, fx.y - 1.5, 3, 3);
+    if (fx.streak) {                      // motion-streak: a short line trailing the velocity
+      ctx.strokeStyle = fx.col || '#fff'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(fx.x, fx.y);
+      ctx.lineTo(fx.x - fx.vx * 0.035, fx.y - fx.vy * 0.035); ctx.stroke();
+    } else {
+      ctx.fillStyle = fx.col || '#fff3c0';
+      ctx.fillRect(fx.x - 1.5, fx.y - 1.5, 3, 3);
+    }
+    ctx.restore();
+  }
+
+  // expanding white flash ring at the point of impact
+  _drawHitRing(ctx, fx) {
+    const p = fx.t / fx.dur, a = 1 - p;
+    const r = fx.r * (0.3 + 0.7 * p);
+    ctx.save();
+    ctx.globalAlpha = a * 0.85;
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1 + 3 * (1 - p);
+    ctx.beginPath(); ctx.arc(fx.x, fx.y, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  }
+
+  // a quick bright slash line carved across the struck foe
+  _drawSlashMark(ctx, fx) {
+    const p = fx.t / fx.dur, a = 1 - p;
+    const grow = Math.min(1, p / 0.4), len = fx.len * (0.4 + 0.6 * grow);
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.translate(fx.x, fx.y); ctx.rotate(fx.angle);
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.lineWidth = 3.5 * (1 - p * 0.6);
+    ctx.beginPath(); ctx.moveTo(-len / 2, 0); ctx.lineTo(len / 2, 0); ctx.stroke();
     ctx.restore();
   }
 
@@ -2612,13 +2674,32 @@ export class Game {
       }
 
     } else {
-      // Knight: the classic wide sweeping cleave
+      // Knight: a fast crescent cleave — a glowing blade-trail with a white-hot
+      // leading edge that whips around as the swing extends.
+      const head = cur;                                   // leading edge angle
+      const tail = a0 + Math.max(0, prog * arc - arc * 0.6);  // trail follows behind
+      const rO = reach, rI = reach * 0.46;
+      // a faint wide wash for the whoosh
       ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, reach, a0, a + arc / 2); ctx.closePath();
-      ctx.fillStyle = 'rgba(150,220,255,0.08)'; ctx.fill();
-      ctx.strokeStyle = 'rgba(190,233,255,0.55)'; ctx.lineWidth = 12;
-      ctx.beginPath(); ctx.arc(0, 0, reach * 0.88, a0, cur); ctx.stroke();
-      ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 4;
-      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(cur) * reach, Math.sin(cur) * reach); ctx.stroke();
+      ctx.fillStyle = `rgba(150,220,255,${0.06 * fade})`; ctx.fill();
+      // the crescent blade-trail (bright at the rim, clear inside)
+      ctx.beginPath();
+      ctx.arc(0, 0, rO, tail, head);
+      ctx.arc(0, 0, rI, head, tail, true);
+      ctx.closePath();
+      const g = ctx.createRadialGradient(0, 0, rI, 0, 0, rO);
+      g.addColorStop(0, 'rgba(190,233,255,0)');
+      g.addColorStop(0.65, `rgba(190,233,255,${0.32 * fade})`);
+      g.addColorStop(1, `rgba(255,255,255,${0.6 * fade})`);
+      ctx.fillStyle = g; ctx.fill();
+      // white-hot leading edge + tip gleam
+      ctx.strokeStyle = `rgba(255,255,255,${0.95 * fade})`; ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(head) * rI, Math.sin(head) * rI);
+      ctx.lineTo(Math.cos(head) * rO * 1.05, Math.sin(head) * rO * 1.05);
+      ctx.stroke();
+      ctx.fillStyle = `rgba(255,255,255,${0.9 * fade})`;
+      ctx.beginPath(); ctx.arc(Math.cos(head) * rO, Math.sin(head) * rO, 3.5, 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
   }

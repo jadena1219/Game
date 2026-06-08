@@ -3,10 +3,13 @@ import { loadAssets } from './assets.js';
 import { Game } from './game.js';
 import { CONFIG } from './config.js';
 import { drawSprite } from './sprite.js';
+import { META, metaCost, LOCKED_RELICS, RELIC_UNLOCK_COST } from './meta.js';
+import { RELICS } from './abilities.js';
 
 const screens = {
   title: document.getElementById('title-screen'),
   'hero-select': document.getElementById('hero-select'),
+  sanctum: document.getElementById('sanctum'),
   shop: document.getElementById('shop-modal'),
   gameover: document.getElementById('game-over'),
   victory: document.getElementById('victory'),
@@ -74,6 +77,64 @@ const ui = {
     loop();
   },
 
+  // The Sanctum — spend banked Souls on permanent upgrades + relic unlocks.
+  showSanctum(g) {
+    const m = g.meta;
+    const render = () => {
+      document.getElementById('sanctum-souls-n').textContent = m.souls;
+      const wrap = document.getElementById('sanctum-list');
+      wrap.innerHTML = '';
+      META.forEach((item, i) => {
+        const lvl = m.up[item.id] || 0;
+        const maxed = lvl >= item.max;
+        const cost = metaCost(item, lvl);
+        const afford = m.souls >= cost;
+        const el = document.createElement('button');
+        el.className = 'soul-item' + (maxed ? ' maxed' : afford ? '' : ' broke');
+        el.style.animationDelay = (i * 0.05) + 's';
+        const pips = Array.from({ length: item.max }, (_, k) => `<i class="${k < lvl ? 'on' : ''}"></i>`).join('');
+        el.innerHTML =
+          `<img class="ware-ico-img" src="assets/icons/${item.icon}.png" alt="">` +
+          `<div class="ware-body">` +
+            `<div class="ware-name">${item.name}<span class="soul-pips">${pips}</span></div>` +
+            `<div class="ware-desc">${maxed ? 'Mastered.' : item.desc(lvl + 1)}</div>` +
+          `</div>` +
+          `<div class="ware-cost soul">${maxed ? '✓' : '<span class="soul-dot small"></span><span class="num">' + cost + '</span>'}</div>`;
+        if (!maxed) el.addEventListener('click', () => {
+          if (g.buyMeta(item)) { this._sanctumMsg('The souls answer. Empowered.'); render(); }
+          else this._sanctumMsg('Not enough souls.');
+        });
+        wrap.appendChild(el);
+      });
+      // relic unlocks
+      LOCKED_RELICS.forEach((id) => {
+        const relic = RELICS.find((r) => r.id === id);
+        const owned = m.relics.includes(id);
+        const afford = m.souls >= RELIC_UNLOCK_COST;
+        const el = document.createElement('button');
+        el.className = 'soul-item relicunlock' + (owned ? ' maxed' : afford ? '' : ' broke');
+        el.innerHTML =
+          `<img class="ware-ico-img" src="assets/icons/${id}.png" alt="">` +
+          `<div class="ware-body">` +
+            `<div class="ware-name">${relic.name}<span class="tagchip relic">RELIC</span></div>` +
+            `<div class="ware-desc">${relic.desc}</div>` +
+            `<div class="ware-flavor">${owned ? 'Unlocked — it now appears at the sorcerer.' : relic.flavor}</div>` +
+          `</div>` +
+          `<div class="ware-cost soul">${owned ? '✓' : '<span class="soul-dot small"></span><span class="num">' + RELIC_UNLOCK_COST + '</span>'}</div>`;
+        if (!owned) el.addEventListener('click', () => {
+          if (g.unlockRelic(id)) { this._sanctumMsg(`${relic.name} unlocked!`); render(); }
+          else this._sanctumMsg('Not enough souls.');
+        });
+        wrap.appendChild(el);
+      });
+    };
+    render();
+    document.getElementById('sanctum-msg').innerHTML = '&nbsp;';
+    document.getElementById('sanctum-back').onclick = () => this.showScreen('title');
+    this.showScreen('sanctum');
+  },
+  _sanctumMsg(t) { const el = document.getElementById('sanctum-msg'); if (el) el.textContent = t; },
+
   // Floating prompt while roaming the camp room.
   setCampPrompt(kind) {
     const b = document.getElementById('camp-prompt');
@@ -140,8 +201,10 @@ const ui = {
   hideShop() { this.showScreen(null); },
   _campMsg(t) { const el = document.getElementById('camp-msg'); if (el) el.textContent = t; },
 
-  gameOver(level) {
+  gameOver(level, souls, total) {
     document.getElementById('go-sub').innerHTML = numWrap(`You reached Level ${level} of 10`);
+    document.getElementById('go-souls').textContent = souls || 0;
+    document.getElementById('go-total').textContent = total || 0;
     this.showScreen('gameover');
   },
   victory(stats) {
@@ -150,6 +213,8 @@ const ui = {
         `<div class="vstat">Foes slain<span class="num">${stats.kills}</span></div>` +
         `<div class="vstat">Gold gathered<span class="num">${stats.gold}</span></div>` +
         `<div class="vstat">Relics claimed<span class="num">${stats.relics}</span></div>`;
+      document.getElementById('win-souls').textContent = stats.souls || 0;
+      document.getElementById('win-total').textContent = stats.total || 0;
     }
     this.showScreen('victory');
   },
@@ -180,6 +245,8 @@ async function boot() {
   document.getElementById('start-btn').addEventListener('click', () => ui.showHeroSelect());
   document.getElementById('retry-btn').addEventListener('click', () => ui.showHeroSelect());
   document.getElementById('win-btn').addEventListener('click', () => ui.showHeroSelect());
+  document.getElementById('sanctum-btn').addEventListener('click', () => ui.showSanctum(game));
+  document.getElementById('sanctum-back').addEventListener('click', () => ui.showScreen('title'));
 }
 
 boot();

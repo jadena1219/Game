@@ -46,7 +46,7 @@ export const CONFIG = {
       name: 'Paladin', sprite: 'paladin', weapon: 'Warhammer', title: 'The Bulwark',
       pips: { hp: 5, spd: 1, pow: 5 }, accent: '#ffd86a',
       blurb: 'A slow, unstoppable wall. Crushing blows send out shockwaves; shrugs off damage.',
-      maxHP: 144, speed: 128, swordDamage: 42, swordReach: 84, swordArcDeg: 132,
+      maxHP: 150, speed: 96, swordDamage: 42, swordReach: 84, swordArcDeg: 132,
       swingCooldown: 0.64, swingActive: 0.18, knockback: 300,
       dashSpeed: 500, dashDur: 0.12, dashCooldown: 1.9, dashInvuln: 0.26,
       damageReduction: 0.12, shockwave: true, swingStyle: 'slam',

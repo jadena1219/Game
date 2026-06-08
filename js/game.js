@@ -6,6 +6,7 @@ import { Input } from './input.js';
 import { recompute, rollStock, RELICS } from './abilities.js';
 import { Assets } from './assets.js';
 import { biomeForLevel } from './biomes.js';
+import { loadMeta, saveMeta, metaBonuses, runSouls, metaCost, LOCKED_RELICS, RELIC_UNLOCK_COST } from './meta.js';
 
 const BOSS_NAMES = { miniboss: 'The Dark Knight', boss: 'The Demon Lord' };
 
@@ -15,6 +16,9 @@ export class Game {
     this.ctx = canvas.getContext('2d');
     this.ui = ui;
     this.input = new Input(canvas);
+    this.meta = loadMeta();
+    this.metaB = metaBonuses(this.meta);
+    this.shopSlots = 4;
     this.state = 'title';
     this.time = 0;
     this.shake = 0;
@@ -306,12 +310,43 @@ export class Game {
   start(heroId = 'knight') {
     this.heroId = heroId;
     this._slashWipe(() => {
-      this.player = new Player(this.world.w / 2, this.world.h / 2, heroId);
-      this.kills = 0; this.level = 1; this.gold = 0; this.totalGold = 0;
+      const mb = this.metaB = metaBonuses(this.meta);
+      this.player = new Player(this.world.w / 2, this.world.h / 2, heroId, mb);
+      this.player.lockedRelics = new Set(LOCKED_RELICS.filter((id) => !this.meta.relics.includes(id)));
+      this.shopSlots = 4 + (mb.slots || 0);
+      this.kills = 0; this.level = 1; this.gold = mb.startGold || 0; this.totalGold = 0;
+      this.runSouls = 0;
       this.hpDisplay = this.hpGhost = this.player.maxHP;
       this.timeScale = 1; this.dying = 0;
       this._startLevel(1, true);
     });
+  }
+
+  // ---- Sanctum (meta-progression) purchases ----
+  buyMeta(item) {
+    const lvl = this.meta.up[item.id] || 0;
+    if (lvl >= item.max || this.meta.souls < metaCost(item, lvl)) return false;
+    this.meta.souls -= metaCost(item, lvl);
+    this.meta.up[item.id] = lvl + 1;
+    this.metaB = metaBonuses(this.meta);
+    saveMeta(this.meta);
+    return true;
+  }
+  unlockRelic(id) {
+    if (this.meta.relics.includes(id) || this.meta.souls < RELIC_UNLOCK_COST) return false;
+    this.meta.souls -= RELIC_UNLOCK_COST;
+    this.meta.relics.push(id);
+    saveMeta(this.meta);
+    return true;
+  }
+
+  // Bank souls for this run (once) and persist.
+  _awardSouls(won) {
+    const cleared = won ? LEVELS.length : Math.max(0, this.level - 1);
+    this.runSouls = runSouls(cleared, this.kills, won);
+    this.meta.souls += this.runSouls;
+    this.metaB = metaBonuses(this.meta);
+    saveMeta(this.meta);
   }
 
   nextLevel() { this._slashWipe(() => this._startLevel(this.level + 1, false)); }
@@ -474,7 +509,7 @@ export class Game {
   }
 
   _collect(pk) {
-    if (pk.type === 'gold') { const g = Math.ceil(pk.value * this.player.mods.goldMult); this.gold += g; this.totalGold += g; }
+    if (pk.type === 'gold') { const g = Math.ceil(pk.value * this.player.mods.goldMult * (1 + this.metaB.gold)); this.gold += g; this.totalGold += g; }
     else if (pk.type === 'health') {
       this.player.hp = Math.min(this.player.maxHP, this.player.hp + pk.value);
       this.effects.push({ kind: 'dmg', x: this.player.x, y: this.player.y - 30, text: '+' + pk.value,
@@ -888,8 +923,9 @@ export class Game {
     this.dying -= dt;
     if (this.dying <= 0) {
       this.timeScale = 1;
+      this._awardSouls(false);
       this.state = 'gameover';
-      this.ui.gameOver(this.level);
+      this.ui.gameOver(this.level, this.runSouls, this.meta.souls);
     }
   }
 
@@ -904,8 +940,10 @@ export class Game {
         hue: Math.random() < 0.5 ? '#ffd86a' : (Math.random() < 0.5 ? '#fff3c0' : '#ff9a3a') });
     }
     if (this.wonT >= 3.6) {
+      this._awardSouls(true);
       this.state = 'victory';
-      this.ui.victory({ kills: this.kills, gold: this.totalGold, relics: this.player.relics.size });
+      this.ui.victory({ kills: this.kills, gold: this.totalGold, relics: this.player.relics.size,
+        souls: this.runSouls, total: this.meta.souls });
     }
   }
 
@@ -984,7 +1022,7 @@ export class Game {
   // ---- the camp: an in-world safe room with a sorcerer to trade with and a
   // glowing door to descend through ----
   openCamp() {
-    this.shopStock = rollStock(this.player, 4);
+    this.shopStock = rollStock(this.player, this.shopSlots || 4);
     this.rerollCost = 12;
     this.shopOpen = false;
     this.enemies = []; this.projectiles = []; this.allyProjectiles = []; this.pickups = [];
@@ -1081,7 +1119,7 @@ export class Game {
     if (this.gold < this.rerollCost) return false;
     this.gold -= this.rerollCost;
     this.rerollCost += 8;
-    this.shopStock = rollStock(this.player, 4);
+    this.shopStock = rollStock(this.player, this.shopSlots || 4);
     return true;
   }
 
@@ -1091,7 +1129,8 @@ export class Game {
     if (this.gold < cost) return { ok: false };
     this.gold -= cost;
     const p = this.player;
-    const unowned = RELICS.filter((r) => !p.relics.has(r.id));
+    const locked = p.lockedRelics || new Set();
+    const unowned = RELICS.filter((r) => !p.relics.has(r.id) && !locked.has(r.id));
     const r = Math.random();
     if (r < 0.6 && unowned.length) {
       const relic = unowned[(Math.random() * unowned.length) | 0];

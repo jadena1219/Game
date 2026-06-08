@@ -22,7 +22,18 @@
       <h1>Knight's<br />Last Stand</h1>
       <p class="tag">Ten waves. One blade. No retreat.</p>
       <button class="btn" id="start-btn">Begin the Stand</button>
+      <button class="btn ghost" id="sanctum-btn">The Sanctum</button>
       <p class="hint">Left side to move &middot; double-tap left to dash &middot; right button to swing</p>
+    </div>
+
+    <!-- The Sanctum: spend Souls on permanent upgrades -->
+    <div class="screen hidden" id="sanctum">
+      <h2 class="gold">The Sanctum</h2>
+      <p class="rw-sub">Souls of the fallen empower every future descent.</p>
+      <div id="sanctum-souls"><span class="soul-dot"></span><span id="sanctum-souls-n">0</span> souls</div>
+      <div id="sanctum-list"></div>
+      <p class="hint" id="sanctum-msg">&nbsp;</p>
+      <button class="btn small" id="sanctum-back">Back</button>
     </div>
 
     <!-- Reward selection -->
@@ -55,8 +66,8 @@
     <div class="screen hidden" id="game-over">
       <h2 class="danger">You Fell</h2>
       <p id="go-sub">You reached Level 1</p>
-      <p class="hint">The stand begins anew...</p>
-      <button class="btn" id="retry-btn">Back to Level 1</button>
+      <div class="souls-earned"><span class="soul-dot"></span>+<span id="go-souls">0</span> souls &middot; <span id="go-total">0</span> banked</div>
+      <button class="btn" id="retry-btn">Try Again</button>
     </div>
 
     <!-- Victory -->
@@ -66,6 +77,7 @@
       <h2 class="gold">The Demon Lord Falls</h2>
       <p>Ten levels of dark. One blade unbroken.<br>The realm is saved.</p>
       <div id="victory-stats"></div>
+      <div class="souls-earned"><span class="soul-dot"></span>+<span id="win-souls">0</span> souls &middot; <span id="win-total">0</span> banked</div>
       <button class="btn" id="win-btn">Begin Anew</button>
     </div>
   </div>

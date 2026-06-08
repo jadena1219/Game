@@ -88,8 +88,9 @@ function shuffle(a) {
 
 // Build the camp's wares: a mix of forge upgrades (not maxed) + relics (not owned).
 export function rollStock(player, n = 4) {
+  const locked = player.lockedRelics || new Set();
   const forgePool = shuffle(FORGE.filter((f) => (player.forge[f.id] || 0) < f.max).map((f) => ({ kind: 'forge', item: f })));
-  const relicPool = shuffle(RELICS.filter((r) => !player.relics.has(r.id)).map((r) => ({ kind: 'relic', item: r })));
+  const relicPool = shuffle(RELICS.filter((r) => !player.relics.has(r.id) && !locked.has(r.id)).map((r) => ({ kind: 'relic', item: r })));
   const stock = [];
   const relicN = Math.min(2, relicPool.length);
   for (let i = 0; i < relicN; i++) stock.push(relicPool[i]);

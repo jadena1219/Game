@@ -7,11 +7,12 @@ function norm(x, y) { const l = Math.hypot(x, y) || 1; return [x / l, y / l]; }
 function angDiff(a, b) { let d = (a - b) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; }
 
 export class Player {
-  constructor(x, y, heroId = 'knight') {
+  constructor(x, y, heroId = 'knight', metaB = null) {
     this.x = x; this.y = y;
     this.heroId = heroId;
     this.hero = CONFIG.heroes[heroId] || CONFIG.heroes.knight;
     this.sprite = this.hero.sprite;
+    this.metaB = metaB || { hp: 0, dmg: 0, spd: 0, gold: 0 };
     this.mods = BASE_MODS();
     this.hp = this.maxHP;
     this.r = CONFIG.player.radius;
@@ -40,10 +41,10 @@ export class Player {
 
   get facingAngle() { return Math.atan2(this.fy, this.fx); }
   get dashing() { return this.dashTimer > 0; }
-  get maxHP() { return this.hero.maxHP + (this.mods ? this.mods.bonusHP : 0); }
-  // effective stats after upgrades (per-hero base)
-  get moveSpeed() { return this.hero.speed * this.mods.moveSpeedMult * (this.slowT > 0 ? 0.55 : 1); }
-  get swordDamage() { return this.hero.swordDamage * this.mods.swordDamageMult; }
+  get maxHP() { return this.hero.maxHP + (this.mods ? this.mods.bonusHP : 0) + this.metaB.hp; }
+  // effective stats after upgrades (per-hero base + meta-progression)
+  get moveSpeed() { return this.hero.speed * this.mods.moveSpeedMult * (1 + this.metaB.spd) * (this.slowT > 0 ? 0.55 : 1); }
+  get swordDamage() { return this.hero.swordDamage * this.mods.swordDamageMult * (1 + this.metaB.dmg); }
   get reach() { return this.hero.swordReach * this.mods.reachMult; }
   get arcDeg() { return this.hero.swordArcDeg + this.mods.arcBonusDeg; }
   get swingCooldown0() { return this.hero.swingCooldown * this.mods.swingCooldownMult; }

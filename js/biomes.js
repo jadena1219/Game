@@ -94,14 +94,37 @@ export const BIOMES = [
     detail: detailCrypt,
   },
   {
-    id: 'keep', name: 'The Iron Keep', act: 'III', levels: [7, 8, 9],
+    // The Iron Keep stretches to L10 — the Dark Knight holds its inner shrine.
+    id: 'keep', name: 'The Iron Keep', act: 'III', levels: [7, 8, 9, 10],
     ground: ['#28202a', '#140d14'], wall: '#1f1820', cap: '#352b33',
     grade: 'rgba(120,60,40,0.10)', dark: 0.62, torch: '#ffb24a', lava: false,
     particle: 'embers', pcol: ['#ff8a3a', '#c0502a', '#ffce6a'],
     detail: detailKeep,
   },
+  // ---- the deeper descent (back half): darker, colder, hungrier variants ----
   {
-    id: 'throne', name: 'Throne of the Demon Lord', act: 'IV', levels: [10],
+    id: 'catacomb', name: 'The Sunless Vault', act: 'IV', levels: [11, 12, 13],
+    ground: ['#231d31', '#0d0916'], wall: '#1a1526', cap: '#2a2240',
+    grade: 'rgba(50,40,110,0.12)', dark: 0.66, torch: '#8ab0ff', lava: false,
+    particle: 'pollen', pcol: ['#6a6a8e', '#44445c'],
+    detail: detailCatacomb,
+  },
+  {
+    id: 'crypt', name: 'The Drowned Halls', act: 'V', levels: [14, 15, 16],
+    ground: ['#16231e', '#08120e'], wall: '#10201a', cap: '#1c332b',
+    grade: 'rgba(40,110,90,0.12)', dark: 0.72, torch: '#6fe0b0', lava: false,
+    particle: 'pollen', pcol: ['#4e7a68', '#2e4a3e'],
+    detail: detailCrypt,
+  },
+  {
+    id: 'keep', name: 'The Bleeding Keep', act: 'VI', levels: [17, 18, 19],
+    ground: ['#2a1b1d', '#140a0b'], wall: '#1f1315', cap: '#33222a',
+    grade: 'rgba(170,40,30,0.13)', dark: 0.6, torch: '#ff7a4a', lava: false,
+    particle: 'embers', pcol: ['#ff7a3a', '#c0402a', '#ffb24a'],
+    detail: detailKeep,
+  },
+  {
+    id: 'throne', name: 'Throne of the Demon Lord', act: 'VII', levels: [20],
     ground: ['#241320', '#10070d'], wall: '#180a12', cap: '#2c1420',
     grade: 'rgba(255,70,30,0.12)', dark: 0.55, torch: '#ff7a2a', lava: true,
     particle: 'embers', pcol: ['#ff5a2a', '#ff9a3a', '#ffce6a'],

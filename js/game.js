@@ -14,11 +14,16 @@ const BOSS_NAMES = { miniboss: 'The Dark Knight', boss: 'The Demon Lord' };
 // The Demon Lord's voice — cryptic, threatening, escalating. Keyed by the level
 // you just cleared; the screen blacks out and these type across it in blood red.
 const DEMON_LINES = {
-  1: 'ONE DOOR OPENED. NINE REMAIN.\nI HAVE COUNTED THEM SINCE BEFORE YOUR BIRTH.',
+  1: 'ONE DOOR OPENED. NINETEEN REMAIN.\nI HAVE COUNTED THEM SINCE BEFORE YOUR BIRTH.',
   3: 'DO YOU FEEL THE COLD DEEPEN?\nTHAT IS ME — BREATHING ON YOUR NECK.',
-  5: 'MY CHAMPION LIES BROKEN AT YOUR FEET.\nGOOD. I HAD GROWN BORED OF HIM.',
-  7: 'EVERY STEP DOWN, I HAVE ALREADY WALKED.\nTHE THRONE IS PATIENT. SO AM I.',
-  9: 'THE LAST DOOR IS OPEN, LITTLE KNIGHT.\nI SET TWO CHAIRS. YOU WILL NOT SIT.',
+  5: 'YOU CLIMB DOWN SO EAGERLY.\nEVERY STEP IS ONE I HAVE ALREADY WALKED.',
+  7: 'MY CHAMPION SHARPENS HIS BLADE BELOW.\nHE HAS NEVER LEFT A ROOM UNQUIET.',
+  9: 'THE DARK KNIGHT WAITS AT THE TENTH GATE.\nKNEEL, AND I MAY YET SPARE THE REST.',
+  11: 'MY CHAMPION LIES BROKEN AT YOUR FEET.\nGOOD. I HAD GROWN BORED OF HIM.',
+  13: 'HALFWAY IS NOT VICTORY, LITTLE KNIGHT.\nIT IS MERELY WHERE I BEGIN TO WATCH.',
+  15: 'THE WALLS REMEMBER EVERY NAME.\nI WILL CARVE YOURS WHERE IT FITS.',
+  17: 'YOUR WOUNDS OUTNUMBER YOUR VICTORIES.\nYET STILL YOU DESCEND. HOW LOVELY.',
+  19: 'THE LAST DOOR IS OPEN, LITTLE KNIGHT.\nI SET TWO CHAIRS. YOU WILL NOT SIT.',
 };
 
 export class Game {
@@ -586,7 +591,7 @@ export class Game {
     this.state = 'playing';
     this.ui.showScreen(null);
 
-    // pre-level countdown + intro card (boss reveal on 5 & 10)
+    // pre-level countdown + intro card (boss reveal on 10 & 20)
     this.countdown = 3.6;
     if (bossType) {
       this.intro = { kind: 'boss', text: BOSS_NAMES[bossType], sub: this.biome.name, t: 0, dur: 3.0 };
@@ -853,7 +858,7 @@ export class Game {
       // empowered "elite" foe — forced by an event ambush, else rare & depth-scaled
       if (!e.boss) {
         if (this.forceElite > 0) { this.forceElite--; this._eliteify(e); }
-        else if (this.level >= 3 && Math.random() < Math.min(0.32, 0.05 + this.level * 0.03)) this._eliteify(e);
+        else if (this.level >= 3 && Math.random() < Math.min(0.42, 0.04 + this.level * 0.022)) this._eliteify(e);
       }
       this.enemies.push(e);
       if (type === 'boss' || type === 'miniboss') break; // a boss is its own batch
@@ -2678,29 +2683,29 @@ export class Game {
       // Rogue: a pair of fast neon-green dagger streaks + a thin crescent flick
       for (const off of [-0.16, 0.16]) {
         const aa = a + off;
-        const grd = ctx.createLinearGradient(Math.cos(aa) * reach * 0.25, Math.sin(aa) * reach * 0.25,
-          Math.cos(aa) * reach * 1.05, Math.sin(aa) * reach * 1.05);
+        const grd = ctx.createLinearGradient(Math.cos(aa) * reach * 0.22, Math.sin(aa) * reach * 0.22,
+          Math.cos(aa) * reach * 0.92, Math.sin(aa) * reach * 0.92);
         grd.addColorStop(0, 'rgba(120,255,190,0)');
         grd.addColorStop(0.6, `rgba(150,255,200,${0.85 * fade})`);
         grd.addColorStop(1, `rgba(255,255,255,${0.95 * fade})`);
-        ctx.strokeStyle = grd; ctx.lineWidth = 5;
+        ctx.strokeStyle = grd; ctx.lineWidth = 4.5;
         ctx.beginPath();
-        ctx.moveTo(Math.cos(aa) * reach * 0.25, Math.sin(aa) * reach * 0.25);
-        ctx.lineTo(Math.cos(aa) * reach * 1.05, Math.sin(aa) * reach * 1.05);
+        ctx.moveTo(Math.cos(aa) * reach * 0.22, Math.sin(aa) * reach * 0.22);
+        ctx.lineTo(Math.cos(aa) * reach * 0.92, Math.sin(aa) * reach * 0.92);
         ctx.stroke();
       }
       ctx.fillStyle = `rgba(180,255,220,${0.5 * fade})`;
-      ctx.fill(this._crescentPath(a - 0.32, 0.64, reach * 0.94, reach * 0.16, 0, sweep));
+      ctx.fill(this._crescentPath(a - 0.3, 0.6, reach * 0.8, reach * 0.13, 0, sweep));
 
     } else {
       // Knight (sweep) & Paladin (slam): a sharp, fast crescent slash. The bright
       // edge runs ALONG the curve (the blade's edge catching light) — no radial
       // shaft, so it reads as a sword cut, not a spear thrust.
       const slam = style === 'slam';
-      const rMid = reach * 0.9;
+      const rMid = reach * 0.68;                            // sits inside the hitbox, not beyond it
       const bloom = slam ? '150,90,25' : '60,150,255';
       const body  = slam ? '255,190,90' : '150,220,255';
-      const outer = reach * (slam ? 0.66 : 0.56);          // crescent thickness
+      const outer = reach * (slam ? 0.46 : 0.4);           // crescent thickness
       // helper: trace the convex outer rim of the crescent from u=lo..hi
       const rim = (lo, hi) => {
         ctx.beginPath();
@@ -2715,11 +2720,11 @@ export class Game {
       // 1) origin flash — a quick radial pop where the swing begins
       if (life < 0.26) {
         const f = (1 - life / 0.26) * fade;
-        const rg = ctx.createRadialGradient(0, 0, 0, 0, 0, reach * 0.5);
+        const rg = ctx.createRadialGradient(0, 0, 0, 0, 0, reach * 0.4);
         rg.addColorStop(0, `rgba(${body},${0.5 * f})`);
         rg.addColorStop(1, `rgba(${body},0)`);
         ctx.fillStyle = rg;
-        ctx.beginPath(); ctx.arc(0, 0, reach * 0.5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(0, 0, reach * 0.4, 0, Math.PI * 2); ctx.fill();
       }
       // 2) soft bloom + 3) colored body + 4) white-hot core (thinner = sharper)
       ctx.fillStyle = `rgba(${bloom},${0.20 * fade})`;

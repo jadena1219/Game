@@ -54,14 +54,14 @@ export const CONFIG = {
   },
 
   // HP restored after clearing each level (capped at maxHP)
-  hpRestorePerLevel: 24,
+  hpRestorePerLevel: 18,
 
   // Per-level scaling applied to base enemy stats. Ramps hard — you snowball in
   // power via cards/relics, so the dungeon has to push back to stay tense.
   scaling: {
-    hpPerLevel: 0.18,       // +18% enemy HP per level above 1
-    speedPerLevel: 0.045,   // +4.5% enemy speed per level above 1
-    dmgPerLevel: 0.075,     // +7.5% enemy contact/projectile damage per level above 1
+    hpPerLevel: 0.155,      // +15.5% enemy HP per level above 1 (spread over 20 levels)
+    speedPerLevel: 0.035,   // +3.5% enemy speed per level above 1
+    dmgPerLevel: 0.085,     // +8.5% enemy contact/projectile damage per level above 1
   },
 
   spawn: {
@@ -80,10 +80,10 @@ export const ENEMY_TYPES = {
   // Bomber: rushes you and detonates on death — keep your distance or kill from afar.
   bomber:  { sprite: 'bomber',   hp: 24,  speed: 116, damage: 6,  radius: 12, touch: true,
              explode: { r: 70, dmg: 26 } },
-  // Mini-boss (Dark Knight, L5): a GIGANTIC dread-knight — telegraphed CHARGE that rushes you down.
-  miniboss:{ sprite: 'miniboss', hp: 700, speed: 82,  damage: 22, radius: 46, touch: true, boss: true,
+  // Mini-boss (Dark Knight, L10): a GIGANTIC dread-knight — telegraphed CHARGE that rushes you down.
+  miniboss:{ sprite: 'miniboss', hp: 950, speed: 82,  damage: 22, radius: 46, touch: true, boss: true,
              charge: { windup: 0.62, dur: 0.52, speed: 500, cooldown: 2.7 } },
-  // Final boss (Demon Lord, L10): nova volleys + telegraphed ground SLAM + SUMMONS.
+  // Final boss (Demon Lord, L20): nova volleys + telegraphed ground SLAM + SUMMONS.
   boss:    { sprite: 'boss',     hp: 1350, speed: 60, damage: 17, radius: 42, touch: true, boss: true,
              ranged: { range: 9999, keep: 0, cooldown: 2.4, projSpeed: 185, projDmg: 14, nova: 14 },
              specials: { interval: 4.6, slam: { r: 175, dmg: 1.8 }, summon: { type: 'swarmer', count: 5 } } },
@@ -99,17 +99,27 @@ export const ELITE_AFFIXES = {
   vampiric: { name: 'Vampiric',  color: '#d8413a', regen: 0.05 }, // %maxHP/s
 };
 
-// Level composition. Each entry: { type: count }. miniboss at L5, boss at L10.
+// Level composition. Each entry: { type: count }. miniboss at L10, boss at L20.
 // Counts ramp up to match the player's snowballing ability kit.
 export const LEVELS = [
-  { chaser: 8 },                                          // 1  (gentle, but not a nap)
-  { chaser: 14, swarmer: 4 },                             // 2
-  { chaser: 12, swarmer: 11 },                            // 3
-  { chaser: 11, swarmer: 13, bomber: 4, tank: 2 },        // 4
-  { miniboss: 1, chaser: 10, swarmer: 6 },                // 5  — mini-boss + escort
-  { swarmer: 18, caster: 5, bomber: 6 },                  // 6
-  { chaser: 15, caster: 6, tank: 4, bomber: 4 },          // 7
-  { swarmer: 20, caster: 6, tank: 4, bomber: 7 },         // 8
-  { chaser: 16, swarmer: 16, caster: 6, tank: 5, bomber: 6 }, // 9
-  { boss: 1, caster: 4, tank: 3, bomber: 4 },             // 10 — final boss
+  { chaser: 8 },                                              // 1  (gentle, but not a nap)
+  { chaser: 13, swarmer: 5 },                                 // 2
+  { chaser: 12, swarmer: 10 },                                // 3
+  { chaser: 12, swarmer: 11, bomber: 3 },                     // 4
+  { chaser: 11, swarmer: 12, bomber: 4, tank: 2 },            // 5
+  { swarmer: 16, caster: 4, bomber: 5 },                      // 6
+  { chaser: 14, caster: 5, tank: 3, bomber: 4 },              // 7
+  { swarmer: 18, caster: 5, tank: 4, bomber: 6 },             // 8
+  { chaser: 16, swarmer: 14, caster: 6, tank: 4, bomber: 6 }, // 9
+  { miniboss: 1, chaser: 10, swarmer: 8 },                    // 10 — mini-boss + escort
+  { chaser: 16, swarmer: 14, caster: 6, bomber: 6 },          // 11
+  { swarmer: 20, caster: 7, tank: 5, bomber: 7 },             // 12
+  { chaser: 18, caster: 7, tank: 5, bomber: 7 },              // 13
+  { swarmer: 22, caster: 8, tank: 6, bomber: 8 },             // 14
+  { chaser: 18, swarmer: 18, caster: 8, tank: 6, bomber: 8 }, // 15
+  { swarmer: 24, caster: 9, tank: 7, bomber: 9 },             // 16
+  { chaser: 20, swarmer: 18, caster: 9, tank: 7, bomber: 9 }, // 17
+  { swarmer: 26, caster: 10, tank: 8, bomber: 10 },           // 18
+  { chaser: 22, swarmer: 22, caster: 10, tank: 8, bomber: 10 }, // 19
+  { boss: 1, caster: 5, tank: 4, bomber: 5 },                 // 20 — final boss
 ];

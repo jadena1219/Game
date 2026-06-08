@@ -1,7 +1,7 @@
 // Entry point: load sprites, wire up the menus, run the game.
 import { loadAssets } from './assets.js';
 import { Game } from './game.js';
-import { CONFIG } from './config.js';
+import { CONFIG, LEVELS } from './config.js';
 import { drawSprite } from './sprite.js';
 import { META, metaCost, LOCKED_RELICS, RELIC_UNLOCK_COST } from './meta.js';
 import { RELICS } from './abilities.js';
@@ -183,8 +183,8 @@ const ui = {
   showShop(g) {
     const level = g.level;
     document.getElementById('camp-title').textContent =
-      level + 1 === 5 ? 'The Sorcerer — the Dark Knight waits below'
-      : level + 1 === 10 ? 'The Sorcerer — the Demon Lord stirs'
+      level + 1 === 10 ? 'The Sorcerer — the Dark Knight waits below'
+      : level + 1 === 20 ? 'The Sorcerer — the Demon Lord stirs'
       : 'The Sorcerer';
 
     const render = () => {
@@ -229,7 +229,7 @@ const ui = {
   _campMsg(t) { const el = document.getElementById('camp-msg'); if (el) el.textContent = t; },
 
   gameOver(level) {
-    document.getElementById('go-sub').innerHTML = numWrap(`You reached Level ${level} of 10`);
+    document.getElementById('go-sub').innerHTML = numWrap(`You reached Level ${level} of ${LEVELS.length}`);
     this.showScreen('gameover');
   },
   victory(stats) {

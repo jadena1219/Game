@@ -54,7 +54,7 @@ const ui = {
             `<div class="ware-desc">${w.label}</div>` +
             (w.kind === 'relic' ? `<div class="ware-flavor">${w.item.flavor}</div>` : '') +
           `</div>` +
-          `<div class="ware-cost">${owned ? '✓' : '◆ ' + w.cost}</div>`;
+          `<div class="ware-cost">${owned ? '✓' : '◆ <span class="num">' + w.cost + '</span>'}</div>`;
         if (!owned) el.addEventListener('click', () => {
           if (g.buyWare(w)) { this._campMsg(`Bought ${w.item.name}.`); render(); }
           else this._campMsg('Not enough gold.');
@@ -88,7 +88,15 @@ const ui = {
     document.getElementById('go-sub').textContent = `You reached Level ${level} of 10`;
     this.showScreen('gameover');
   },
-  victory() { this.showScreen('victory'); },
+  victory(stats) {
+    if (stats) {
+      document.getElementById('victory-stats').innerHTML =
+        `<div class="vstat">Foes slain<span class="num">${stats.kills}</span></div>` +
+        `<div class="vstat">Gold gathered<span class="num">${stats.gold}</span></div>` +
+        `<div class="vstat">Relics claimed<span class="num">${stats.relics}</span></div>`;
+    }
+    this.showScreen('victory');
+  },
 };
 
 async function boot() {

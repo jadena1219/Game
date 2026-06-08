@@ -12,6 +12,9 @@ export class Input {
     // joystick visual state
     this.stick = { active: false, id: null, ox: 0, oy: 0, x: 0, y: 0 };
     this.btn = { active: false, id: null, x: 0, y: 0, r: 64 };
+    // floating Fury button (positioned by the game above the hero when charged)
+    this.furyBtn = { x: 0, y: 0, r: 0, visible: false };
+    this.furyTapped = false;        // set on tap; consumed by the game
 
     this.keys = new Set();
     this._bind();
@@ -36,6 +39,11 @@ export class Input {
     const rect = () => c.getBoundingClientRect();
 
     const onDown = (id, x, y) => {
+      // Fury button takes priority when it's showing
+      if (this.furyBtn.visible) {
+        const fx = x - this.furyBtn.x, fy = y - this.furyBtn.y;
+        if (fx * fx + fy * fy <= this.furyBtn.r * this.furyBtn.r * 1.5) { this.furyTapped = true; return; }
+      }
       if (this._inButton(x, y)) {
         this.btn.active = true; this.btn.id = id; this.swingHeld = true;
       } else {
@@ -96,6 +104,7 @@ export class Input {
     window.addEventListener('keydown', (e) => {
       const k = e.key.toLowerCase();
       if (k === 'shift' && !e.repeat) this.dashQueued = true;   // dodge on desktop
+      if ((k === 'q' || k === 'e' || k === 'f') && !e.repeat) this.furyTapped = true; // ultimate
       this.keys.add(k);
       if ([' ', 'j', 'k'].includes(k)) this.swingHeld = true;
     });

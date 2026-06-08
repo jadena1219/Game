@@ -631,6 +631,16 @@ export class Game {
     }
   }
 
+  // Keep the floating Fury button parked just above the hero's head.
+  _updateFuryButton() {
+    const ib = this.input.furyBtn || (this.input.furyBtn = { x: 0, y: 0, r: 0, visible: false });
+    if (this.furyReady && this.state === 'playing' && this.countdown <= 0) {
+      ib.x = this.player.x - this.cam.x;
+      ib.y = this.player.y - this.cam.y - 60;
+      ib.r = 30; ib.visible = true;
+    } else { ib.visible = false; }
+  }
+
   // Gentle camera that follows the hero but stays clamped inside the walls.
   _updateCamera(dt) {
     if (this.state === 'camp') return;            // the camp camera is fixed (set in openCamp)
@@ -660,6 +670,7 @@ export class Game {
     if (this.transition && this.transition.t < this.transition.half) return;
 
     if (this.state === 'dying') return this._updateDying(dt);
+    if (this.state === 'won') return this._updateWon(dt);
     if (this.state === 'camp') return this._updateCamp(dt);
     if (this.state !== 'playing') return;
 
@@ -680,7 +691,12 @@ export class Game {
     }
 
     this._updateAbilities(sdt);
-    if (p.fury >= p.furyMax) { p.fury = 0; this._ultimate(); }
+    // Fury no longer auto-fires — it arms a button the player taps to unleash.
+    this.furyReady = p.fury >= p.furyMax;
+    this._updateFuryButton();
+    if (this.furyReady && this.input.furyTapped) {
+      this.input.furyTapped = false; p.fury = 0; this.furyReady = false; this._ultimate();
+    } else if (this.input.furyTapped) { this.input.furyTapped = false; }
     if (p.dashing) {
       this._dashGhostT = (this._dashGhostT || 0) - sdt;
       if (this._dashGhostT <= 0) {
@@ -771,7 +787,7 @@ export class Game {
       if (this.sweep.t >= this.sweep.dur) {
         this.sweep = null;
         this.pendingReward = null;
-        this.openCamp();
+        this._slashWipe(() => this.openCamp());   // wipe into the camp room
       }
     }
   }
@@ -824,6 +840,22 @@ export class Game {
       this.timeScale = 1;
       this.state = 'gameover';
       this.ui.gameOver(this.level);
+    }
+  }
+
+  _updateWon(dt) {
+    this.wonT += dt;
+    this._updateProjAndFx(dt);
+    // a steady rain of golden confetti for the celebration
+    if (Math.random() < 0.7) {
+      this.embers.push({ x: this.cam.x + Math.random() * this.vw, y: this.cam.y - 8,
+        vx: (Math.random() - 0.5) * 30, vy: 40 + Math.random() * 70,
+        r: 1.5 + Math.random() * 2.5, life: 0, dur: 3 + Math.random() * 2,
+        hue: Math.random() < 0.5 ? '#ffd86a' : (Math.random() < 0.5 ? '#fff3c0' : '#ff9a3a') });
+    }
+    if (this.wonT >= 3.6) {
+      this.state = 'victory';
+      this.ui.victory({ kills: this.kills, gold: this.gold, relics: this.player.relics.size });
     }
   }
 
@@ -883,8 +915,11 @@ export class Game {
 
   _win() {
     if (this.level >= LEVELS.length) {
-      this.state = 'victory';
-      this.ui.victory();
+      // epic celebration sequence, then the victory screen
+      this.state = 'won';
+      this.wonT = 0;
+      this.shake = Math.max(this.shake, 10);
+      this.flashScreen = 0.3;
       this._spawnEmberBurst();
     } else {
       // "LEVEL CLEARED" sweep, then the camp shop
@@ -1090,6 +1125,7 @@ export class Game {
     this._drawGrade(ctx);           // biome colour grade (screen overlay)
     if (title) { this._drawTransition(ctx); return; }
     this._drawDeathOverlay(ctx);    // desaturate + "YOU FELL" during dying/gameover lead-in
+    this._drawVictory(ctx);         // golden celebration during the 'won' sequence
 
     // full-screen flash (ultimate)
     if (this.flashScreen > 0) {
@@ -1121,7 +1157,52 @@ export class Game {
     this._drawCountdownIntro(ctx); // level/boss intro + 3..2..1..FIGHT
     this._drawHUD(ctx);
     if (this.state === 'playing' || (this.state === 'camp' && !this.shopOpen)) this.input.draw(ctx);
+    this._drawFuryButton(ctx);     // floating "unleash fury" button above the hero
     this._drawTransition(ctx);     // slash-wipe on the very top
+  }
+
+  _drawFuryButton(ctx) {
+    if (this.state !== 'playing') return;
+    const b = this.input.furyBtn;
+    if (!b.visible) return;
+    const x = b.x, y = b.y, r = b.r, t = this.time;
+    const pulse = 0.5 + 0.5 * Math.sin(t * 6);
+    ctx.save();
+    // aura
+    const g = ctx.createRadialGradient(x, y, 2, x, y, r + 20 + pulse * 8);
+    g.addColorStop(0, 'rgba(190,130,255,0.65)');
+    g.addColorStop(0.55, 'rgba(140,80,230,0.32)');
+    g.addColorStop(1, 'rgba(120,60,200,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r + 20 + pulse * 8, 0, Math.PI * 2); ctx.fill();
+    // rotating rune ticks
+    ctx.strokeStyle = `rgba(220,190,255,${0.4 + 0.5 * pulse})`; ctx.lineWidth = 2;
+    for (let i = 0; i < 10; i++) {
+      const a = t * 1.6 + i * (Math.PI * 2 / 10);
+      const r0 = r + 6, r1 = r + 11;
+      ctx.beginPath();
+      ctx.moveTo(x + Math.cos(a) * r0, y + Math.sin(a) * r0);
+      ctx.lineTo(x + Math.cos(a) * r1, y + Math.sin(a) * r1);
+      ctx.stroke();
+    }
+    // button body
+    const br = r * (1 + pulse * 0.05);
+    const bg = ctx.createRadialGradient(x, y - r * 0.4, 2, x, y, br);
+    bg.addColorStop(0, '#d6b3ff'); bg.addColorStop(0.5, '#8a44e0'); bg.addColorStop(1, '#46198a');
+    ctx.fillStyle = bg; ctx.beginPath(); ctx.arc(x, y, br, 0, Math.PI * 2); ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = '#efe0ff'; ctx.stroke();
+    // lightning glyph
+    ctx.fillStyle = '#fff'; ctx.shadowColor = '#e9d8ff'; ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.moveTo(x + 4, y - 13); ctx.lineTo(x - 7, y + 2); ctx.lineTo(x - 1, y + 2);
+    ctx.lineTo(x - 4, y + 13); ctx.lineTo(x + 8, y - 3); ctx.lineTo(x + 1, y - 3);
+    ctx.closePath(); ctx.fill();
+    ctx.shadowBlur = 0;
+    // label
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = '600 8px "Press Start 2P", monospace';
+    ctx.fillStyle = '#efe0ff';
+    ctx.fillText('FURY', x, y + r + 12);
+    ctx.restore();
   }
 
   // ---- Phase 3: atmosphere draw helpers ----
@@ -1176,6 +1257,7 @@ export class Game {
   // of it at the torches, the hero and any spell flashes. This is the vibe.
   _drawDarkness(ctx) {
     const b = this.biome; if (!b || !b.dark) return;
+    if (this.state === 'won') return;      // the victory is bathed in golden light
     if (this.flashScreen > 0.02) return;   // the ultimate floods the room with light
     const darkLevel = this.state === 'camp' ? Math.min(b.dark, 0.34) : b.dark; // safe room is brighter
     const S = 0.5;                          // half-res shadow buffer (soft, cheap)
@@ -1378,8 +1460,8 @@ export class Game {
       ctx.save();
       ctx.globalAlpha = Math.max(0.25, a);
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      const sz = (fight ? 60 : 84) * scale;
-      ctx.font = `bold ${sz}px "Pixelify Sans", sans-serif`;
+      const sz = (fight ? 46 : 72) * scale;
+      ctx.font = fight ? `bold ${sz}px "Pixelify Sans", sans-serif` : `${sz}px "Press Start 2P", monospace`;
       ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,0.6)';
       ctx.strokeText(label, this.vw / 2, this.vh * 0.5);
       ctx.fillStyle = fight ? '#d8413a' : '#fff';
@@ -1404,6 +1486,46 @@ export class Game {
       ctx.strokeText('YOU FELL', this.vw / 2, this.vh * 0.45);
       ctx.fillStyle = '#d8413a';
       ctx.fillText('YOU FELL', this.vw / 2, this.vh * 0.45);
+    }
+    ctx.restore();
+  }
+
+  _drawVictory(ctx) {
+    if (this.state !== 'won') return;
+    const t = this.wonT, cx = this.vw / 2;
+    ctx.save();
+    // golden wash
+    ctx.fillStyle = `rgba(70,46,8,${Math.min(0.4, t * 0.28)})`;
+    ctx.fillRect(0, 0, this.vw, this.vh);
+    // heavenly light beam + glow on the hero
+    if (this.player) {
+      const sx = this.player.x - this.cam.x, sy = this.player.y - this.cam.y;
+      const beam = ctx.createLinearGradient(sx, 0, sx, sy + 10);
+      beam.addColorStop(0, 'rgba(255,236,170,0)'); beam.addColorStop(1, 'rgba(255,236,170,0.28)');
+      ctx.fillStyle = beam;
+      ctx.beginPath(); ctx.moveTo(sx - 14, 0); ctx.lineTo(sx + 14, 0);
+      ctx.lineTo(sx + 60, sy + 16); ctx.lineTo(sx - 60, sy + 16); ctx.closePath(); ctx.fill();
+      const rg = ctx.createRadialGradient(sx, sy - 16, 2, sx, sy - 16, 90);
+      rg.addColorStop(0, `rgba(255,240,180,${0.4 + 0.1 * Math.sin(t * 5)})`); rg.addColorStop(1, 'rgba(255,220,120,0)');
+      ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(sx, sy - 16, 90, 0, Math.PI * 2); ctx.fill();
+    }
+    // VICTORY slam-in
+    if (t > 0.35) {
+      const p = Math.min(1, (t - 0.35) / 0.45);
+      ctx.globalAlpha = Math.min(1, p * 1.5);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const sz = 26 + (1 - p) * 16;
+      ctx.font = `${sz}px "Press Start 2P", monospace`;
+      ctx.lineWidth = 8; ctx.strokeStyle = 'rgba(40,20,0,0.7)';
+      ctx.strokeText('VICTORY', cx, this.vh * 0.32);
+      const grd = ctx.createLinearGradient(0, this.vh * 0.30, 0, this.vh * 0.35);
+      grd.addColorStop(0, '#fff3c0'); grd.addColorStop(1, '#f0b835');
+      ctx.fillStyle = grd; ctx.fillText('VICTORY', cx, this.vh * 0.32);
+    }
+    if (t > 1.0) {
+      ctx.globalAlpha = Math.min(1, (t - 1.0) / 0.5);
+      ctx.font = 'bold 17px "Pixelify Sans", sans-serif'; ctx.fillStyle = '#ffe9b0';
+      ctx.fillText('The Demon Lord Falls', cx, this.vh * 0.32 + 40);
     }
     ctx.restore();
   }
@@ -1478,7 +1600,7 @@ export class Game {
     const a = 1 - fx.t / fx.dur;
     ctx.save();
     ctx.globalAlpha = a;
-    ctx.font = 'bold 15px "Pixelify Sans", sans-serif';
+    ctx.font = '11px "Press Start 2P", monospace';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.7)';
     ctx.strokeText(fx.text, fx.x, fx.y);
@@ -1567,7 +1689,7 @@ export class Game {
   }
 
   _drawHUD(ctx) {
-    if (this.state === 'title' || this.state === 'gameover' || this.state === 'victory') return;
+    if (this.state === 'title' || this.state === 'gameover' || this.state === 'victory' || this.state === 'won') return;
     const p = this.player;
     if (!p) return;
     // health bar (fixed max) — smoothed with a "damage ghost" chunk
@@ -1596,17 +1718,19 @@ export class Game {
     ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = 'bold 9px "Pixelify Sans", sans-serif';
     ctx.textAlign = 'left'; ctx.fillText(ff >= 1 ? 'ULTIMATE!' : 'FURY', bx + 4, fy + fh / 2 + 1);
 
-    // level medallion (centred, below the bars) + foes/gold on the right
+    // level medallion (centred, below the bars) + foes/gold on the right.
+    // numbers use Press Start 2P (unambiguous digits); icons are drawn as shapes.
     this._drawLevelBadge(ctx);
     const remaining = this.enemies.length + this.spawnQueue.length;
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'middle';
-    ctx.font = 'bold 15px "Pixelify Sans", sans-serif';
-    ctx.fillStyle = '#e9c84a';
-    ctx.fillText(`◆ ${this.gold}`, this.vw - 18, 26);
+    ctx.textBaseline = 'middle'; ctx.textAlign = 'right';
+    ctx.font = '12px "Press Start 2P", monospace'; ctx.fillStyle = '#f0cf5a';
+    ctx.fillText('' + this.gold, this.vw - 16, 26);
+    this._diamond(ctx, this.vw - 24 - ctx.measureText('' + this.gold).width, 26, 5, '#f0cf5a');
     if (this.state !== 'camp') {
-      ctx.fillStyle = '#cdbfe0'; ctx.font = 'bold 13px "Pixelify Sans", sans-serif';
-      ctx.fillText(`☠ ${remaining}`, this.vw - 18, 46);
+      ctx.textAlign = 'right'; ctx.fillStyle = '#d6c8ea';
+      ctx.font = '12px "Press Start 2P", monospace';
+      ctx.fillText('' + remaining, this.vw - 16, 48);
+      this._skull(ctx, this.vw - 26 - ctx.measureText('' + remaining).width, 47, '#d6c8ea');
     }
   }
 
@@ -1637,8 +1761,24 @@ export class Game {
     ctx.textAlign = 'center';
     ctx.fillStyle = accent; ctx.font = '600 9px "Pixelify Sans", sans-serif'; ctx.textBaseline = 'middle';
     ctx.fillText(bossType ? 'BOSS' : 'LEVEL', cx, cy - 9);
-    ctx.fillStyle = '#fff'; ctx.font = '700 26px "Pixelify Sans", sans-serif'; ctx.textBaseline = 'middle';
-    ctx.fillText('' + this.level, cx, cy + 8);
+    ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle';
+    ctx.font = (this.level >= 10 ? '15px' : '20px') + ' "Press Start 2P", monospace';
+    ctx.fillText('' + this.level, cx, cy + 9);
+    ctx.restore();
+  }
+
+  // small HUD icon shapes (so numbers can use a clean monospace pixel font)
+  _diamond(ctx, x, y, r, col) {
+    ctx.save(); ctx.fillStyle = col; ctx.beginPath();
+    ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y);
+    ctx.closePath(); ctx.fill(); ctx.restore();
+  }
+  _skull(ctx, x, y, col) {
+    ctx.save(); ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(x, y - 1, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillRect(x - 4, y + 2, 8, 3);
+    ctx.fillStyle = '#1a1020';
+    ctx.fillRect(x - 3, y - 2, 2, 2); ctx.fillRect(x + 1, y - 2, 2, 2);
     ctx.restore();
   }
 }

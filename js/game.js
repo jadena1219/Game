@@ -289,7 +289,7 @@ export class Game {
     ctx.save();
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const label = (text, x, y, col, glow) => {
-      ctx.font = 'bold 13px "Pixelify Sans", sans-serif';
+      ctx.font = 'bold 13px "Silkscreen", sans-serif';
       ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,0.8)';
       ctx.strokeText(text, x, y); ctx.fillStyle = col; ctx.fillText(text, x, y);
     };
@@ -337,12 +337,11 @@ export class Game {
     this.countdown = 3.6;
     const bossType = (LEVELS[level - 1].boss && 'boss') || (LEVELS[level - 1].miniboss && 'miniboss');
     if (bossType) {
-      this.intro = { kind: 'boss', text: BOSS_NAMES[bossType], sub: `LEVEL ${level} · ${this.biome.name}`, t: 0, dur: 2.4 };
+      this.intro = { kind: 'boss', text: BOSS_NAMES[bossType], sub: this.biome.name, t: 0, dur: 2.4 };
       this.countdown = 4.2;
       this.shake = Math.max(this.shake, 8);
     } else {
-      this.intro = { kind: 'level', text: `LEVEL ${level}`,
-        sub: `Act ${this.biome.act} · ${this.biome.name}`, t: 0, dur: 2.0 };
+      this.intro = { kind: 'level', text: `LEVEL ${level}`, sub: this.biome.name, t: 0, dur: 2.0 };
     }
   }
 
@@ -632,14 +631,13 @@ export class Game {
     }
   }
 
-  // Park the Fury rune beside the hero (by his sword), not over him.
+  // Fury button: a fixed control centred at the bottom, between move + swing.
   _updateFuryButton() {
     const ib = this.input.furyBtn || (this.input.furyBtn = { x: 0, y: 0, r: 0, visible: false });
     if (this.furyReady && this.state === 'playing' && this.countdown <= 0) {
-      const side = this.player.faceLeft ? -1 : 1;
-      ib.x = this.player.x - this.cam.x + 40 * side;
-      ib.y = this.player.y - this.cam.y - 16;
-      ib.r = 26; ib.visible = true;
+      ib.x = this.vw / 2;
+      ib.y = this.vh - (this.input.btn.r || 60) - 30;
+      ib.r = 30; ib.visible = true;
     } else { ib.visible = false; }
   }
 
@@ -1147,7 +1145,7 @@ export class Game {
       ctx.globalAlpha = Math.max(0, a);
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       const size = 30 + prog * 14;
-      ctx.font = `bold ${size}px "Pixelify Sans", sans-serif`;
+      ctx.font = `bold ${size}px "Silkscreen", sans-serif`;
       ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,0.65)';
       ctx.strokeText(fx.text, this.vw / 2, this.vh * 0.32);
       ctx.fillStyle = '#ffdd6a';
@@ -1170,7 +1168,7 @@ export class Game {
     const t = this.time;
     const pulse = 0.5 + 0.5 * Math.sin(t * 5);
     const cx = b.x, cy = b.y + Math.sin(t * 3) * 1.5;
-    const PXS = 4, N = 9, half = N * PXS / 2;          // a 9x9 chunky-pixel rune tile
+    const PXS = 5, N = 9, half = N * PXS / 2;          // a 9x9 chunky-pixel rune tile
     const x0 = Math.round(cx - half), y0 = Math.round(cy - half);
     ctx.save();
     // soft arcane glow behind the stone
@@ -1200,7 +1198,7 @@ export class Game {
     }
     // FURY label above (pixel font, gold glow)
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = '8px "Press Start 2P", monospace';
+    ctx.font = '8px "Silkscreen", sans-serif';
     ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(20,10,30,0.85)';
     ctx.strokeText('FURY', cx, y0 - 9);
     ctx.fillStyle = `rgba(216,184,255,${0.7 + 0.3 * pulse})`;
@@ -1408,7 +1406,7 @@ export class Game {
     const x = cx - (1 - slideIn) * 60;
     ctx.globalAlpha *= slideIn;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = 'bold 40px "Pixelify Sans", sans-serif';
+    ctx.font = 'bold 40px "Silkscreen", sans-serif';
     ctx.fillStyle = '#fff';
     ctx.fillText('LEVEL CLEARED', x, this.vh / 2);
     ctx.restore();
@@ -1434,21 +1432,21 @@ export class Game {
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       const y = this.vh * 0.38;
       if (it.kind === 'boss') {
-        ctx.font = 'bold 16px "Pixelify Sans", sans-serif'; ctx.fillStyle = '#d8413a';
+        ctx.font = 'bold 16px "Silkscreen", sans-serif'; ctx.fillStyle = '#d8413a';
         ctx.fillText(it.sub, this.vw / 2, y - 34);
         const size = 34 + slide * 8;
-        ctx.font = `bold ${size}px "Pixelify Sans", sans-serif`;
+        ctx.font = `bold ${size}px "Silkscreen", sans-serif`;
         ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,0.7)';
         ctx.strokeText(it.text, this.vw / 2, y);
         ctx.fillStyle = '#ffce4a'; ctx.fillText(it.text, this.vw / 2, y);
       } else {
         const x = this.vw / 2 + (1 - slide) * 80;
-        ctx.font = '26px "Press Start 2P", monospace';   // clear digits
+        ctx.font = '26px "Silkscreen", sans-serif';   // clear digits
         ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,0.6)';
         ctx.strokeText(it.text, x, y);
         ctx.fillStyle = '#e9c84a';
         ctx.fillText(it.text, x, y);
-        if (it.sub) { ctx.font = 'italic 15px "Pixelify Sans", sans-serif'; ctx.fillStyle = '#cfc6e6';
+        if (it.sub) { ctx.font = 'italic 15px "Silkscreen", sans-serif'; ctx.fillStyle = '#cfc6e6';
           ctx.fillText(it.sub, x, y + 30); }
       }
       ctx.restore();
@@ -1466,7 +1464,7 @@ export class Game {
       ctx.globalAlpha = Math.max(0.25, a);
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       const sz = (fight ? 46 : 72) * scale;
-      ctx.font = fight ? `bold ${sz}px "Pixelify Sans", sans-serif` : `${sz}px "Press Start 2P", monospace`;
+      ctx.font = fight ? `bold ${sz}px "Silkscreen", sans-serif` : `${sz}px "Silkscreen", sans-serif`;
       ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,0.6)';
       ctx.strokeText(label, this.vw / 2, this.vh * 0.5);
       ctx.fillStyle = fight ? '#d8413a' : '#fff';
@@ -1486,7 +1484,7 @@ export class Game {
       const sp = Math.min(1, (p - 0.35) / 0.25);
       ctx.globalAlpha = sp;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.font = `bold ${64 + (1 - sp) * 40}px "Pixelify Sans", sans-serif`;
+      ctx.font = `bold ${64 + (1 - sp) * 40}px "Silkscreen", sans-serif`;
       ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,0.8)';
       ctx.strokeText('YOU FELL', this.vw / 2, this.vh * 0.45);
       ctx.fillStyle = '#d8413a';
@@ -1520,7 +1518,7 @@ export class Game {
       ctx.globalAlpha = Math.min(1, p * 1.5);
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       const sz = 26 + (1 - p) * 16;
-      ctx.font = `${sz}px "Press Start 2P", monospace`;
+      ctx.font = `${sz}px "Silkscreen", sans-serif`;
       ctx.lineWidth = 8; ctx.strokeStyle = 'rgba(40,20,0,0.7)';
       ctx.strokeText('VICTORY', cx, this.vh * 0.32);
       const grd = ctx.createLinearGradient(0, this.vh * 0.30, 0, this.vh * 0.35);
@@ -1529,7 +1527,7 @@ export class Game {
     }
     if (t > 1.0) {
       ctx.globalAlpha = Math.min(1, (t - 1.0) / 0.5);
-      ctx.font = 'bold 17px "Pixelify Sans", sans-serif'; ctx.fillStyle = '#ffe9b0';
+      ctx.font = 'bold 17px "Silkscreen", sans-serif'; ctx.fillStyle = '#ffe9b0';
       ctx.fillText('The Demon Lord Falls', cx, this.vh * 0.32 + 40);
     }
     ctx.restore();
@@ -1605,7 +1603,7 @@ export class Game {
     const a = 1 - fx.t / fx.dur;
     ctx.save();
     ctx.globalAlpha = a;
-    ctx.font = '11px "Press Start 2P", monospace';
+    ctx.font = '11px "Silkscreen", sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.7)';
     ctx.strokeText(fx.text, fx.x, fx.y);
@@ -1616,12 +1614,28 @@ export class Game {
 
   _drawPlayer(ctx) {
     const p = this.player;
+    const frame = pickFrame(p, this.time);
+    // Fury charged: a cool animated purple aura + outline around the knight
+    if (this.furyReady && this.state === 'playing') {
+      const t = this.time, pulse = 0.5 + 0.5 * Math.sin(t * 6);
+      ctx.save();
+      const g = ctx.createRadialGradient(p.x, p.y - 18, 4, p.x, p.y - 18, 46);
+      g.addColorStop(0, `rgba(170,110,255,${0.28 + 0.18 * pulse})`);
+      g.addColorStop(1, 'rgba(140,80,230,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y - 18, 46, 0, Math.PI * 2); ctx.fill();
+      // purple silhouette offset around the sprite = glowing outline
+      const off = 1.5 + pulse;
+      const aura = { color: '#c89aff', a: 0.55 + 0.35 * pulse };
+      for (const [dx, dy] of [[off, 0], [-off, 0], [0, off], [0, -off]]) {
+        drawSprite(ctx, 'knight', frame, p.x + dx, p.y + dy, p.faceLeft, 1, aura);
+      }
+      ctx.restore();
+    }
     if (p.invuln > 0 && Math.floor(this.time * 20) % 2 === 0 && p.flash <= 0) {
-      // blink slightly during i-frames
-      ctx.globalAlpha = 0.6;
+      ctx.globalAlpha = 0.6;   // blink during i-frames
     }
     const tint = p.flash > 0 ? { color: '#ff5a5a', a: 0.6 } : null;
-    drawSprite(ctx, 'knight', pickFrame(p, this.time), p.x, p.y, p.faceLeft, 1, tint);
+    drawSprite(ctx, 'knight', frame, p.x, p.y, p.faceLeft, 1, tint);
     ctx.globalAlpha = 1;
   }
 
@@ -1708,7 +1722,7 @@ export class Game {
     ctx.fillStyle = 'rgba(232,120,120,0.65)'; ctx.fillRect(bx, by, bw * ghostf, bh); // ghost
     ctx.fillStyle = col; ctx.fillRect(bx, by, bw * hpf, bh);
     ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1; ctx.strokeRect(bx, by, bw, bh);
-    ctx.fillStyle = '#fff'; ctx.font = '9px "Press Start 2P", monospace';
+    ctx.fillStyle = '#fff'; ctx.font = '9px "Silkscreen", sans-serif';
     ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
     ctx.fillText(`${Math.max(0, Math.ceil(p.hp))}/${p.maxHP}`, bx + 7, by + bh / 2 + 1);
 
@@ -1720,7 +1734,7 @@ export class Game {
     const pulse = 0.7 + 0.3 * Math.sin(this.time * 10);
     ctx.fillStyle = ff >= 1 ? `rgba(255,220,90,${pulse})` : '#9a59e0';
     ctx.fillRect(bx, fy, bw * ff, fh);
-    ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = 'bold 9px "Pixelify Sans", sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = 'bold 9px "Silkscreen", sans-serif';
     ctx.textAlign = 'left'; ctx.fillText(ff >= 1 ? 'ULTIMATE!' : 'FURY', bx + 4, fy + fh / 2 + 1);
 
     // level medallion (centred, below the bars) + foes/gold on the right.
@@ -1728,12 +1742,12 @@ export class Game {
     this._drawLevelBadge(ctx);
     const remaining = this.enemies.length + this.spawnQueue.length;
     ctx.textBaseline = 'middle'; ctx.textAlign = 'right';
-    ctx.font = '12px "Press Start 2P", monospace'; ctx.fillStyle = '#f0cf5a';
+    ctx.font = '12px "Silkscreen", sans-serif'; ctx.fillStyle = '#f0cf5a';
     ctx.fillText('' + this.gold, this.vw - 16, 26);
     this._diamond(ctx, this.vw - 24 - ctx.measureText('' + this.gold).width, 26, 5, '#f0cf5a');
     if (this.state !== 'camp') {
       ctx.textAlign = 'right'; ctx.fillStyle = '#d6c8ea';
-      ctx.font = '12px "Press Start 2P", monospace';
+      ctx.font = '12px "Silkscreen", sans-serif';
       ctx.fillText('' + remaining, this.vw - 16, 48);
       this._skull(ctx, this.vw - 26 - ctx.measureText('' + remaining).width, 47, '#d6c8ea');
     }
@@ -1764,10 +1778,10 @@ export class Game {
     dia(R - 5); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.stroke();
     // text — "LEVEL" header + big number (no fraction; fits inside the diamond)
     ctx.textAlign = 'center';
-    ctx.fillStyle = accent; ctx.font = '600 9px "Pixelify Sans", sans-serif'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = accent; ctx.font = '600 9px "Silkscreen", sans-serif'; ctx.textBaseline = 'middle';
     ctx.fillText(bossType ? 'BOSS' : 'LEVEL', cx, cy - 9);
     ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle';
-    ctx.font = (this.level >= 10 ? '15px' : '20px') + ' "Press Start 2P", monospace';
+    ctx.font = (this.level >= 10 ? '15px' : '20px') + ' "Silkscreen", sans-serif';
     ctx.fillText('' + this.level, cx, cy + 9);
     ctx.restore();
   }

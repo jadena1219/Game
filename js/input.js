@@ -17,6 +17,8 @@ export class Input {
     this.furyTapped = false;        // set on tap; consumed by the game
 
     this.keys = new Set();
+    // desktop = no touch: keyboard to move, left-click anywhere to swing
+    this.desktop = !(('ontouchstart' in window) || (navigator.maxTouchPoints || 0) > 0);
     this._bind();
   }
 
@@ -91,14 +93,23 @@ export class Input {
     c.addEventListener('touchend', end, { passive: false });
     c.addEventListener('touchcancel', end, { passive: false });
 
-    // Mouse (desktop): left button drag = joystick, but if pressed on button = swing
+    // Mouse: on desktop, left-click ANYWHERE swings (movement is keyboard);
+    // on touch devices a stray mouse still drives the joystick.
     c.addEventListener('mousedown', (e) => {
-      const r = rect(); onDown('mouse', e.clientX - r.left, e.clientY - r.top);
+      const r = rect(); const x = e.clientX - r.left, y = e.clientY - r.top;
+      if (this.desktop) {
+        if (this.furyBtn.visible) {
+          const dx = x - this.furyBtn.x, dy = y - this.furyBtn.y;
+          if (dx * dx + dy * dy <= this.furyBtn.r * this.furyBtn.r * 1.5) { this.furyTapped = true; return; }
+        }
+        this.swingHeld = true;
+      } else onDown('mouse', x, y);
     });
     window.addEventListener('mousemove', (e) => {
+      if (this.desktop) return;
       const r = rect(); onMove('mouse', e.clientX - r.left, e.clientY - r.top);
     });
-    window.addEventListener('mouseup', () => onUp('mouse'));
+    window.addEventListener('mouseup', () => { if (this.desktop) this.swingHeld = false; else onUp('mouse'); });
 
     // Keyboard
     window.addEventListener('keydown', (e) => {
@@ -142,11 +153,15 @@ export class Input {
     if (kx || ky) {
       const l = Math.hypot(kx, ky);
       this.move.x = kx / l; this.move.y = ky / l;
+    } else if (!this.stick.active) {
+      // no keys held and no joystick — stop (fixes keys "sticking" on release)
+      this.move.x = 0; this.move.y = 0;
     }
     return this.move;
   }
 
   draw(ctx) {
+    if (this.desktop) return;   // keyboard + mouse, no on-screen joystick/sword button
     // joystick
     if (this.stick.active) {
       ctx.save();

@@ -28,7 +28,7 @@ export const CONFIG = {
       name: 'Knight', sprite: 'knight', weapon: 'Greatsword', title: 'The Veteran',
       pips: { hp: 3, spd: 3, pow: 3 }, accent: '#7fb0ff',
       blurb: 'The balanced veteran. Wide cleaving swings that shove crowds back.',
-      maxHP: 100, speed: 200, swordDamage: 34, swordReach: 78, swordArcDeg: 120,
+      maxHP: 100, speed: 178, swordDamage: 34, swordReach: 78, swordArcDeg: 120,
       swingCooldown: 0.42, swingActive: 0.16, knockback: 230,
       dashSpeed: 760, dashDur: 0.18, dashCooldown: 0.85, dashInvuln: 0.32,
       swingStyle: 'sweep',

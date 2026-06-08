@@ -248,6 +248,9 @@ async function boot() {
   document.getElementById('win-btn').addEventListener('click', () => game.start('knight'));
   document.getElementById('sanctum-btn').addEventListener('click', () => ui.showSanctum(game));
   document.getElementById('sanctum-back').addEventListener('click', () => ui.showScreen('title'));
+  // return to the title (where the Sanctum lives) after a run
+  document.getElementById('go-menu-btn').addEventListener('click', () => ui.showScreen('title'));
+  document.getElementById('win-menu-btn').addEventListener('click', () => ui.showScreen('title'));
 }
 
 boot();

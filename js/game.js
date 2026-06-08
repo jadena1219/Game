@@ -723,19 +723,21 @@ export class Game {
     } else { ib.visible = false; }
   }
 
-  // Camera locked exactly on the hero (no smoothing lag), clamped to the walls.
-  // Exact-follow = the world scrolls at precisely the player's speed in every
-  // direction, so movement reads as one constant speed.
+  // Camera follows the hero with a GENTLE ease (restores the smooth feel; the
+  // actual move speed is constant because that bug was in the joystick, not here).
   _updateCamera(dt) {
     if (this.state === 'camp') return;            // the camp camera is fixed (set in openCamp)
-    let tx, ty;
+    const cw = this.world.w - this.vw, ch = this.world.h - this.vh;
     if (this.state === 'title' || !this.player) {
-      tx = this.world.w / 2 - this.vw / 2; ty = this.world.h / 2 - this.vh / 2;
-    } else {
-      tx = this.player.x - this.vw / 2; ty = this.player.y - this.vh / 2;
+      this.cam.x = Math.max(0, Math.min(cw, this.world.w / 2 - this.vw / 2));
+      this.cam.y = Math.max(0, Math.min(ch, this.world.h / 2 - this.vh / 2));
+      return;
     }
-    this.cam.x = Math.max(0, Math.min(this.world.w - this.vw, tx));
-    this.cam.y = Math.max(0, Math.min(this.world.h - this.vh, ty));
+    const tx = Math.max(0, Math.min(cw, this.player.x - this.vw / 2));
+    const ty = Math.max(0, Math.min(ch, this.player.y - this.vh / 2));
+    const k = Math.min(1, (dt || 0.016) * 12);
+    this.cam.x += (tx - this.cam.x) * k;
+    this.cam.y += (ty - this.cam.y) * k;
   }
 
   // ---------- update ----------
@@ -1769,11 +1771,18 @@ export class Game {
     if (e.elite || e.type === 'bomber') {
       const col = e.affix ? e.affix.color : '#ff7a2a';
       const pulse = 0.5 + 0.5 * Math.sin(this.time * (e.type === 'bomber' ? 9 : 4) + e.x);
-      ctx.save();
-      const g = ctx.createRadialGradient(e.x, e.y - e.r * 0.5, 2, e.x, e.y - e.r * 0.5, e.r * 2.2);
-      g.addColorStop(0, this._rgba(col, 0.32 + 0.22 * pulse));
-      g.addColorStop(1, this._rgba(col, 0));
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(e.x, e.y - e.r * 0.5, e.r * 2.2, 0, Math.PI * 2); ctx.fill();
+      const rr = Math.round(e.r * 2.2);
+      const cache = this._glowCache || (this._glowCache = new Map());
+      const key = rr + '|' + col;
+      let g = cache.get(key);
+      if (!g) {
+        g = ctx.createRadialGradient(0, 0, 0, 0, 0, rr);
+        g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)');
+        cache.set(key, g);
+      }
+      const ay = e.y - e.r * 0.5;
+      ctx.save(); ctx.globalAlpha = 0.3 + 0.2 * pulse; ctx.fillStyle = g;
+      ctx.translate(e.x, ay); ctx.beginPath(); ctx.arc(0, 0, rr, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
     }
     const tint = e.flash > 0 ? { color: '#ffffff', a: 0.7 }

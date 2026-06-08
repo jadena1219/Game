@@ -64,6 +64,12 @@ export class Game {
     this.dying = 0;            // dramatic death sequence timer
     this.hpDisplay = 100;      // smoothed health-bar value
     this.hpGhost = 100;        // lagging "damage taken" chunk
+    this.hpHitT = 0;           // >0 briefly when damaged (HP-bar shake/flash)
+    this._hpWas = null;        // last-frame HP, to detect damage
+    this.combo = 0;            // kill streak
+    this.comboT = 0;           // time left before the streak lapses
+    this.comboPop = 0;         // scale-pop on each new kill
+    this.goldPop = 0;          // scale-pop when gold is picked up
     this.titleT = 0;           // title-scene animation clock
     this.tunnelScroll = 0;     // how far the title corridor has scrolled past
     this.introCut = null;      // iris-to-black blink from the corridor into Level 1
@@ -729,6 +735,7 @@ export class Game {
       p.hp = Math.min(p.maxHP, p.hp + p.mods.lifestealHeal);
     }
     this.kills++;
+    this.combo++; this.comboT = 2.6; this.comboPop = 1;     // feed the kill streak
     // hit-pause on meaningful kills (skip trash so swarms stay fluid)
     if (e.boss) this.hitStop = Math.max(this.hitStop, 0.14);
     else if (e.type === 'tank' || e.elite) this.hitStop = Math.max(this.hitStop, 0.06);
@@ -798,7 +805,11 @@ export class Game {
   }
 
   _collect(pk) {
-    if (pk.type === 'gold') { const g = Math.ceil(pk.value * this.player.mods.goldMult * (1 + this.metaB.gold)); this.gold += g; this.totalGold += g; }
+    if (pk.type === 'gold') {
+      const g = Math.ceil(pk.value * this.player.mods.goldMult * (1 + this.metaB.gold)); this.gold += g; this.totalGold += g;
+      this.goldPop = 1;                              // the HUD coin tally pops
+      this._mote(pk.x, pk.y, '#ffe08a', { vy: -30, r: 1.6, twinkle: 1, dur: 0.35 });
+    }
     else if (pk.type === 'health') {
       this.player.hp = Math.min(this.player.maxHP, this.player.hp + pk.value);
       this.effects.push({ kind: 'dmg', x: this.player.x, y: this.player.y - 30, text: '+' + pk.value,
@@ -1151,15 +1162,24 @@ export class Game {
   // it scales with framerate, not enemy count.
   _emitAuras(sdt) {
     const rate = (per) => Math.random() < per * sdt * 60;   // ~per particles/frame@60
-    // the blessed knight sheds slow rising motes of holy light
     const p = this.player;
+    // the blessed knight sheds slow rising motes of holy light
     if (p && this.furyReady && this.countdown <= 0 && rate(0.6)) {
       this._mote(p.x + (Math.random() - 0.5) * p.r * 1.6, p.y - 6 - Math.random() * 10,
         Math.random() < 0.5 ? '#ffe9a8' : '#ffd36b',
         { vx: (Math.random() - 0.5) * 10, vy: -(18 + Math.random() * 24), g: -10, r: 1.4 + Math.random() * 1.4, twinkle: 1, dur: 0.6 + Math.random() * 0.4 });
     }
+    // footstep dust kicked up underfoot as the hero runs
+    if (p && p.moving && (p.dashTimer || 0) <= 0 && this.countdown <= 0 && rate(0.4)) {
+      this._puff(p.x + (Math.random() - 0.5) * 8, p.y, '#4a4350', 1, 0, { r0: 2, r1: 8, dur: 0.34 });
+    }
     for (const e of this.enemies) {
-      if (e.dead || e.boss) continue;
+      if (e.dead) continue;
+      // heavy foes throw up dust with every stride
+      if ((e.type === 'tank' || e.boss) && e.moving && rate(e.boss ? 0.5 : 0.3)) {
+        this._puff(e.x + (Math.random() - 0.5) * e.r, e.y, '#4a4248', 1, 0, { r0: 3, r1: e.boss ? 16 : 10, dur: 0.45 });
+      }
+      if (e.boss) continue;
       const x = e.x, y = e.y - e.r * 0.4, r = e.r;
       if (e.type === 'bomber') {                 // a hissing, smoking fuse
         if (rate(0.5)) this._mote(x + (Math.random() - 0.5) * r, y - r * 0.8,
@@ -1345,13 +1365,20 @@ export class Game {
       this.campToast.t += dt;
       if (this.campToast.t >= this.campToast.dur) this.campToast = null;
     }
-    // smoothed health bar
+    // smoothed health bar (+ detect damage for the HP-bar punch)
     if (this.player) {
       const hp = Math.max(0, this.player.hp);
+      if (this._hpWas != null && hp < this._hpWas - 0.01) this.hpHitT = 0.32;
+      this._hpWas = hp;
       this.hpDisplay += (hp - this.hpDisplay) * Math.min(1, dt * 14);
       if (this.hpGhost < this.hpDisplay) this.hpGhost = this.hpDisplay;
       else this.hpGhost += (this.hpDisplay - this.hpGhost) * Math.min(1, dt * 4);
     }
+    // HUD juice timers
+    if (this.hpHitT > 0) this.hpHitT -= dt;
+    if (this.goldPop > 0) this.goldPop -= dt * 4;
+    if (this.comboPop > 0) this.comboPop -= dt * 4;
+    if (this.comboT > 0) { this.comboT -= dt; if (this.comboT <= 0) this.combo = 0; }
     // floating embers (used for death fx, title & victory celebration) — spawned
     // in world space around the current view
     const want = (this.state === 'victory') ? 60 : 0;   // title now uses the corridor scene
@@ -2052,8 +2079,9 @@ export class Game {
     };
     for (const bz of this._torches) {
       if (!this._inView(bz.x, bz.y)) continue;
-      const fl = 0.8 + 0.2 * Math.sin(this.titleT * 11 + bz.x);
-      glow(bz.x, bz.y - 6, 130, bz.lava ? '#ff7a2a' : (bz.torch || '#ffb24a'), 0.6 * fl);
+      // a layered, candle-like flicker rather than a single clean sine
+      const fl = 0.74 + 0.16 * Math.sin(this.titleT * 11 + bz.x) + 0.1 * Math.sin(this.titleT * 27 + bz.x * 1.7);
+      glow(bz.x, bz.y - 6, 130 + 10 * Math.sin(this.titleT * 17 + bz.x), bz.lava ? '#ff7a2a' : (bz.torch || '#ffb24a'), 0.6 * fl);
     }
     if (this.player) glow(this.player.x, this.player.y - 14, 64, '#cfe6ff', 0.16);
     for (const pr of this.projectiles) glow(pr.x, pr.y, 38, pr.boss ? '#ff7a2a' : '#b06bff', 0.55);
@@ -2096,7 +2124,7 @@ export class Game {
       g.fillStyle = grd;
       g.translate(sx, sy); g.beginPath(); g.arc(0, 0, rr, 0, Math.PI * 2); g.fill(); g.translate(-sx, -sy);
     };
-    for (const bz of this._torches) hole(bz.x, bz.y - 6, 168);
+    for (const bz of this._torches) hole(bz.x, bz.y - 6, 168 + 9 * Math.sin(this.titleT * 17 + bz.x));
     const hx = this.player ? this.player.x : this.world.w / 2;
     const hy = this.player ? this.player.y - 8 : this.world.h / 2 + this.vh * 0.16;
     hole(hx, hy, 175);           // the hero carries the light
@@ -2927,7 +2955,9 @@ export class Game {
     const tint = e.flash > 0 ? { color: '#ffffff', a: 0.7 }
       : (e.state === 'windup' || e.state === 'special' ? { color: '#ff4040', a: 0.5 }
       : (e.elite ? { color: e.affix.color, a: 0.16 } : null));
-    drawSprite(ctx, e.sprite, frame, e.x, e.y, e.faceLeft, 1, tint);
+    // a gentle breathing bob when idle so foes never look frozen
+    const bob = (!e.boss && !e.moving) ? Math.sin(this.time * 2.6 + e.x * 0.07) : 0;
+    drawSprite(ctx, e.sprite, frame, e.x, e.y - bob, e.faceLeft, 1, tint);
     // small floating HP bar for tanks & elites (bosses use the big top bar)
     if (!e.boss && (e.type === 'tank' || e.elite)) {
       const w = 34, hpf = e.hp / e.maxHP, hy = e.y - 56;
@@ -3168,8 +3198,12 @@ export class Game {
     if (this.state === 'title' || this.state === 'gameover' || this.state === 'victory' || this.state === 'won') return;
     const p = this.player;
     if (!p) return;
-    // health bar (fixed max) — smoothed with a "damage ghost" chunk
-    const bw = Math.min(180, this.vw * 0.36), bh = 20, bx = 18, by = 20;
+    // health bar (fixed max) — smoothed with a "damage ghost" chunk. On a hit
+    // the whole bar jolts and flashes white.
+    const bw = Math.min(180, this.vw * 0.36), bh = 20;
+    const hit = Math.max(0, this.hpHitT || 0) / 0.32;
+    const bx = 18 + (hit > 0 ? (Math.random() - 0.5) * 6 * hit : 0);
+    const by = 20 + (hit > 0 ? (Math.random() - 0.5) * 5 * hit : 0);
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.fillRect(bx - 3, by - 3, bw + 6, bh + 6);
     const hpf = Math.max(0, this.hpDisplay / p.maxHP);
@@ -3178,29 +3212,45 @@ export class Game {
     ctx.fillStyle = '#2a1d28'; ctx.fillRect(bx, by, bw, bh);
     ctx.fillStyle = 'rgba(232,120,120,0.65)'; ctx.fillRect(bx, by, bw * ghostf, bh); // ghost
     ctx.fillStyle = col; ctx.fillRect(bx, by, bw * hpf, bh);
-    ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1; ctx.strokeRect(bx, by, bw, bh);
+    if (hit > 0) { ctx.fillStyle = `rgba(255,255,255,${0.5 * hit})`; ctx.fillRect(bx, by, bw * hpf, bh); }
+    // low-health danger pulse on the frame
+    const danger = hpf <= 0.3 ? 0.4 + 0.4 * Math.sin(this.time * 7) : 0;
+    ctx.strokeStyle = danger ? `rgba(216,65,58,${danger})` : 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = danger ? 2 : 1; ctx.strokeRect(bx, by, bw, bh);
     ctx.fillStyle = '#fff'; ctx.font = '9px "Silkscreen", sans-serif';
     ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
     ctx.fillText(`${Math.max(0, Math.ceil(p.hp))}/${p.maxHP}`, bx + 7, by + bh / 2 + 1);
 
-    // fury bar (under health)
-    const fy = by + bh + 5, fh = 9;
-    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(bx - 3, fy - 3, bw + 6, fh + 6);
-    ctx.fillStyle = '#241830'; ctx.fillRect(bx, fy, bw, fh);
+    // fury bar (under health) — glows when fully charged
+    const fy = 20 + bh + 5, fh = 9, fbx = 18;
     const ff = p.fury / p.furyMax;
     const pulse = 0.7 + 0.3 * Math.sin(this.time * 10);
+    if (ff >= 1) {                                   // charged: a warm glow halo behind the bar
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.35 + 0.25 * pulse;
+      const gg = ctx.createLinearGradient(fbx, 0, fbx + bw, 0);
+      gg.addColorStop(0, 'rgba(255,180,40,0)'); gg.addColorStop(0.5, 'rgba(255,210,90,0.9)'); gg.addColorStop(1, 'rgba(255,180,40,0)');
+      ctx.fillStyle = gg; ctx.fillRect(fbx - 6, fy - 6, bw + 12, fh + 12); ctx.restore();
+    }
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(fbx - 3, fy - 3, bw + 6, fh + 6);
+    ctx.fillStyle = '#241830'; ctx.fillRect(fbx, fy, bw, fh);
     ctx.fillStyle = ff >= 1 ? `rgba(255,220,90,${pulse})` : '#9a59e0';
-    ctx.fillRect(bx, fy, bw * ff, fh);
+    ctx.fillRect(fbx, fy, bw * ff, fh);
     ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = 'bold 9px "Silkscreen", sans-serif';
-    ctx.textAlign = 'left'; ctx.fillText(ff >= 1 ? 'ULTIMATE!' : 'FURY', bx + 4, fy + fh / 2 + 1);
+    ctx.textAlign = 'left'; ctx.fillText(ff >= 1 ? 'ULTIMATE!' : 'FURY', fbx + 4, fy + fh / 2 + 1);
+
+    this._drawComboCounter(ctx);
 
     // level medallion (centred, below the bars) + foes/gold on the right.
     // numbers use Press Start 2P (unambiguous digits); icons are drawn as shapes.
     this._drawLevelBadge(ctx);
     const remaining = this.enemies.length + this.spawnQueue.length;
     ctx.textBaseline = 'middle'; ctx.textAlign = 'right';
-    ctx.font = '12px "Silkscreen", sans-serif'; ctx.fillStyle = '#f0cf5a';
-    ctx.fillText('' + this.gold, this.vw - 16, 26);
+    const gpop = 1 + 0.4 * Math.max(0, this.goldPop || 0);
+    ctx.save();
+    ctx.translate(this.vw - 16, 26); ctx.scale(gpop, gpop);
+    ctx.font = '12px "Silkscreen", sans-serif'; ctx.fillStyle = this.goldPop > 0.4 ? '#fff0b0' : '#f0cf5a';
+    ctx.fillText('' + this.gold, 0, 0);
+    ctx.restore();
     this._diamond(ctx, this.vw - 24 - ctx.measureText('' + this.gold).width, 26, 5, '#f0cf5a');
     if (this.state !== 'camp') {
       ctx.textAlign = 'right'; ctx.fillStyle = '#d6c8ea';
@@ -3208,6 +3258,30 @@ export class Game {
       ctx.fillText('' + remaining, this.vw - 16, 48);
       this._skull(ctx, this.vw - 26 - ctx.measureText('' + remaining).width, 47, '#d6c8ea');
     }
+  }
+
+  // Kill-streak counter — pops on each kill, drifts up and fades when it lapses.
+  _drawComboCounter(ctx) {
+    if (this.state !== 'playing' || this.combo < 3) return;
+    const fade = Math.min(1, this.comboT / 0.7);
+    const pop = Math.max(0, this.comboPop || 0);
+    const scale = 1 + 0.28 * pop;
+    const cx = this.vw / 2, cy = 92;
+    // hotter colour the longer the streak runs
+    const col = this.combo >= 25 ? '#ff5a3a' : this.combo >= 12 ? '#ffae3a' : '#ffd86a';
+    ctx.save();
+    ctx.globalAlpha = fade;
+    ctx.translate(cx, cy); ctx.scale(scale, scale);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = '20px "Silkscreen", sans-serif';
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+    ctx.strokeText('' + this.combo, 0, 0);
+    ctx.fillStyle = col; ctx.fillText('' + this.combo, 0, 0);
+    ctx.font = '8px "Silkscreen", sans-serif';
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+    ctx.strokeText('COMBO', 0, 16); ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fillText('COMBO', 0, 16);
+    ctx.restore();
   }
 
   // A "cool" diamond level medallion (no longer collides with the bars).

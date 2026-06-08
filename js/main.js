@@ -170,19 +170,12 @@ const ui = {
       el.className = 'event-choice';
       el.style.animationDelay = (i * 0.07) + 's';
       el.innerHTML = `<div class="ec-label">${ch.label}</div><div class="ec-risk">${ch.risk}</div>`;
-      el.onclick = () => this._showEventResult(g, g.chooseEvent(i));
+      // one tap decides it — no Continue step; the outcome floats as a camp toast
+      el.onclick = () => g.resolveEvent(i);
       choices.appendChild(el);
     });
     document.getElementById('event-result').classList.add('hidden');
     this.showScreen('event');
-  },
-  _showEventResult(g, res) {
-    document.getElementById('event-choices').classList.add('hidden');
-    document.getElementById('event-flavor').classList.add('hidden');
-    const r = document.getElementById('event-result');
-    r.classList.remove('hidden');
-    document.getElementById('event-result-text').textContent = res;
-    document.getElementById('event-continue').onclick = () => g.closeEvent();
   },
   hideEvent() { this.showScreen(null); },
 

@@ -1077,6 +1077,10 @@ export class Game {
       this.interludeFade.t += dt;
       if (this.interludeFade.t >= this.interludeFade.dur) this.interludeFade = null;
     }
+    if (this.campToast) {
+      this.campToast.t += dt;
+      if (this.campToast.t >= this.campToast.dur) this.campToast = null;
+    }
     // smoothed health bar
     if (this.player) {
       const hp = Math.max(0, this.player.hp);
@@ -1133,7 +1137,9 @@ export class Game {
   // The Demon Lord's voice: black out, type his words in blood red, then fade
   // back into the dungeon (the camp). Runs as its own state, the field frozen.
   _beginInterlude(line) {
-    this.interlude = { line, shown: 0, phase: 'in', t: 0 };
+    const wrapped = this._wrapText(line, 13);                 // short lines → big type
+    const totalChars = wrapped.reduce((s, l) => s + l.length, 0);
+    this.interlude = { line, wrapped, totalChars, shown: 0, phase: 'in', t: 0 };
     this.state = 'interlude';
     this._tapped = false;
     this.ui.showScreen(null);
@@ -1145,9 +1151,9 @@ export class Game {
     if (il.phase === 'in') {
       if (il.t >= 0.6 || this._tapped) { il.phase = 'type'; il.t = 0; this._tapped = false; }
     } else if (il.phase === 'type') {
-      il.shown = Math.min(il.line.length, il.shown + dt * 13);     // ~13 chars/sec — slow & ominous
-      if (this._tapped) { il.shown = il.line.length; this._tapped = false; }  // tap = finish line
-      if (il.shown >= il.line.length) { il.phase = 'hold'; il.t = 0; }
+      il.shown = Math.min(il.totalChars, il.shown + dt * 13);     // ~13 chars/sec — slow & ominous
+      if (this._tapped) { il.shown = il.totalChars; this._tapped = false; }  // tap = finish line
+      if (il.shown >= il.totalChars) { il.phase = 'hold'; il.t = 0; }
     } else if (il.phase === 'hold') {
       if (il.t >= 2.0 || this._tapped) {
         this.interlude = null; this._tapped = false;
@@ -1396,13 +1402,16 @@ export class Game {
     this.shopOpen = true; this.ui.setCampPrompt(null);
     this.ui.showEvent(this, this.camp.event);
   }
-  chooseEvent(idx) {
+  // Pick a choice: apply it, close the panel immediately (no Continue step —
+  // the second choice IS the "leave it" option), and float the outcome as a toast.
+  resolveEvent(idx) {
     const ev = this.camp.event;
     const res = ev.choices[idx].apply(this);
     this.camp.eventUsed = true; this.camp.prompt = null;
-    return res;
+    this.shopOpen = false;
+    this.ui.hideEvent(); this.ui.setCampPrompt(null);
+    this.campToast = { text: res, t: 0, dur: 4.2 };
   }
-  closeEvent() { this.shopOpen = false; this.ui.hideEvent(); this.ui.setCampPrompt(null); }
 
   buyWare(ware) {
     if (!ware || ware.sold || this.gold < ware.cost) return false;
@@ -1564,8 +1573,54 @@ export class Game {
     this._drawHUD(ctx);
     if (this.state === 'playing' || (this.state === 'camp' && !this.shopOpen)) this.input.draw(ctx);
     this._drawFuryButton(ctx);     // floating "unleash fury" button above the hero
+    if (this.state === 'camp') this._drawCampToast(ctx);   // event outcome flavour
     this._drawInterlude(ctx);      // Demon Lord taunt: blacks out the whole screen + red typewriter
     this._drawTransition(ctx);     // slash-wipe on the very top
+  }
+
+  // A small parchment toast that floats the outcome of an event choice, then fades.
+  _drawCampToast(ctx) {
+    const t = this.campToast; if (!t) return;
+    const W = this.vw, p = t.t / t.dur;
+    const a = p < 0.12 ? p / 0.12 : (p > 0.8 ? 1 - (p - 0.8) / 0.2 : 1);
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, a);
+    ctx.font = '13px "Silkscreen", monospace';
+    const lines = this._wrapText(t.text, 30);
+    const lh = 20, padX = 16, padY = 12;
+    let tw = 0; for (const l of lines) tw = Math.max(tw, ctx.measureText(l).width);
+    const bw = Math.min(W - 24, tw + padX * 2), bh = lines.length * lh + padY * 2;
+    const bx = (W - bw) / 2, by = this.vh * 0.12;
+    ctx.fillStyle = 'rgba(14,10,20,0.9)'; this._roundRect(ctx, bx, by, bw, bh, 8); ctx.fill();
+    ctx.strokeStyle = 'rgba(176,107,255,0.55)'; ctx.lineWidth = 2; this._roundRect(ctx, bx, by, bw, bh, 8); ctx.stroke();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#e7dcc4';
+    lines.forEach((l, i) => ctx.fillText(l, W / 2, by + padY + lh / 2 + i * lh));
+    ctx.restore();
+  }
+
+  _roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  // Word-wrap text into lines of at most `maxChars`, honouring explicit newlines.
+  _wrapText(text, maxChars) {
+    const out = [];
+    for (const para of String(text).split('\n')) {
+      let cur = '';
+      for (const w of para.split(' ')) {
+        if (cur && (cur.length + 1 + w.length) > maxChars) { out.push(cur); cur = w; }
+        else cur = cur ? cur + ' ' + w : w;
+      }
+      out.push(cur);
+    }
+    return out;
   }
 
   _drawFuryButton(ctx) {
@@ -2003,43 +2058,41 @@ export class Game {
     rg.addColorStop(0, 'rgba(60,4,4,0.5)'); rg.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H);
 
-    const lines = il.line.split('\n');
-    // fit the longest line to the screen width so layout stays put as it types
-    let size = 24;
+    // BIG type — short wrapped lines sized to fill most of the screen
+    const lines = il.wrapped;
+    ctx.font = '100px "Silkscreen", monospace';
+    let longest = 1; for (const l of lines) longest = Math.max(longest, ctx.measureText(l).width);
+    const sizeW = 100 * (W * 0.9) / longest;               // fill the width
+    const sizeH = (H * 0.7) / (lines.length * 1.38);       // …or the height, whichever's smaller
+    const size = Math.max(14, Math.min(sizeW, sizeH, 60));
     ctx.font = `${size}px "Silkscreen", monospace`;
-    const longest = lines.reduce((m, l) => Math.max(m, ctx.measureText(l).width), 0);
-    const maxW = W * 0.88;
-    if (longest > maxW) { size = Math.max(10, Math.floor(size * maxW / longest)); }
-    ctx.font = `${size}px "Silkscreen", monospace`;
-    const lh = size * 1.7, cy = H * 0.46 - (lines.length - 1) * lh / 2;
+    const lh = size * 1.38, cy = H * 0.46 - (lines.length - 1) * lh / 2;
 
     const shownN = Math.floor(il.shown);
     let counted = 0, cursorPlaced = false;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     for (let i = 0; i < lines.length; i++) {
       const full = lines[i];
-      // how many chars of this line are revealed (account for the newline char)
       const start = counted, end = start + full.length;
-      let vis = full;
-      if (shownN <= start) vis = '';
-      else if (shownN < end) vis = full.slice(0, shownN - start);
-      counted = end + 1;                                   // +1 for the '\n'
-      // blinking cursor at the tip of the line currently being typed
+      let vis = shownN <= start ? '' : (shownN < end ? full.slice(0, shownN - start) : full);
+      counted = end;                                       // wrapped lines counted contiguously
       let text = vis;
+      const blink = Math.floor(this.time * 2.5) % 2 === 0;
       if (!cursorPlaced && il.phase === 'type' && shownN < end && (vis.length || i === 0)) {
-        if (Math.floor(this.time * 2.5) % 2 === 0) text = vis + '█';
-        cursorPlaced = true;
+        if (blink) text = vis + '▌'; cursorPlaced = true;
       }
-      if (il.phase === 'hold' && i === lines.length - 1 && Math.floor(this.time * 2.5) % 2 === 0) text = full + '█';
+      if (il.phase === 'hold' && i === lines.length - 1 && blink) text = full + '▌';
       const y = cy + i * lh;
-      ctx.shadowColor = '#ff2a1e'; ctx.shadowBlur = 12;
-      ctx.fillStyle = '#e2231a'; ctx.fillText(text, W / 2, y);
+      ctx.shadowColor = '#ff2a1e'; ctx.shadowBlur = size * 0.5;
+      ctx.lineWidth = Math.max(2, size * 0.06); ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+      ctx.strokeText(text, W / 2, y);
+      ctx.fillStyle = '#e8241a'; ctx.fillText(text, W / 2, y);
       ctx.shadowBlur = 0;
     }
     // a quiet hint to move on
     if (il.phase === 'hold') {
       ctx.font = '9px "Silkscreen", monospace'; ctx.fillStyle = 'rgba(180,40,30,0.5)';
-      ctx.fillText('tap to continue', W / 2, H * 0.82);
+      ctx.fillText('tap to continue', W / 2, H * 0.9);
     }
     ctx.restore();
   }

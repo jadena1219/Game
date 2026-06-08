@@ -1323,14 +1323,21 @@ export class Game {
   }
 
   _drawLights(ctx) {
-    // additive warm glow — braziers, the hero's blade, and live projectiles
+    // additive warm glow — gradients are cached per (radius,colour) and reused
+    // via translate so we don't allocate dozens of gradients every frame.
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
+    const cache = this._glowCache || (this._glowCache = new Map());
     const glow = (x, y, r, col, a) => {
-      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-      g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.globalAlpha = a; ctx.fillStyle = g;
-      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      const rr = Math.round(r), key = rr + '|' + col;
+      let grd = cache.get(key);
+      if (!grd) {
+        grd = ctx.createRadialGradient(0, 0, 0, 0, 0, rr);
+        grd.addColorStop(0, col); grd.addColorStop(1, 'rgba(0,0,0,0)');
+        cache.set(key, grd);
+      }
+      ctx.globalAlpha = a; ctx.fillStyle = grd;
+      ctx.translate(x, y); ctx.beginPath(); ctx.arc(0, 0, rr, 0, Math.PI * 2); ctx.fill(); ctx.translate(-x, -y);
     };
     for (const bz of this._torches) {
       if (!this._inView(bz.x, bz.y)) continue;
@@ -1357,34 +1364,39 @@ export class Game {
       sc = this.shadowCanvas = document.createElement('canvas');
       sc.width = sw; sc.height = sh;
       g = this.shadowCtx = sc.getContext('2d');
+      this._holeCache = new Map();   // gradients are tied to this ctx
     }
+    const cache = this._holeCache || (this._holeCache = new Map());
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, sw, sh);
     g.fillStyle = `rgba(4,3,9,${darkLevel})`;
     g.fillRect(0, 0, sw, sh);
     g.globalCompositeOperation = 'destination-out';
-    const hole = (wx, wy, r, soft) => {
-      const sx = (wx - this.cam.x) * S, sy = (wy - this.cam.y) * S, rr = r * S;
+    // cached light "holes": one gradient per rounded radius, reused via translate
+    const hole = (wx, wy, r) => {
+      const sx = (wx - this.cam.x) * S, sy = (wy - this.cam.y) * S, rr = Math.round(r * S);
       if (sx < -rr || sx > sw + rr || sy < -rr || sy > sh + rr) return;
-      const grd = g.createRadialGradient(sx, sy, rr * soft, sx, sy, rr);
-      grd.addColorStop(0, 'rgba(0,0,0,1)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
-      g.fillStyle = grd; g.beginPath(); g.arc(sx, sy, rr, 0, Math.PI * 2); g.fill();
+      let grd = cache.get(rr);
+      if (!grd) {
+        grd = g.createRadialGradient(0, 0, rr * 0.22, 0, 0, rr);
+        grd.addColorStop(0, 'rgba(0,0,0,1)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
+        cache.set(rr, grd);
+      }
+      g.fillStyle = grd;
+      g.translate(sx, sy); g.beginPath(); g.arc(0, 0, rr, 0, Math.PI * 2); g.fill(); g.translate(-sx, -sy);
     };
-    for (const bz of this._torches) {
-      const fl = 0.85 + 0.15 * Math.sin(this.titleT * 11 + bz.x);
-      hole(bz.x, bz.y - 6, 170 * fl, 0.18);
-    }
+    for (const bz of this._torches) hole(bz.x, bz.y - 6, 168);
     const hx = this.player ? this.player.x : this.world.w / 2;
     const hy = this.player ? this.player.y - 8 : this.world.h / 2 + this.vh * 0.16;
-    hole(hx, hy, 175, 0.25);     // the hero carries the light
-    for (const fb of this.allyProjectiles) hole(fb.x, fb.y, 90, 0.15);
-    for (const pr of this.projectiles) hole(pr.x, pr.y, 52, 0.15);
-    for (const pk of this.pickups) hole(pk.x, pk.y, 30, 0.1);   // loot glints in the dark
-    if (this.state === 'camp' && this.camp) {                   // door + sorcerer light the room
-      hole(this.camp.door.x, this.camp.door.y - 6, 120, 0.12);
-      hole(this.camp.sorcerer.x, this.camp.sorcerer.y - 12, 110, 0.2);
+    hole(hx, hy, 175);           // the hero carries the light
+    for (const fb of this.allyProjectiles) hole(fb.x, fb.y, 90);
+    for (const pr of this.projectiles) hole(pr.x, pr.y, 52);
+    for (const pk of this.pickups) hole(pk.x, pk.y, 30);   // loot glints in the dark
+    if (this.state === 'camp' && this.camp) {              // door + sorcerer light the room
+      hole(this.camp.door.x, this.camp.door.y - 6, 120);
+      hole(this.camp.sorcerer.x, this.camp.sorcerer.y - 12, 110);
     }
-    for (const fx of this.effects) { if (fx.kind === 'boom' || fx.kind === 'ult') hole(fx.x, fx.y, (fx.r || 80) * 1.1, 0.1); }
+    for (const fx of this.effects) { if (fx.kind === 'boom' || fx.kind === 'ult') hole(fx.x, fx.y, Math.round((fx.r || 80) * 1.1)); }
     g.globalCompositeOperation = 'source-over';
     ctx.save(); ctx.imageSmoothingEnabled = true;
     ctx.drawImage(sc, 0, 0, this.vw, this.vh);

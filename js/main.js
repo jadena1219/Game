@@ -242,9 +242,10 @@ async function boot() {
   game = new Game(canvas, ui);
   ui.showScreen('title');
 
-  document.getElementById('start-btn').addEventListener('click', () => ui.showHeroSelect());
-  document.getElementById('retry-btn').addEventListener('click', () => ui.showHeroSelect());
-  document.getElementById('win-btn').addEventListener('click', () => ui.showHeroSelect());
+  // Hero select stays built for a future unlock; for now every run is the Knight.
+  document.getElementById('start-btn').addEventListener('click', () => game.start('knight'));
+  document.getElementById('retry-btn').addEventListener('click', () => game.start('knight'));
+  document.getElementById('win-btn').addEventListener('click', () => game.start('knight'));
   document.getElementById('sanctum-btn').addEventListener('click', () => ui.showSanctum(game));
   document.getElementById('sanctum-back').addEventListener('click', () => ui.showScreen('title'));
 }

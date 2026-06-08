@@ -26,8 +26,8 @@ const ui = {
     const b = document.getElementById('camp-prompt');
     if (!kind) { b.classList.add('hidden'); return; }
     b.classList.remove('hidden');
-    if (kind === 'sorcerer') { b.innerHTML = '✦ Trade'; b.className = 'sorcerer'; b.onclick = () => game.campTrade(); }
-    else { b.innerHTML = 'Descend ▾'; b.className = 'door'; b.onclick = () => game.campDescend(); }
+    if (kind === 'sorcerer') { b.textContent = 'Trade'; b.className = 'sorcerer'; b.onclick = () => game.campTrade(); }
+    else { b.textContent = 'Descend'; b.className = 'door'; b.onclick = () => game.campDescend(); }
   },
 
   // The sorcerer's trade panel — spend gold on forge upgrades & relics.

@@ -91,10 +91,10 @@ p { max-width: 30ch; line-height: 1.5; }
 
 .btn {
   margin-top: 10px;
-  padding: 13px 28px;
-  font-size: clamp(14px, 4.2vw, 18px);
-  font-weight: 700;
-  letter-spacing: 1px;
+  padding: 14px 26px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: clamp(11px, 3.2vw, 14px);
+  letter-spacing: 0.5px;
   color: #2a1d06;
   background: #e9c84a;
   border: 3px solid #6b5212;
@@ -108,7 +108,7 @@ p { max-width: 30ch; line-height: 1.5; }
 /* ---- camp interaction prompt (floating button while roaming the room) ---- */
 #camp-prompt {
   position: fixed; left: 50%; bottom: 17vh; transform: translateX(-50%);
-  z-index: 30; padding: 12px 24px; font-size: 15px; font-weight: 700; letter-spacing: 0.5px;
+  z-index: 30; padding: 13px 22px; font-family: 'Press Start 2P', monospace; font-size: 12px;
   color: #2a1d06; background: #e9c84a;
   border: 3px solid #6b5212; border-radius: 3px;
   box-shadow: inset 0 2px 0 rgba(255,255,255,0.35), 0 5px 0 #6b5212;
@@ -120,21 +120,28 @@ p { max-width: 30ch; line-height: 1.5; }
 
 /* ---- the sorcerer's trade panel ---- */
 #shop-modal { gap: 8px; justify-content: flex-start; padding: 5vh 16px 4vh; overflow-y: auto; }
-.ware-ico-img { width: 38px; height: 38px; image-rendering: pixelated; flex-shrink: 0;
-  filter: drop-shadow(0 2px 3px rgba(0,0,0,0.6)); }
-.shrine-explain { font-size: 11.5px; opacity: 0.7; max-width: 420px; margin: 6px auto 0; line-height: 1.4; }
+.ware-ico-img { width: 34px; height: 34px; image-rendering: pixelated; flex-shrink: 0;
+  padding: 5px; background: #120c1c; border: 3px solid #3a3048; border-radius: 3px;
+  box-shadow: inset 0 0 0 1px #000; }
+.ware.relic .ware-ico-img { border-color: #6a3fb0; }
+.shrine-explain { font-size: 11.5px; opacity: 0.75; max-width: 420px; margin: 6px auto 0; line-height: 1.5; }
 .shrine-explain b { color: #c89aff; }
 .btn.small { margin-top: 10px; padding: 11px 24px; font-size: 16px; }
 #camp-gold { font-weight: bold; color: var(--gold); font-size: 17px; letter-spacing: 0.5px;
   text-shadow: 0 0 10px rgba(233,200,74,0.4); }
 /* numbers stay in the body font (Silkscreen has clear digits) — just gilded */
 .num, #camp-gold-n, #reroll-cost { color: var(--gold); font-weight: 700; }
+.gdot { display: inline-block; width: 9px; height: 9px; background: var(--gold);
+  transform: rotate(45deg); margin-right: 7px; vertical-align: middle;
+  box-shadow: inset -2px -2px 0 rgba(0,0,0,0.25); }
+#camp-title { font-size: clamp(22px, 6.5vw, 36px); margin-bottom: 2px; }
+#camp-sub { max-width: 30ch; }
 
 /* ---- victory screen ---- */
 #victory { background: radial-gradient(circle at 50% 38%, rgba(80,60,16,0.5), rgba(8,6,14,0.92) 70%); }
 .victory-crown {
-  font-size: 64px; color: #ffd86a; line-height: 1;
-  text-shadow: 0 0 24px rgba(255,216,106,0.7), 0 3px 0 #6b5212;
+  width: 84px; height: 84px; image-rendering: pixelated;
+  filter: drop-shadow(0 0 18px rgba(255,216,106,0.7));
   animation: crownFloat 2.4s ease-in-out infinite;
 }
 @keyframes crownFloat { 0%,100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-8px) rotate(3deg); } }
@@ -163,10 +170,11 @@ p { max-width: 30ch; line-height: 1.5; }
 .ware-ico { font-size: 30px; width: 40px; text-align: center; flex-shrink: 0;
   filter: drop-shadow(0 0 6px rgba(255,200,90,0.4)); }
 .ware-body { flex: 1; min-width: 0; }
-.ware-name { font-weight: bold; font-size: 15px; display: flex; align-items: center; gap: 8px; }
-.ware-desc { font-size: 12.5px; opacity: 0.85; margin-top: 2px; }
-.ware-flavor { font-size: 11px; font-style: italic; opacity: 0.55; margin-top: 2px; }
-.ware-cost { font-weight: bold; color: var(--gold); font-size: 15px; flex-shrink: 0; white-space: nowrap; }
+.ware-name { font-family: 'Press Start 2P', monospace; font-size: 10px; line-height: 1.5;
+  color: #fff; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.ware-desc { font-size: 12.5px; opacity: 0.9; margin-top: 4px; line-height: 1.4; }
+.ware-flavor { font-size: 11px; font-style: italic; opacity: 0.55; margin-top: 3px; }
+.ware-cost { font-weight: 700; color: var(--gold); font-size: 15px; flex-shrink: 0; white-space: nowrap; }
 .ware.sold .ware-cost { color: #6ad06a; }
 /* chunky pixel-dungeon tags */
 .tagchip {
@@ -186,7 +194,8 @@ p { max-width: 30ch; line-height: 1.5; }
 }
 #camp-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; justify-content: center; }
 .camp-btn {
-  padding: 11px 15px; font-size: 13px; font-weight: 700; color: #ece6f5;
+  padding: 12px 14px; font-family: 'Press Start 2P', monospace; font-size: 9px;
+  line-height: 1.4; color: #ece6f5;
   background: #2e2444; border: 3px solid #5a4a7a; border-radius: 3px;
   box-shadow: inset 0 2px 0 rgba(255,255,255,0.12), 0 4px 0 #1a1228;
   cursor: pointer; transition: transform 0.05s, box-shadow 0.05s;

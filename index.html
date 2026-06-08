@@ -30,15 +30,15 @@
     <div class="screen hidden" id="shop-modal">
       <h2 id="camp-title">The Sorcerer</h2>
       <p class="rw-sub" id="camp-sub">"Spend your gold, knight. The dark is patient."</p>
-      <div id="camp-gold">◆ <span id="camp-gold-n">0</span> gold</div>
+      <div id="camp-gold"><span class="gdot"></span><span id="camp-gold-n">0</span> gold</div>
       <div id="camp-wares"></div>
       <div id="camp-actions">
-        <button class="camp-btn" id="reroll-btn">↻ New Wares <span class="cst" id="reroll-cost">12</span></button>
-        <button class="camp-btn shrine" id="shrine-btn">⛧ Gamble <span class="cst">30</span></button>
+        <button class="camp-btn" id="reroll-btn">Reroll <span class="cst" id="reroll-cost">12</span></button>
+        <button class="camp-btn shrine" id="shrine-btn">Gamble <span class="cst">30</span></button>
       </div>
-      <p class="shrine-explain">⛧ <b>Cursed Shrine</b> — pay 30 gold for a <b>60% chance</b> at a random relic. Otherwise the dark keeps it.</p>
+      <p class="shrine-explain"><b>Cursed Shrine</b> — pay 30 gold for a <b>60% chance</b> at a random relic. Otherwise the dark keeps it.</p>
       <p class="hint" id="camp-msg">&nbsp;</p>
-      <button class="btn small" id="shop-back">← Back to camp</button>
+      <button class="btn small" id="shop-back">Back</button>
     </div>
 
     <!-- Floating interaction prompt while walking the camp room -->
@@ -54,7 +54,8 @@
 
     <!-- Victory -->
     <div class="screen hidden" id="victory">
-      <div class="victory-crown">♛</div>
+      <img class="victory-crown" src="assets/icons/ember.png" alt="">
+
       <h2 class="gold">The Demon Lord Falls</h2>
       <p>Ten levels of dark. One blade unbroken.<br>The realm is saved.</p>
       <div id="victory-stats"></div>

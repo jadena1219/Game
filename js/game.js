@@ -1434,8 +1434,11 @@ export class Game {
       if (it.kind === 'boss') {
         ctx.font = 'bold 16px "Silkscreen", sans-serif'; ctx.fillStyle = '#d8413a';
         ctx.fillText(it.sub, this.vw / 2, y - 34);
-        const size = 34 + slide * 8;
+        let size = 30 + slide * 6;
         ctx.font = `bold ${size}px "Silkscreen", sans-serif`;
+        const maxW = this.vw * 0.88;                    // scale down so it never overflows
+        const tw = ctx.measureText(it.text).width;
+        if (tw > maxW) { size = Math.floor(size * maxW / tw); ctx.font = `bold ${size}px "Silkscreen", sans-serif`; }
         ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,0.7)';
         ctx.strokeText(it.text, this.vw / 2, y);
         ctx.fillStyle = '#ffce4a'; ctx.fillText(it.text, this.vw / 2, y);

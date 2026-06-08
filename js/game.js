@@ -897,8 +897,10 @@ export class Game {
     const style = (player.hero && player.hero.swingStyle) || 'sweep';
     // visual lives LONGER than the hit window so the slash actually reads on screen
     const dur = style === 'stab' ? 0.2 : 0.32;
+    // anchor at the torso, not the feet (sprites are feet-anchored) so the slash
+    // radiates from the knight's body evenly in every facing direction
     this.effects.push({ kind: 'swing', t: 0, dur, style,
-      x: player.x, y: player.y, angle: player.facingAngle });
+      x: player.x, y: player.y - 16, angle: player.facingAngle });
   }
 
   // knockback resistance: bosses are immovable, tanks heavy, trash light

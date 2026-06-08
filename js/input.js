@@ -126,22 +126,24 @@ export class Input {
   }
 
   _updateMove() {
-    let dx = this.stick.x - this.stick.ox;
-    let dy = this.stick.y - this.stick.oy;
+    const dx = this.stick.x - this.stick.ox;
+    const dy = this.stick.y - this.stick.oy;
     const len = Math.hypot(dx, dy);
-    const max = this.maxStick;
-    if (len > max) { dx = dx / len * max; dy = dy / len * max; }
-    // clamp visual knob
-    this.stick.x = this.stick.ox + dx;
-    this.stick.y = this.stick.oy + dy;
-    // CONSTANT speed: once past a small dead-zone, move full speed in that
-    // direction (no analog scaling — that made speed depend on how far you could
-    // drag, which differs by screen position and felt random/slow).
+    // Direction (unit vector) from the RAW drag — full, constant speed past a
+    // small dead-zone, regardless of how far you can drag. (The old code divided
+    // the clamped vector by the unclamped length, so dragging far = slower, which
+    // made one direction faster than the other depending on where you gripped.)
     if (len > 7) {
       this.move.x = dx / len;
       this.move.y = dy / len;
     } else {
       this.move.x = 0; this.move.y = 0;
+    }
+    // clamp the VISUAL knob only
+    const max = this.maxStick;
+    if (len > max) {
+      this.stick.x = this.stick.ox + dx / len * max;
+      this.stick.y = this.stick.oy + dy / len * max;
     }
   }
 

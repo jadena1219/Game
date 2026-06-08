@@ -80,9 +80,9 @@ export class Game {
     this.input.layout(this.vw, this.vh);
 
     // a contained arena ~1.5x the screen — room to roam, walls in view
-    // bigger arena so the camera follows (player stays centred) far more than it
-    // clamps at the edges — that edge-clamp + smoothing was the perceived-speed bug.
-    this.world = { w: Math.round(this.vw * 2.4), h: Math.round(this.vh * 2.4) };
+    // contained arena (~1.7x screen). The speed bug was the joystick math, not
+    // the camera; the camera now follows exactly (no smoothing) for consistency.
+    this.world = { w: Math.round(this.vw * 1.7), h: Math.round(this.vh * 1.7) };
     const m = 56;
     this.worldBounds = { minX: m, minY: m, maxX: this.world.w - m, maxY: this.world.h - m };
     this.bounds = this.worldBounds;

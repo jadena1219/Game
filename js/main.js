@@ -26,9 +26,18 @@ const numWrap = (s) => String(s).replace(/(\d+)/g, '<span class="num">$1</span>'
 const ui = {
   showScreen(name) {
     if (name !== 'hero-select') this._heroAnim = false;   // stop preview loop on leave
+    screens.title.classList.remove('swipe-out');          // reset the cold-open animation
     for (const [k, el] of Object.entries(screens)) {
       el.classList.toggle('hidden', k !== name);
     }
+  },
+
+  // The cold open: lift the title overlay away, revealing the live corridor
+  // already scrolling on the canvas beneath it.
+  swipeTitleAway() {
+    const el = screens.title;
+    el.classList.add('swipe-out');
+    setTimeout(() => { el.classList.add('hidden'); el.classList.remove('swipe-out'); }, 620);
   },
 
   // Hero select — choose your champion (shown after the title 'Begin').
@@ -268,7 +277,7 @@ async function boot() {
   ui.showScreen('title');
 
   // Hero select stays built for a future unlock; for now every run is the Knight.
-  document.getElementById('start-btn').addEventListener('click', () => game.start('knight'));
+  document.getElementById('start-btn').addEventListener('click', () => game.beginIntro('knight'));
   document.getElementById('retry-btn').addEventListener('click', () => game.start('knight'));
   document.getElementById('win-btn').addEventListener('click', () => game.start('knight'));
   document.getElementById('sanctum-btn').addEventListener('click', () => ui.showSanctum(game));

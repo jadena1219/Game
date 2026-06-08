@@ -48,6 +48,8 @@ export class Game {
     this.hpDisplay = 100;      // smoothed health-bar value
     this.hpGhost = 100;        // lagging "damage taken" chunk
     this.titleT = 0;           // title-scene animation clock
+    this.tunnelScroll = 0;     // how far the title corridor has scrolled past
+    this.introBloom = null;    // light-flood that hides the cut into Level 1
     this.wipeEl = document.getElementById('wipe');
 
     // --- Phase 3b: open world ---
@@ -345,10 +347,37 @@ export class Game {
   }
 
   // ---------- flow ----------
-  // A fresh run resets all progression (death sends you back to Level 1).
-  start(heroId = 'knight') {
+  // The cold open: the title lifts away and the knight — already striding the
+  // endless corridor behind it — walks on. The passage scrolls faster, the far
+  // end floods with torchlight, and that bloom hides the cut straight into L1.
+  beginIntro(heroId = 'knight') {
+    if (this.state !== 'title') return;
     this.heroId = heroId;
-    this._slashWipe(() => {
+    this.state = 'intro';
+    this.introT = 0;
+    this.introFired = false;
+    this.ui.swipeTitleAway();           // CSS lift-and-blur on the title overlay
+  }
+
+  _updateIntro(dt) {
+    this.introT += dt;
+    // the careful stroll quickens into a stride as he commits to the dark
+    const speed = 60 + Math.min(250, this.introT * 150);
+    this.tunnelScroll += speed * dt;
+    const WALK = 2.7;                    // seconds of corridor before the threshold
+    if (!this.introFired && this.introT >= WALK) {
+      this.introFired = true;
+      this.introBloom = { t: 0, dur: 0.9 };
+      this.start(this.heroId, false);   // no slash-wipe — the bloom hides the cut
+    }
+  }
+
+  // A fresh run resets all progression (death sends you back to Level 1). When
+  // `wiped` is false (the cold-open hand-off) we set the level up immediately so
+  // only the light-bloom covers the transition, not the diagonal slash.
+  start(heroId = 'knight', wiped = true) {
+    this.heroId = heroId;
+    const begin = () => {
       const mb = this.metaB = metaBonuses(this.meta);
       this.player = new Player(this.world.w / 2, this.world.h / 2, heroId, mb);
       this.player.lockedRelics = new Set(LOCKED_RELICS.filter((id) => !this.meta.relics.includes(id)));
@@ -359,7 +388,9 @@ export class Game {
       this.hpDisplay = this.hpGhost = this.player.maxHP;
       this.timeScale = 1; this.dying = 0;
       this._startLevel(1, true);
-    });
+      if (!wiped) { this.intro = null; this.countdown = 1.5; }  // skip the LEVEL card; let the bloom breathe
+    };
+    if (wiped) this._slashWipe(begin); else begin();
   }
 
   // ---- Sanctum (meta-progression) purchases ----
@@ -819,6 +850,7 @@ export class Game {
     if (this.state === 'dying') return this._updateDying(dt);
     if (this.state === 'won') return this._updateWon(dt);
     if (this.state === 'camp') return this._updateCamp(dt);
+    if (this.state === 'intro') return this._updateIntro(dt);
     if (this.state !== 'playing') return;
 
     // brief hit-pause freezes the simulation for weight
@@ -893,6 +925,12 @@ export class Game {
   // Ambient/UI animation that runs regardless of pause/menus.
   _updateAmbient(dt) {
     this.titleT += dt;
+    // the title corridor scrolls on its own — a slow, careful stroll into the dark
+    if (this.state === 'title') this.tunnelScroll += dt * 42;
+    if (this.introBloom) {
+      this.introBloom.t += dt;
+      if (this.introBloom.t >= this.introBloom.dur) this.introBloom = null;
+    }
     // smoothed health bar
     if (this.player) {
       const hp = Math.max(0, this.player.hp);
@@ -902,7 +940,7 @@ export class Game {
     }
     // floating embers (used for death fx, title & victory celebration) — spawned
     // in world space around the current view
-    const want = (this.state === 'title' || this.state === 'victory') ? 60 : 0;
+    const want = (this.state === 'victory') ? 60 : 0;   // title now uses the corridor scene
     if (this.embers.length < want && Math.random() < 0.6) {
       this.embers.push({ x: this.cam.x + Math.random() * this.vw, y: this.cam.y + this.vh + 8,
         vx: (Math.random() - 0.5) * 14, vy: -(18 + Math.random() * 34),
@@ -1246,6 +1284,16 @@ export class Game {
     const title = this.state === 'title';
     const camx = this.cam.x, camy = this.cam.y;
 
+    // Cold open: the title & intro are a screen-space torch-lit corridor, drawn
+    // outside the normal world pipeline so the cut into Level 1 is seamless.
+    if (title || this.state === 'intro') {
+      ctx.clearRect(0, 0, this.vw, this.vh);
+      this._drawTunnelScene(ctx);
+      this._drawIntroBloom(ctx);
+      this._drawTransition(ctx);
+      return;
+    }
+
     ctx.clearRect(0, 0, this.vw, this.vh);
     ctx.save();
     if (this.shake > 0) {
@@ -1270,7 +1318,6 @@ export class Game {
     for (const fx of this.effects) if (fx.kind === 'swing') this._drawSwing(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'death') this._drawDeathFx(ctx, fx);
 
-    if (title) this._drawTitleScene(ctx);
     if (this.state === 'camp') this._drawCampFloor(ctx);   // door + table (on the floor)
 
     // depth-sort enemies + hero (+ sorcerer) by feet-y
@@ -1302,7 +1349,7 @@ export class Game {
 
     this._drawAtmos(ctx);           // biome weather (screen overlay)
     this._drawGrade(ctx);           // biome colour grade (screen overlay)
-    if (title) { this._drawTransition(ctx); return; }
+    this._drawIntroBloom(ctx);      // light-flood lingering from the cold-open cut
     this._drawDeathOverlay(ctx);    // desaturate + "YOU FELL" during dying/gameover lead-in
     this._drawVictory(ctx);         // golden celebration during the 'won' sequence
 
@@ -1532,26 +1579,116 @@ export class Game {
     ctx.restore();
   }
 
-  _drawTitleScene(ctx) {
-    // a knight standing his ground, a couple of foes lurking — all idling.
-    // drawn in WORLD space at the world centre (the title frames this spot).
-    const cx = this.world.w / 2, gy = this.world.h / 2 + this.vh * 0.18;
-    const bob = Math.sin(this.titleT * 2) * 2;
-    // lurking enemies flanking
-    drawSprite(ctx, 'skeleton', this.titleT % 1 < 0.5 ? 'walkA' : 'walkB',
-      cx - this.vw * 0.26, gy + 18 + bob, false, 1.4);
-    drawSprite(ctx, 'imp', this.titleT % 0.6 < 0.3 ? 'walkA' : 'walkB',
-      cx + this.vw * 0.27, gy - 6 - bob, true, 1.2);
-    drawSprite(ctx, 'ogre', this.titleT % 1.2 < 0.6 ? 'idle' : 'walkA',
-      cx + this.vw * 0.17, gy + 40 + bob, true, 1.5);
-    // hero, larger, sword drawn, gentle breathing
-    drawSprite(ctx, 'knight', this.titleT % 1.4 < 0.7 ? 'idle' : 'walkA',
-      cx - this.vw * 0.02, gy + bob, false, 2.4);
-    // ground glow under hero
+  // Bake one repeating slice of the title corridor (walls + floor + a torch on
+  // each wall). Rebuilt only if the viewport changed.
+  _buildTunnel() {
+    const W = this.vw, H = this.vh, SEG = 200;
+    const b = biomeForLevel(1);                       // catacomb palette → matches Level 1
+    const top = Math.round(H * 0.30), bot = Math.round(H * 0.74);
+    this._tunnel = { SEG, top, bot, torchY: { top, bot } };
+    const c = document.createElement('canvas'); c.width = SEG; c.height = H;
+    const g = c.getContext('2d');
+    // sunken floor
+    const grd = g.createLinearGradient(0, top, 0, bot);
+    grd.addColorStop(0, b.ground[0]); grd.addColorStop(1, b.ground[1]);
+    g.fillStyle = grd; g.fillRect(0, top, SEG, bot - top);
+    g.strokeStyle = 'rgba(0,0,0,0.42)'; g.lineWidth = 2;
+    for (let x = 0; x <= SEG; x += 50) { g.beginPath(); g.moveTo(x, top); g.lineTo(x, bot); g.stroke(); }
+    for (let y = top; y <= bot; y += 50) { g.beginPath(); g.moveTo(0, y); g.lineTo(SEG, y); g.stroke(); }
+    for (let i = 0; i < 40; i++) { g.fillStyle = 'rgba(0,0,0,0.2)'; g.fillRect(Math.random() * SEG, top + Math.random() * (bot - top), 1 + Math.random() * 2, 1); }
+    // walls above & below
+    g.fillStyle = b.wall; g.fillRect(0, 0, SEG, top); g.fillRect(0, bot, SEG, H - bot);
+    g.strokeStyle = 'rgba(0,0,0,0.5)'; g.lineWidth = 2;
+    for (let x = 0; x <= SEG; x += 46) {
+      g.beginPath(); g.moveTo(x, 0); g.lineTo(x, top); g.moveTo(x + 23, bot); g.lineTo(x + 23, H); g.stroke();
+    }
+    for (let y = 0; y < top; y += 26) { g.beginPath(); g.moveTo(0, y); g.lineTo(SEG, y); g.stroke(); }
+    for (let y = bot + 26; y < H; y += 26) { g.beginPath(); g.moveTo(0, y); g.lineTo(SEG, y); g.stroke(); }
+    // lit cap + recessed shadow where wall meets floor
+    g.fillStyle = b.cap; g.fillRect(0, top - 5, SEG, 5); g.fillRect(0, bot, SEG, 5);
+    g.fillStyle = 'rgba(0,0,0,0.45)'; g.fillRect(0, top, SEG, 10); g.fillRect(0, bot - 10, SEG, 10);
+    // a brazier standing against each wall, centred in the slice
+    this._bakeBrazierPost(g, SEG * 0.5, top);
+    this._bakeBrazierPost(g, SEG * 0.5, bot);
+    this.tunnelStrip = c; this._tunnelW = W; this._tunnelH = H;
+  }
+
+  // The title / cold-open scene: an endless torch-lit corridor with the knight
+  // striding forward. The whole thing scrolls left (he walks right).
+  _drawTunnelScene(ctx) {
+    if (!this.tunnelStrip || this._tunnelW !== this.vw || this._tunnelH !== this.vh) this._buildTunnel();
+    const W = this.vw, H = this.vh, { SEG, top, bot, torchY } = this._tunnel;
+    const scroll = this.tunnelScroll;
+    const off = ((scroll % SEG) + SEG) % SEG;
+    // void behind the walls, then the tiled corridor
+    ctx.fillStyle = '#070510'; ctx.fillRect(0, 0, W, H);
+    for (let x = -off; x < W + SEG; x += SEG) ctx.drawImage(this.tunnelStrip, Math.round(x), 0);
+    // darkness veil — the corridor lives in shadow, lit only in pools
+    ctx.fillStyle = 'rgba(6,4,12,0.62)'; ctx.fillRect(0, 0, W, H);
+
+    // gather on-screen torch positions (one per slice, on each wall)
+    const torches = [];
+    for (let x = -off; x < W + SEG; x += SEG) { const tx = x + SEG * 0.5; torches.push([tx, torchY.top], [tx, torchY.bot]); }
+
+    // additive light pass: torch pools, the hero's glow, and the doorway beyond
     ctx.save();
-    const g = ctx.createRadialGradient(cx, gy + 6, 4, cx, gy + 6, 90);
-    g.addColorStop(0, 'rgba(120,180,255,0.18)'); g.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = g; ctx.fillRect(cx - 90, gy - 84, 180, 120);
+    ctx.globalCompositeOperation = 'lighter';
+    const cache = this._glowCache || (this._glowCache = new Map());
+    const glow = (x, y, r, col, a) => {
+      const rr = Math.round(r), key = rr + '|' + col;
+      let grd = cache.get(key);
+      if (!grd) { grd = ctx.createRadialGradient(0, 0, 0, 0, 0, rr); grd.addColorStop(0, col); grd.addColorStop(1, 'rgba(0,0,0,0)'); cache.set(key, grd); }
+      ctx.globalAlpha = a; ctx.fillStyle = grd;
+      ctx.translate(x, y); ctx.beginPath(); ctx.arc(0, 0, rr, 0, Math.PI * 2); ctx.fill(); ctx.translate(-x, -y);
+    };
+    for (const [tx, ty] of torches) { const fl = 0.78 + 0.22 * Math.sin(this.titleT * 11 + tx); glow(tx, ty, 150, '#9fc6ff', 0.5 * fl); }
+    const hx = W * 0.42, hy = (top + bot) / 2 + 8;
+    glow(hx, hy - 10, 120, '#cfe6ff', 0.22);
+    if (this.state === 'intro') {                      // the threshold ahead floods with light
+      const p = Math.min(1, this.introT / 2.7);
+      glow(W * 0.99, (top + bot) / 2, 90 + p * p * 560, '#dfeaff', 0.55 * p);
+    }
+    ctx.restore();
+
+    // torch flames on top of their pools
+    for (const [tx, ty] of torches) this._tunnelFlame(ctx, tx, ty);
+
+    // the knight, mid-stride, walking into the dark
+    const bob = Math.abs(Math.sin(this.titleT * 5)) * 2;
+    const frame = this.titleT * 5 % 1 < 0.5 ? 'walkA' : 'walkB';
+    ctx.save();
+    ctx.globalAlpha = 0.5; ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.ellipse(hx, hy + 22, 22, 7, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    drawSprite(ctx, 'knight', frame, hx, hy - bob, false, 2.6);
+  }
+
+  _tunnelFlame(ctx, x, y) {
+    const f = this.titleT * 12 + x;
+    const h = 12 + Math.sin(f) * 3 + Math.sin(f * 2.3) * 2;
+    const cy = y - 4;
+    ctx.save();
+    const g1 = ctx.createRadialGradient(x, cy - h * 0.3, 1, x, cy, h);
+    g1.addColorStop(0, '#fff'); g1.addColorStop(0.5, '#9fc6ff'); g1.addColorStop(1, 'rgba(90,130,210,0)');
+    ctx.fillStyle = g1;
+    ctx.beginPath();
+    ctx.moveTo(x - 5, cy + 2);
+    ctx.quadraticCurveTo(x - 4, cy - h * 0.6, x, cy - h);
+    ctx.quadraticCurveTo(x + 4, cy - h * 0.6, x + 5, cy + 2);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+
+  // The light-flood that hides the cut from the corridor into Level 1.
+  _drawIntroBloom(ctx) {
+    if (!this.introBloom) return;
+    const p = this.introBloom.t / this.introBloom.dur;
+    const a = p < 0.28 ? p / 0.28 : 1 - (p - 0.28) / 0.72;   // flood fast, ebb slow
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, a);
+    const g = ctx.createRadialGradient(this.vw * 0.5, this.vh * 0.5, 0, this.vw * 0.5, this.vh * 0.5, this.vw * 0.72);
+    g.addColorStop(0, '#ffffff'); g.addColorStop(0.5, '#dfeaff'); g.addColorStop(1, 'rgba(180,205,255,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, this.vw, this.vh);
     ctx.restore();
   }
 

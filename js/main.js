@@ -1,11 +1,10 @@
 // Entry point: load sprites, wire up the menus, run the game.
 import { loadAssets } from './assets.js';
 import { Game } from './game.js';
-import { nextLevelOf } from './abilities.js';
 
 const screens = {
   title: document.getElementById('title-screen'),
-  reward: document.getElementById('reward-screen'),
+  camp: document.getElementById('camp-screen'),
   gameover: document.getElementById('game-over'),
   victory: document.getElementById('victory'),
 };
@@ -19,45 +18,68 @@ const ui = {
     }
   },
 
-  // Reward card selection between levels.
-  showRewards(level, choices, player, hp) {
-    document.getElementById('rw-title').textContent =
-      level + 1 === 5 ? 'Cleared! The Dark Knight awaits…'
-      : level + 1 === 10 ? 'Cleared! The Demon Lord stirs…'
-      : 'Level Cleared';
-    document.getElementById('rw-sub').innerHTML = `+${hp} HP restored &middot; choose a power for Level ${level + 1}`;
+  // The between-level dungeon camp: spend gold on forge upgrades & relics.
+  showCamp(g) {
+    const level = g.level;
+    document.getElementById('camp-title').textContent =
+      level + 1 === 5 ? 'Camp — the Dark Knight awaits below'
+      : level + 1 === 10 ? 'Camp — the Demon Lord stirs below'
+      : 'The Camp';
+    const greetings = [
+      'A hooded figure waits by the fire…', '"Spend your gold, knight. The dark is patient."',
+      '"Steel and charms. What\'ll it be?"', '"You\'ll not survive below without me."',
+      '"Coin for your life. Fair trade."',
+    ];
+    document.getElementById('camp-sub').textContent = greetings[(Math.random() * greetings.length) | 0];
 
-    const wrap = document.getElementById('reward-cards');
-    wrap.innerHTML = '';
-    const els = [];
-    choices.forEach((card, i) => {
-      const lvl = nextLevelOf(player, card);
-      const isNew = lvl === 1;
-      const el = document.createElement('button');
-      el.className = 'card' + (isNew ? ' is-new' : '');
-      el.style.animationDelay = (i * 0.11) + 's';   // cascade in one-by-one
-      el.innerHTML =
-        `<img class="ico" src="assets/icons/${card.id}.png" alt="" draggable="false">` +
-        `<div class="body">` +
-        `<div class="name">${card.name}` +
-        `<span class="tagchip">${isNew ? 'NEW' : 'Lv ' + lvl}</span></div>` +
-        `<div class="cdesc">${card.desc(lvl)}</div>` +
-        `</div>`;
-      el.addEventListener('click', () => {
-        if (wrap.dataset.locked) return;
-        wrap.dataset.locked = '1';
-        // animated pick: chosen card pops, others slide away, then commit
-        els.forEach((other) => {
-          other.style.animationDelay = '0s';
-          other.classList.add(other === el ? 'picked' : 'dismiss');
+    const render = () => {
+      document.getElementById('camp-gold-n').textContent = g.gold;
+      document.getElementById('reroll-cost').textContent = g.rerollCost;
+      const wrap = document.getElementById('camp-wares');
+      wrap.innerHTML = '';
+      g.shopStock.forEach((w, i) => {
+        const owned = w.sold;
+        const afford = g.gold >= w.cost;
+        const el = document.createElement('button');
+        el.className = 'ware ' + w.kind + (owned ? ' sold' : afford ? '' : ' broke');
+        el.style.animationDelay = (i * 0.08) + 's';
+        const tag = w.kind === 'relic' ? 'RELIC' : (w.level > 0 ? 'Lv ' + w.next : 'NEW');
+        el.innerHTML =
+          `<div class="ware-ico">${w.item.icon}</div>` +
+          `<div class="ware-body">` +
+            `<div class="ware-name">${w.item.name}<span class="tagchip ${w.kind}">${tag}</span></div>` +
+            `<div class="ware-desc">${w.label}</div>` +
+            (w.kind === 'relic' ? `<div class="ware-flavor">${w.item.flavor}</div>` : '') +
+          `</div>` +
+          `<div class="ware-cost">${owned ? '✓' : '◆ ' + w.cost}</div>`;
+        if (!owned) el.addEventListener('click', () => {
+          if (g.buyWare(w)) { this._campMsg(`Bought ${w.item.name}.`); render(); }
+          else this._campMsg('Not enough gold.');
         });
-        setTimeout(() => { delete wrap.dataset.locked; game.chooseReward(card); }, 430);
+        wrap.appendChild(el);
       });
-      els.push(el);
-      wrap.appendChild(el);
-    });
-    this.showScreen('reward');
+    };
+    render();
+    this._campRender = render;
+
+    document.getElementById('reroll-btn').onclick = () => {
+      if (g.rerollShop()) { this._campMsg('New wares.'); render(); }
+      else this._campMsg('Not enough gold to reroll.');
+    };
+    document.getElementById('shrine-btn').onclick = () => {
+      const r = g.gambleShrine();
+      if (!r.ok) return this._campMsg('The shrine demands 30 gold.');
+      if (r.kind === 'relic') this._campMsg(`The shrine grants you ${r.icon} ${r.name}!`);
+      else if (r.kind === 'gold') this._campMsg('The shrine spits back a few coins.');
+      else this._campMsg('The shrine takes your gold, and laughs.');
+      render();
+    };
+    document.getElementById('descend-btn').onclick = () => { this.showScreen(null); g.descend(); };
+    document.getElementById('camp-msg').innerHTML = '&nbsp;';
+    this.showScreen('camp');
   },
+
+  _campMsg(t) { const el = document.getElementById('camp-msg'); if (el) el.textContent = t; },
 
   gameOver(level) {
     document.getElementById('go-sub').textContent = `You reached Level ${level} of 10`;

@@ -23,10 +23,17 @@
     </div>
 
     <!-- Reward selection -->
-    <div class="screen hidden" id="reward-screen">
-      <h2 id="rw-title">Level Cleared</h2>
-      <p class="rw-sub" id="rw-sub">+35 HP restored &middot; choose a power</p>
-      <div id="reward-cards"></div>
+    <div class="screen hidden" id="camp-screen">
+      <h2 id="camp-title">The Camp</h2>
+      <p class="rw-sub" id="camp-sub">A hooded figure waits by the fire…</p>
+      <div id="camp-gold">◆ <span id="camp-gold-n">0</span> gold</div>
+      <div id="camp-wares"></div>
+      <div id="camp-actions">
+        <button class="camp-btn" id="reroll-btn">↻ Reroll <span class="cst" id="reroll-cost">12</span></button>
+        <button class="camp-btn shrine" id="shrine-btn">⛧ Cursed Shrine <span class="cst">30</span></button>
+        <button class="camp-btn descend" id="descend-btn">Descend ▾</button>
+      </div>
+      <p class="hint" id="camp-msg">&nbsp;</p>
     </div>
 
     <!-- Game over -->

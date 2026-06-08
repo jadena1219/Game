@@ -3,7 +3,7 @@ import { CONFIG, LEVELS } from './config.js';
 import { Player, Enemy, inSwingArc } from './entities.js';
 import { drawSprite, pickFrame } from './sprite.js';
 import { Input } from './input.js';
-import { rollChoices, applyCard } from './abilities.js';
+import { recompute, rollStock, RELICS } from './abilities.js';
 import { Assets } from './assets.js';
 import { biomeForLevel } from './biomes.js';
 
@@ -299,9 +299,22 @@ export class Game {
     const wasAlive = !e.dead;
     e.takeHit(dmg, kx, ky);
     this.spawnDamageNumber(e.x, e.y - e.r - 6, Math.round(dmg), source);
-    if (source === 'sword') this._spark(e.x, e.y);
+    if (source === 'sword') { this._spark(e.x, e.y); this._relicOnHit(e, dmg); }
     if (e.boss && wasAlive) this.hitStop = Math.max(this.hitStop, 0.05); // weight on boss hits
     if (wasAlive && e.dead) this.onEnemyKilled(e, source);
+  }
+
+  // Relic procs that hang off the blade (only on direct sword hits).
+  _relicOnHit(e, dmg) {
+    const p = this.player;
+    if (p.relics.has('frost')) e.applySlow(1.4);
+    if (p.relics.has('thunder')) {
+      const t = this.nearestEnemy(e.x, e.y, 150, new Set([e]));
+      if (t) {
+        this.addEffect({ kind: 'bolt', pts: [{ x: e.x, y: e.y }, { x: t.x, y: t.y }], t: 0, dur: 0.16 });
+        this.hitEnemy(t, dmg * 0.5, 0, 0, 'ability');   // 'ability' source won't re-proc
+      }
+    }
   }
 
   onEnemyKilled(e, source) {
@@ -317,6 +330,18 @@ export class Game {
     else if (e.type === 'tank') this.hitStop = Math.max(this.hitStop, 0.06);
     this._spawnDeathFx(e);
     this._dropLoot(e);
+    // Ember Crown: the slain erupt, scorching nearby foes (no chain-recursion)
+    if (p.relics.has('ember') && !this._inEmber) {
+      this._inEmber = true;
+      const R = 64, dmg = 16 * p.mods.abilityDmgMult;
+      for (const o of this.enemiesInRadius(e.x, e.y, R)) {
+        if (o === e) continue;
+        const a = Math.atan2(o.y - e.y, o.x - e.x);
+        this.hitEnemy(o, dmg, Math.cos(a) * 80, Math.sin(a) * 80, 'ability');
+      }
+      this.addEffect({ kind: 'boom', x: e.x, y: e.y, r: R, t: 0, dur: 0.3 });
+      this._inEmber = false;
+    }
   }
 
   _dropLoot(e) {
@@ -324,8 +349,8 @@ export class Game {
       y: e.y + (Math.random() - 0.5) * 14, vx: (Math.random() - 0.5) * 80, vy: -(40 + Math.random() * 60),
       t: 0, dead: false });
     // gold: most enemies drop a little; bosses/tanks drop a lot
-    const coins = e.boss ? 10 : (e.type === 'tank' ? 3 : (Math.random() < 0.7 ? 1 : 0));
-    for (let i = 0; i < coins; i++) drop('gold', e.boss ? 5 : 1);
+    const coins = e.boss ? 12 : (e.type === 'tank' ? 4 : (Math.random() < 0.8 ? 1 : 0));
+    for (let i = 0; i < coins; i++) drop('gold', e.boss ? 6 : (1 + (Math.random() < 0.3 ? 1 : 0)));
     // health: rare from trash, guaranteed-ish from elites/bosses
     if (e.boss || (e.type === 'tank' && Math.random() < 0.5) || Math.random() < 0.05) {
       drop('health', e.boss ? 30 : 12);
@@ -349,7 +374,7 @@ export class Game {
   }
 
   _collect(pk) {
-    if (pk.type === 'gold') { this.gold += pk.value; }
+    if (pk.type === 'gold') { this.gold += Math.ceil(pk.value * this.player.mods.goldMult); }
     else if (pk.type === 'health') {
       this.player.hp = Math.min(this.player.maxHP, this.player.hp + pk.value);
       this.effects.push({ kind: 'dmg', x: this.player.x, y: this.player.y - 30, text: '+' + pk.value,
@@ -491,12 +516,16 @@ export class Game {
     const p = this.player;
     if (p.swingTimer <= 0) return;
     const kbStrength = CONFIG.player.knockback;
+    const missing = 1 - p.hp / p.maxHP;
+    const berserk = p.relics.has('berserk') ? 1 + 0.45 * missing : 1;
     for (const e of this.enemies) {
       if (p.hitThisSwing.has(e)) continue;
       if (inSwingArc(p, e)) {
         const [kx, ky] = [Math.cos(p.facingAngle), Math.sin(p.facingAngle)];
         const kb = e.boss ? kbStrength * 0.25 : kbStrength;
-        this.hitEnemy(e, p.swordDamage, kx * kb, ky * kb, 'sword');
+        let dmg = p.swordDamage * berserk;
+        if (p.relics.has('exec') && e.hp < e.maxHP * 0.35) dmg *= 1.7;
+        this.hitEnemy(e, dmg, kx * kb, ky * kb, 'sword');
         p.hitThisSwing.add(e);
         this.shake = Math.max(this.shake, e.boss ? 5 : 3.5);
       }
@@ -655,14 +684,13 @@ export class Game {
     }
     // intro card timer
     if (this.intro) { this.intro.t += dt; if (this.intro.t >= this.intro.dur) this.intro = null; }
-    // "level cleared" sweep -> then show reward cards
+    // "level cleared" sweep -> then the camp shop
     if (this.sweep) {
       this.sweep.t += dt;
       if (this.sweep.t >= this.sweep.dur) {
         this.sweep = null;
-        const r = this.pendingReward; this.pendingReward = null;
-        this.state = 'reward';
-        this.ui.showRewards(this.level, r.choices, this.player, r.heal);
+        this.pendingReward = null;
+        this.openCamp();
       }
     }
   }
@@ -778,19 +806,65 @@ export class Game {
       this.ui.victory();
       this._spawnEmberBurst();
     } else {
-      // "LEVEL CLEARED" sweep, then the reward cards
+      // "LEVEL CLEARED" sweep, then the camp shop
       this.player.hp = Math.min(this.player.maxHP, this.player.hp + CONFIG.hpRestorePerLevel);
       this.state = 'clearing';
       this.sweep = { t: 0, dur: 1.5 };
-      this.pendingReward = { choices: rollChoices(this.player, 3), heal: CONFIG.hpRestorePerLevel };
+      this.pendingReward = { heal: CONFIG.hpRestorePerLevel };
     }
   }
 
-  // called by the reward UI when the player taps a card
-  chooseReward(card) {
-    applyCard(this.player, card);
-    this.nextLevel();
+  // ---- the camp shop ----
+  openCamp() {
+    this.shopStock = rollStock(this.player, 4);
+    this.rerollCost = 12;
+    this.state = 'shop';
+    this.ui.showCamp(this);
   }
+
+  buyWare(ware) {
+    if (!ware || ware.sold || this.gold < ware.cost) return false;
+    const p = this.player;
+    this.gold -= ware.cost;
+    if (ware.kind === 'forge') {
+      const before = p.maxHP;
+      p.forge[ware.id] = (p.forge[ware.id] || 0) + 1;
+      recompute(p);
+      if (ware.id === 'armor') p.hp += p.maxHP - before;   // new armor heals the gained HP
+    } else {
+      p.relics.add(ware.id);
+      recompute(p);
+    }
+    ware.sold = true;
+    return true;
+  }
+
+  rerollShop() {
+    if (this.gold < this.rerollCost) return false;
+    this.gold -= this.rerollCost;
+    this.rerollCost += 8;
+    this.shopStock = rollStock(this.player, 4);
+    return true;
+  }
+
+  // Cursed shrine: gamble gold for a chance at a random relic.
+  gambleShrine() {
+    const cost = 30;
+    if (this.gold < cost) return { ok: false };
+    this.gold -= cost;
+    const p = this.player;
+    const unowned = RELICS.filter((r) => !p.relics.has(r.id));
+    const r = Math.random();
+    if (r < 0.6 && unowned.length) {
+      const relic = unowned[(Math.random() * unowned.length) | 0];
+      p.relics.add(relic.id); recompute(p);
+      return { ok: true, kind: 'relic', name: relic.name, icon: relic.icon };
+    }
+    if (r < 0.85) { this.gold += 12; return { ok: true, kind: 'gold', amount: 12 }; }
+    return { ok: true, kind: 'nothing' };
+  }
+
+  descend() { this.nextLevel(); }
 
   // ---------- render ----------
   _frame(t) {

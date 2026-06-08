@@ -9,7 +9,7 @@ function angDiff(a, b) { let d = (a - b) % TAU; if (d > Math.PI) d -= TAU; if (d
 export class Player {
   constructor(x, y) {
     this.x = x; this.y = y;
-    this.maxHP = CONFIG.player.maxHP;
+    this.mods = BASE_MODS();
     this.hp = this.maxHP;
     this.r = CONFIG.player.radius;
     this.fx = 1; this.fy = 0;          // facing unit vector (last moved dir)
@@ -28,14 +28,15 @@ export class Player {
     this.dashCD = 0;
     this.dashDirX = 1; this.dashDirY = 0;
     // progression
-    this.mods = BASE_MODS();
-    this.cardLevels = {};              // cardId -> level
-    this.abilities = [];              // [{id, def, level, cd}]
+    this.forge = {};                   // forge id -> level
+    this.relics = new Set();           // owned relic ids
+    this.abilities = [];               // (kept empty: the knight is the core)
     this.fury = 0; this.furyMax = 100;
   }
 
   get facingAngle() { return Math.atan2(this.fy, this.fx); }
   get dashing() { return this.dashTimer > 0; }
+  get maxHP() { return CONFIG.player.maxHP + (this.mods ? this.mods.bonusHP : 0); }
   // effective stats after upgrades
   get moveSpeed() { return CONFIG.player.speed * this.mods.moveSpeedMult; }
   get swordDamage() { return CONFIG.player.swordDamage * this.mods.swordDamageMult; }
@@ -63,7 +64,7 @@ export class Player {
     this.fx = dx; this.fy = dy; this.faceLeft = dx < 0;
     this.dashTimer = p.dashDur;
     this.dashCD = this.dashCooldown0;
-    this.invuln = Math.max(this.invuln, p.dashDur + p.dashInvuln);
+    this.invuln = Math.max(this.invuln, p.dashDur + p.dashInvuln + this.mods.dashInvulnBonus);
     game.onDash(this);
   }
 
@@ -122,7 +123,7 @@ export class Player {
 
   takeHit(dmg) {
     if (this.invuln > 0 || this.dead) return false;
-    this.hp -= dmg;
+    this.hp -= dmg * (1 - this.mods.damageReduction);
     this.invuln = CONFIG.player.invuln;
     this.flash = 0.25;
     if (this.hp <= 0) { this.hp = 0; this.dead = true; }

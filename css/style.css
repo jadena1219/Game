@@ -344,3 +344,35 @@ p { max-width: 30ch; line-height: 1.5; }
   font-size: 13px; color: #c8a8ff; margin: 2px 0 8px; text-shadow: 0 0 10px rgba(154,108,224,0.5);
 }
 .souls-earned .num, #go-souls, #go-total, #win-souls, #win-total { color: #d8c4ff; font-weight: 700; }
+
+/* ---- dungeon event modal (Update 2: The Forking Dark) ---- */
+#event-modal {
+  gap: 10px; padding: 6vh 18px 4vh; overflow-y: auto;
+  background: radial-gradient(ellipse at 50% 30%, rgba(20,10,30,0.72), rgba(6,4,10,0.97) 72%);
+}
+.event-icon {
+  width: 60px; height: 60px; image-rendering: pixelated;
+  filter: drop-shadow(0 0 16px var(--ev, #b06bff)) drop-shadow(0 3px 4px rgba(0,0,0,0.8));
+  animation: evFloat 3s ease-in-out infinite;
+}
+@keyframes evFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+#event-title { color: var(--ev, #b06bff); font-size: clamp(20px, 6vw, 32px);
+  text-shadow: 0 0 26px var(--ev, #b06bff), 0 3px 0 #000; }
+.event-flavor { max-width: 34ch; font-size: 13.5px; line-height: 1.6; opacity: 0.9; font-style: italic; color: #d8d0e8; }
+#event-choices { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 440px; margin-top: 6px; }
+.event-choice {
+  text-align: left; padding: 13px 16px; cursor: pointer; color: #ece6f5;
+  background: linear-gradient(150deg, rgba(34,22,46,0.95), rgba(16,10,24,0.97));
+  border: 3px solid var(--ev, #b06bff); border-radius: 4px;
+  box-shadow: inset 0 2px 0 rgba(255,255,255,0.08), 0 4px 0 rgba(0,0,0,0.55), 0 0 16px -3px var(--ev, #b06bff);
+  transition: transform 0.06s, filter 0.06s; animation: cardIn 0.34s cubic-bezier(0.2,1.25,0.35,1) both;
+}
+.event-choice:hover { filter: brightness(1.12); }
+.event-choice:active { transform: translateY(3px); }
+.ec-label { font-family: 'Press Start 2P', monospace; font-size: 10.5px; line-height: 1.55; color: #fff; }
+.ec-risk { font-size: 12px; opacity: 0.85; margin-top: 6px; color: var(--ev, #b06bff); }
+#event-result { display: flex; flex-direction: column; align-items: center; gap: 14px; max-width: 34ch; animation: cardIn 0.3s ease both; }
+#event-result-text { font-size: 14px; line-height: 1.65; color: #e8e0f4; }
+/* shrine prompt button colour */
+#camp-prompt.shrine { background: #b06bff; border-color: #5a2fa0; color: #160a26;
+  box-shadow: inset 0 2px 0 rgba(255,255,255,0.3), 0 5px 0 #5a2fa0; }

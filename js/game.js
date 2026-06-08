@@ -7,6 +7,7 @@ import { recompute, rollStock, RELICS } from './abilities.js';
 import { Assets } from './assets.js';
 import { biomeForLevel } from './biomes.js';
 import { loadMeta, saveMeta, metaBonuses, runSouls, metaCost, LOCKED_RELICS, RELIC_UNLOCK_COST } from './meta.js';
+import { pickEvent } from './events.js';
 
 const BOSS_NAMES = { miniboss: 'The Dark Knight', boss: 'The Demon Lord' };
 
@@ -268,6 +269,43 @@ export class Game {
     ctx.fillStyle = '#7fe0a0'; ctx.fillRect(tx - 4, ty - 9, 4, 5);          // green potion
     ctx.fillStyle = '#e06a9a'; ctx.fillRect(tx + 10, ty - 8, 4, 4);        // pink potion
     ctx.restore();
+
+    // the event shrine (the third path)
+    if (this.camp.shrine && !this.camp.eventUsed) this._drawShrine(ctx, this.camp.shrine, this.camp.event);
+  }
+
+  _drawShrine(ctx, sh, ev) {
+    const t = this.camp.t, pulse = 0.5 + 0.5 * Math.sin(t * 2.4);
+    const col = ev.color || '#b06bff';
+    const x = sh.x, y = sh.y;
+    ctx.save();
+    // ground glow
+    const g = ctx.createRadialGradient(x, y - 6, 3, x, y - 6, 56);
+    g.addColorStop(0, this._rgba(col, 0.4 + 0.25 * pulse)); g.addColorStop(1, this._rgba(col, 0));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y - 6, 56, 0, Math.PI * 2); ctx.fill();
+    // shadow + stone plinth
+    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(x, y + 12, 22, 7, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#3a3446'; ctx.fillRect(x - 16, y + 2, 32, 12);        // base
+    ctx.fillStyle = '#4a4458'; ctx.fillRect(x - 13, y - 10, 26, 14);       // pillar
+    ctx.fillStyle = '#2a2636'; ctx.fillRect(x - 13, y + 2, 26, 2);
+    // a floating rune-stone / sigil bobbing above
+    const ry = y - 24 + Math.sin(t * 2) * 2.5;
+    ctx.fillStyle = this._rgba(col, 0.9);
+    ctx.save(); ctx.translate(x, ry); ctx.rotate(t * 0.6);
+    ctx.fillRect(-7, -7, 14, 14);
+    ctx.fillStyle = '#100a18'; ctx.fillRect(-3, -3, 6, 6);
+    ctx.restore();
+    // its glow
+    const og = ctx.createRadialGradient(x, ry, 0, x, ry, 16 + pulse * 4);
+    og.addColorStop(0, this._rgba(col, 0.7)); og.addColorStop(1, this._rgba(col, 0));
+    ctx.fillStyle = og; ctx.beginPath(); ctx.arc(x, ry, 16 + pulse * 4, 0, Math.PI * 2); ctx.fill();
+    // rising motes
+    for (let i = 0; i < 3; i++) {
+      const my = y - ((t * 22 + i * 16) % 44);
+      ctx.fillStyle = this._rgba(col, 0.6 * pulse);
+      ctx.fillRect(x - 10 + ((i * 7 + t * 9) % 20), my, 2, 2);
+    }
+    ctx.restore();
   }
 
   _drawSorcerer(ctx, s) {
@@ -302,6 +340,7 @@ export class Game {
     const bob = Math.sin(t * 2.5) * 2;
     label('The Sorcerer', c.sorcerer.x, c.sorcerer.y - 94 + bob, '#9af0ff');
     label('Descend ▾', c.door.x, c.door.y - 42 + bob, '#bfe9ff');
+    if (c.shrine && !c.eventUsed) label('? ? ?', c.shrine.x, c.shrine.y - 52 + bob, c.event.color || '#c8a8ff');
     ctx.restore();
   }
 
@@ -630,21 +669,45 @@ export class Game {
       const type = this.spawnQueue.shift();
       const pos = this._spawnPos();   // bosses also stride in from off-screen
       const e = new Enemy(type, pos[0], pos[1], this.level);
-      // rare empowered "elite" foe (never bosses; ramps with depth)
-      if (!e.boss && this.level >= 3 && Math.random() < Math.min(0.2, 0.03 + this.level * 0.02)) {
-        const keys = Object.keys(ELITE_AFFIXES);
-        const key = keys[(Math.random() * keys.length) | 0];
-        e.applyElite(key, ELITE_AFFIXES[key]);
+      // empowered "elite" foe — forced by an event ambush, else rare & depth-scaled
+      if (!e.boss) {
+        if (this.forceElite > 0) { this.forceElite--; this._eliteify(e); }
+        else if (this.level >= 3 && Math.random() < Math.min(0.2, 0.03 + this.level * 0.02)) this._eliteify(e);
       }
       this.enemies.push(e);
       if (type === 'boss' || type === 'miniboss') break; // a boss is its own batch
     }
   }
 
+  _eliteify(e) {
+    const keys = Object.keys(ELITE_AFFIXES);
+    const key = keys[(Math.random() * keys.length) | 0];
+    e.applyElite(key, ELITE_AFFIXES[key]);
+  }
+
   // ---------- dash ----------
   onDash(player) {
-    this.shake = Math.max(this.shake, 3);
+    this.shake = Math.max(this.shake, 2.5);
     this._dashGhostT = 0;
+    const a = Math.atan2(player.fy, player.fx);
+    // a bright launch streak + a spray of sparks kicked out behind the heel
+    this.effects.push({ kind: 'dashstreak', x: player.x, y: player.y - 16, a, t: 0, dur: 0.26 });
+    for (let i = 0; i < 7; i++) {
+      const sa = a + Math.PI + (Math.random() - 0.5) * 1.1, s = 70 + Math.random() * 120;
+      this.effects.push({ kind: 'spark', x: player.x - Math.cos(a) * 8, y: player.y - 14 - Math.sin(a) * 8,
+        vx: Math.cos(sa) * s, vy: Math.sin(sa) * s, t: 0, dur: 0.3, col: '#bfe9ff' });
+    }
+  }
+
+  // glowing after-image trail while dashing (used in play AND the camp room)
+  _dashTrail(p, sdt) {
+    if (!p.dashing) return;
+    this._dashGhostT = (this._dashGhostT || 0) - sdt;
+    if (this._dashGhostT <= 0) {
+      this._dashGhostT = 0.026;
+      this.effects.push({ kind: 'ghost', sprite: p.sprite, frame: pickFrame(p, this.time),
+        x: p.x, y: p.y, faceLeft: p.faceLeft, t: 0, dur: 0.3 });
+    }
   }
 
   // ---------- swing ----------
@@ -780,13 +843,7 @@ export class Game {
     if (this.furyReady && this.input.furyTapped) {
       this.input.furyTapped = false; p.fury = 0; this.furyReady = false; this._ultimate();
     } else if (this.input.furyTapped) { this.input.furyTapped = false; }
-    if (p.dashing) {
-      this._dashGhostT = (this._dashGhostT || 0) - sdt;
-      if (this._dashGhostT <= 0) {
-        this._dashGhostT = 0.03;
-        this.effects.push({ kind: 'ghost', x: p.x, y: p.y, faceLeft: p.faceLeft, t: 0, dur: 0.22 });
-      }
-    }
+    this._dashTrail(p, sdt);
     this._spawn(sdt);
 
     for (const e of this.enemies) e.update(sdt, this);
@@ -1035,12 +1092,17 @@ export class Game {
     const ox = Math.round(this.world.w / 2 - this.vw / 2);
     const oy = Math.round(this.world.h / 2 - this.vh / 2);
     this.cam.x = ox; this.cam.y = oy;
-    this.player.x = ox + this.vw * 0.5; this.player.y = oy + this.vh * 0.42;
+    this.player.x = ox + this.vw * 0.5; this.player.y = oy + this.vh * 0.30;
     this.player.dashTimer = 0; this.player.swingTimer = 0; this.player.invuln = 0;
+    this.forceElite = 0;                    // reset any pending event-ambush
     const b = this.biome;
+    // a third path may open: a risk/reward event shrine (not every camp)
+    const event = Math.random() < 0.7 ? pickEvent(this) : null;
     this.camp = {
-      sorcerer: { x: ox + this.vw * 0.74, y: oy + this.vh * 0.40 },
-      door: { x: ox + this.vw * 0.5, y: oy + this.vh * 0.80 },
+      sorcerer: { x: ox + this.vw * 0.74, y: oy + this.vh * 0.42 },
+      door: { x: ox + this.vw * 0.5, y: oy + this.vh * 0.82 },
+      shrine: event ? { x: ox + this.vw * 0.26, y: oy + this.vh * 0.46 } : null,
+      event, eventUsed: false,
       torches: this._campTorchScreen.map(([x, y]) => ({ x: ox + x, y: oy + y, lava: !!b.lava, torch: b.torch })),
       prompt: null, t: 0,
     };
@@ -1085,12 +1147,16 @@ export class Game {
     this.input.poll();
     const p = this.player;
     p.update(dt, this.input, this);
+    this._dashTrail(p, dt);                     // dash trail in the camp too
     this._updateProjAndFx(dt);                 // animate & clear any practice-swing arcs
     const c = this.camp;
     const sd = Math.hypot(p.x - c.sorcerer.x, p.y - c.sorcerer.y);
     const dd = Math.hypot(p.x - c.door.x, p.y - c.door.y);
+    const shrineLive = c.shrine && !c.eventUsed;
+    const ss = shrineLive ? Math.hypot(p.x - c.shrine.x, p.y - c.shrine.y) : Infinity;
     let prompt = null;
     if (sd < 70) prompt = 'sorcerer';
+    else if (ss < 66) prompt = 'shrine';
     else if (dd < 60) prompt = 'door';
     if (prompt !== c.prompt) { c.prompt = prompt; this.ui.setCampPrompt(prompt); }
   }
@@ -1099,6 +1165,20 @@ export class Game {
   campTrade() { if (this.state === 'camp') { this.shopOpen = true; this.ui.setCampPrompt(null); this.ui.showShop(this); } }
   campDescend() { if (this.state === 'camp') { this.ui.setCampPrompt(null); this.ui.hideShop(); this.descend(); } }
   closeShop() { this.shopOpen = false; this.ui.hideShop(); }
+
+  // ---- dungeon event (the third path) ----
+  campInspect() {
+    if (this.state !== 'camp' || !this.camp.event || this.camp.eventUsed) return;
+    this.shopOpen = true; this.ui.setCampPrompt(null);
+    this.ui.showEvent(this, this.camp.event);
+  }
+  chooseEvent(idx) {
+    const ev = this.camp.event;
+    const res = ev.choices[idx].apply(this);
+    this.camp.eventUsed = true; this.camp.prompt = null;
+    return res;
+  }
+  closeEvent() { this.shopOpen = false; this.ui.hideEvent(); this.ui.setCampPrompt(null); }
 
   buyWare(ware) {
     if (!ware || ware.sold || this.gold < ware.cost) return false;
@@ -1179,6 +1259,7 @@ export class Game {
     for (const pk of this.pickups) this._drawPickup(ctx, pk);
 
     for (const fx of this.effects) if (fx.kind === 'ghost') this._drawGhost(ctx, fx);
+    for (const fx of this.effects) if (fx.kind === 'dashstreak') this._drawDashStreak(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'swing') this._drawSwing(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'death') this._drawDeathFx(ctx, fx);
 
@@ -1394,9 +1475,10 @@ export class Game {
     for (const fb of this.allyProjectiles) hole(fb.x, fb.y, 90);
     for (const pr of this.projectiles) hole(pr.x, pr.y, 52);
     for (const pk of this.pickups) hole(pk.x, pk.y, 30);   // loot glints in the dark
-    if (this.state === 'camp' && this.camp) {              // door + sorcerer light the room
+    if (this.state === 'camp' && this.camp) {              // door + sorcerer + shrine light the room
       hole(this.camp.door.x, this.camp.door.y - 6, 120);
       hole(this.camp.sorcerer.x, this.camp.sorcerer.y - 12, 110);
+      if (this.camp.shrine && !this.camp.eventUsed) hole(this.camp.shrine.x, this.camp.shrine.y - 8, 110);
     }
     for (const fx of this.effects) { if (fx.kind === 'boom' || fx.kind === 'ult') hole(fx.x, fx.y, Math.round((fx.r || 80) * 1.1)); }
     g.globalCompositeOperation = 'source-over';
@@ -1819,10 +1901,26 @@ export class Game {
   }
 
   _drawGhost(ctx, fx) {
-    const a = (1 - fx.t / fx.dur) * 0.4;
+    const prog = fx.t / fx.dur;
     ctx.save();
-    ctx.globalAlpha = a;
-    drawSprite(ctx, 'knight', 'idle', fx.x, fx.y, fx.faceLeft, 1, { color: '#9fd8ff', a: 0.8 });
+    ctx.globalAlpha = (1 - prog) * 0.5;
+    drawSprite(ctx, fx.sprite || 'knight', fx.frame || 'idle', fx.x, fx.y, fx.faceLeft, 1, { color: '#aee6ff', a: 0.95 });
+    ctx.restore();
+  }
+
+  _drawDashStreak(ctx, fx) {
+    const prog = fx.t / fx.dur, a = 1 - prog;
+    const dx = Math.cos(fx.a), dy = Math.sin(fx.a);
+    const len = 30 + prog * 34;            // streak stretches out as it fades
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.shadowColor = '#7fd0ff'; ctx.shadowBlur = 12;
+    // soft wide trail
+    ctx.globalAlpha = a * 0.5; ctx.strokeStyle = '#7fd0ff'; ctx.lineWidth = 11 * a + 2;
+    ctx.beginPath(); ctx.moveTo(fx.x - dx * len, fx.y - dy * len); ctx.lineTo(fx.x - dx * 6, fx.y - dy * 6); ctx.stroke();
+    // bright core
+    ctx.globalAlpha = a * 0.9; ctx.strokeStyle = '#eaffff'; ctx.lineWidth = 4 * a + 1;
+    ctx.beginPath(); ctx.moveTo(fx.x - dx * len * 0.85, fx.y - dy * len * 0.85); ctx.lineTo(fx.x - dx * 4, fx.y - dy * 4); ctx.stroke();
     ctx.restore();
   }
 
@@ -1830,7 +1928,7 @@ export class Game {
     const a = 1 - fx.t / fx.dur;
     ctx.save();
     ctx.globalAlpha = a;
-    ctx.fillStyle = '#fff3c0';
+    ctx.fillStyle = fx.col || '#fff3c0';
     ctx.fillRect(fx.x - 1.5, fx.y - 1.5, 3, 3);
     ctx.restore();
   }

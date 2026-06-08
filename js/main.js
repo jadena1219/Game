@@ -10,6 +10,7 @@ const screens = {
   title: document.getElementById('title-screen'),
   'hero-select': document.getElementById('hero-select'),
   sanctum: document.getElementById('sanctum'),
+  event: document.getElementById('event-modal'),
   shop: document.getElementById('shop-modal'),
   gameover: document.getElementById('game-over'),
   victory: document.getElementById('victory'),
@@ -141,8 +142,40 @@ const ui = {
     if (!kind) { b.classList.add('hidden'); return; }
     b.classList.remove('hidden');
     if (kind === 'sorcerer') { b.textContent = 'Trade'; b.className = 'sorcerer'; b.onclick = () => game.campTrade(); }
+    else if (kind === 'shrine') { b.textContent = 'Inspect'; b.className = 'shrine'; b.onclick = () => game.campInspect(); }
     else { b.textContent = 'Descend'; b.className = 'door'; b.onclick = () => game.campDescend(); }
   },
+
+  // A dungeon event — risk/reward decision at the shrine.
+  showEvent(g, ev) {
+    const m = document.getElementById('event-modal');
+    m.style.setProperty('--ev', ev.color || '#b06bff');
+    document.getElementById('event-icon').src = `assets/icons/${ev.icon}.png`;
+    document.getElementById('event-title').textContent = ev.title;
+    const flavor = document.getElementById('event-flavor');
+    flavor.textContent = ev.flavor; flavor.classList.remove('hidden');
+    const choices = document.getElementById('event-choices');
+    choices.innerHTML = ''; choices.classList.remove('hidden');
+    ev.choices.forEach((ch, i) => {
+      const el = document.createElement('button');
+      el.className = 'event-choice';
+      el.style.animationDelay = (i * 0.07) + 's';
+      el.innerHTML = `<div class="ec-label">${ch.label}</div><div class="ec-risk">${ch.risk}</div>`;
+      el.onclick = () => this._showEventResult(g, g.chooseEvent(i));
+      choices.appendChild(el);
+    });
+    document.getElementById('event-result').classList.add('hidden');
+    this.showScreen('event');
+  },
+  _showEventResult(g, res) {
+    document.getElementById('event-choices').classList.add('hidden');
+    document.getElementById('event-flavor').classList.add('hidden');
+    const r = document.getElementById('event-result');
+    r.classList.remove('hidden');
+    document.getElementById('event-result-text').textContent = res;
+    document.getElementById('event-continue').onclick = () => g.closeEvent();
+  },
+  hideEvent() { this.showScreen(null); },
 
   // The sorcerer's trade panel — spend gold on forge upgrades & relics.
   showShop(g) {

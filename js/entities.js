@@ -37,14 +37,16 @@ export class Player {
     this.abilities = [];               // (kept empty: the knight is the core)
     this.fury = 0; this.furyMax = 100;
     this.slowT = 0;                    // >0 while chilled by a Frostbound elite
+    this.eventDmg = 1;                 // run-scoped multipliers from dungeon events
+    this.eventHP = 0;
   }
 
   get facingAngle() { return Math.atan2(this.fy, this.fx); }
   get dashing() { return this.dashTimer > 0; }
-  get maxHP() { return this.hero.maxHP + (this.mods ? this.mods.bonusHP : 0) + this.metaB.hp; }
-  // effective stats after upgrades (per-hero base + meta-progression)
+  get maxHP() { return Math.max(1, this.hero.maxHP + (this.mods ? this.mods.bonusHP : 0) + this.metaB.hp + this.eventHP); }
+  // effective stats after upgrades (per-hero base + meta-progression + events)
   get moveSpeed() { return this.hero.speed * this.mods.moveSpeedMult * (1 + this.metaB.spd) * (this.slowT > 0 ? 0.55 : 1); }
-  get swordDamage() { return this.hero.swordDamage * this.mods.swordDamageMult * (1 + this.metaB.dmg); }
+  get swordDamage() { return this.hero.swordDamage * this.mods.swordDamageMult * (1 + this.metaB.dmg) * this.eventDmg; }
   get reach() { return this.hero.swordReach * this.mods.reachMult; }
   get arcDeg() { return this.hero.swordArcDeg + this.mods.arcBonusDeg; }
   get swingCooldown0() { return this.hero.swingCooldown * this.mods.swingCooldownMult; }

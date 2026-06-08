@@ -7,8 +7,11 @@ function norm(x, y) { const l = Math.hypot(x, y) || 1; return [x / l, y / l]; }
 function angDiff(a, b) { let d = (a - b) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; }
 
 export class Player {
-  constructor(x, y) {
+  constructor(x, y, heroId = 'knight') {
     this.x = x; this.y = y;
+    this.heroId = heroId;
+    this.hero = CONFIG.heroes[heroId] || CONFIG.heroes.knight;
+    this.sprite = this.hero.sprite;
     this.mods = BASE_MODS();
     this.hp = this.maxHP;
     this.r = CONFIG.player.radius;
@@ -36,35 +39,34 @@ export class Player {
 
   get facingAngle() { return Math.atan2(this.fy, this.fx); }
   get dashing() { return this.dashTimer > 0; }
-  get maxHP() { return CONFIG.player.maxHP + (this.mods ? this.mods.bonusHP : 0); }
-  // effective stats after upgrades
-  get moveSpeed() { return CONFIG.player.speed * this.mods.moveSpeedMult; }
-  get swordDamage() { return CONFIG.player.swordDamage * this.mods.swordDamageMult; }
-  get reach() { return CONFIG.player.swordReach * this.mods.reachMult; }
-  get arcDeg() { return CONFIG.player.swordArcDeg + this.mods.arcBonusDeg; }
-  get swingCooldown0() { return CONFIG.player.swingCooldown * this.mods.swingCooldownMult; }
-  get dashCooldown0() { return CONFIG.player.dashCooldown * this.mods.dashCooldownMult; }
+  get maxHP() { return this.hero.maxHP + (this.mods ? this.mods.bonusHP : 0); }
+  // effective stats after upgrades (per-hero base)
+  get moveSpeed() { return this.hero.speed * this.mods.moveSpeedMult; }
+  get swordDamage() { return this.hero.swordDamage * this.mods.swordDamageMult; }
+  get reach() { return this.hero.swordReach * this.mods.reachMult; }
+  get arcDeg() { return this.hero.swordArcDeg + this.mods.arcBonusDeg; }
+  get swingCooldown0() { return this.hero.swingCooldown * this.mods.swingCooldownMult; }
+  get dashCooldown0() { return this.hero.dashCooldown * this.mods.dashCooldownMult; }
 
   startSwing() {
-    const p = CONFIG.player;
-    this.swingTimer = p.swingActive;
+    this.swingTimer = this.hero.swingActive;
     this.swingCD = this.swingCooldown0;
-    this.attackAnim = p.swingActive + 0.08;
+    this.attackAnim = this.hero.swingActive + 0.08;
     this.swingProgress = 0;
     this.hitThisSwing.clear();
     this._swinging = true;
   }
 
   startDash(mv, mlen, game) {
-    const p = CONFIG.player;
+    const h = this.hero;
     let dx, dy;
     if (mlen > 0.1) { dx = mv.x / mlen; dy = mv.y / mlen; }
     else { dx = this.fx; dy = this.fy; }       // dash forward if not steering
     this.dashDirX = dx; this.dashDirY = dy;
     this.fx = dx; this.fy = dy; this.faceLeft = dx < 0;
-    this.dashTimer = p.dashDur;
+    this.dashTimer = h.dashDur;
     this.dashCD = this.dashCooldown0;
-    this.invuln = Math.max(this.invuln, p.dashDur + p.dashInvuln + this.mods.dashInvulnBonus);
+    this.invuln = Math.max(this.invuln, h.dashDur + h.dashInvuln + this.mods.dashInvulnBonus);
     game.onDash(this);
   }
 
@@ -84,8 +86,8 @@ export class Player {
     if (this.dashTimer > 0) {
       // dashing: locked-direction burst, ignores steering
       this.dashTimer -= dt;
-      this.x += this.dashDirX * p.dashSpeed * dt;
-      this.y += this.dashDirY * p.dashSpeed * dt;
+      this.x += this.dashDirX * this.hero.dashSpeed * dt;
+      this.y += this.dashDirY * this.hero.dashSpeed * dt;
       this.moving = true;
     } else {
       this.moving = mlen > 0.08;
@@ -109,7 +111,7 @@ export class Player {
     if (this.flash > 0) this.flash -= dt;
     if (this.swingTimer > 0) {
       this.swingTimer -= dt;
-      this.swingProgress = 1 - Math.max(0, this.swingTimer) / p.swingActive;
+      this.swingProgress = 1 - Math.max(0, this.swingTimer) / this.hero.swingActive;
     } else {
       this._swinging = false;
     }
@@ -123,7 +125,8 @@ export class Player {
 
   takeHit(dmg) {
     if (this.invuln > 0 || this.dead) return false;
-    this.hp -= dmg * (1 - this.mods.damageReduction);
+    const dr = Math.min(0.85, this.mods.damageReduction + (this.hero.damageReduction || 0));
+    this.hp -= dmg * (1 - dr);
     this.invuln = CONFIG.player.invuln;
     this.flash = 0.25;
     if (this.hp <= 0) { this.hp = 0; this.dead = true; }

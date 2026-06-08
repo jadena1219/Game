@@ -301,9 +301,10 @@ export class Game {
 
   // ---------- flow ----------
   // A fresh run resets all progression (death sends you back to Level 1).
-  start() {
+  start(heroId = 'knight') {
+    this.heroId = heroId;
     this._slashWipe(() => {
-      this.player = new Player(this.world.w / 2, this.world.h / 2);
+      this.player = new Player(this.world.w / 2, this.world.h / 2, heroId);
       this.kills = 0; this.level = 1; this.gold = 0; this.totalGold = 0;
       this.hpDisplay = this.hpGhost = this.player.maxHP;
       this.timeScale = 1; this.dying = 0;
@@ -594,7 +595,7 @@ export class Game {
   _applySwingDamage() {
     const p = this.player;
     if (p.swingTimer <= 0) return;
-    const kbStrength = CONFIG.player.knockback;
+    const kbStrength = p.hero.knockback;
     const missing = 1 - p.hp / p.maxHP;
     const berserk = p.relics.has('berserk') ? 1 + 0.45 * missing : 1;
     for (const e of this.enemies) {
@@ -604,9 +605,23 @@ export class Game {
         const kb = e.boss ? kbStrength * 0.25 : kbStrength;
         let dmg = p.swordDamage * berserk;
         if (p.relics.has('exec') && e.hp < e.maxHP * 0.35) dmg *= 1.7;
-        this.hitEnemy(e, dmg, kx * kb, ky * kb, 'sword');
+        // Rogue: chance to crit
+        let crit = false;
+        if (p.hero.crit && Math.random() < p.hero.crit) { dmg *= p.hero.critMult; crit = true; }
+        this.hitEnemy(e, dmg, kx * kb, ky * kb, crit ? 'ultimate' : 'sword');
         p.hitThisSwing.add(e);
-        this.shake = Math.max(this.shake, e.boss ? 5 : 3.5);
+        this.shake = Math.max(this.shake, e.boss ? 5 : (crit ? 5 : 3.5));
+        // Paladin: crushing blows ripple out a shockwave
+        if (p.hero.shockwave) {
+          this.addEffect({ kind: 'ring', x: e.x, y: e.y, r: 48, color: '#e9c84a', t: 0, dur: 0.3 });
+          for (const o of this.enemiesInRadius(e.x, e.y, 48)) {
+            if (o === e || p.hitThisSwing.has(o)) continue;
+            const a = Math.atan2(o.y - e.y, o.x - e.x);
+            this.hitEnemy(o, dmg * 0.4, Math.cos(a) * 200, Math.sin(a) * 200, 'ability');
+            p.hitThisSwing.add(o);
+          }
+          this.hitStop = Math.max(this.hitStop, 0.04);
+        }
       }
     }
     // deflect projectiles caught in the arc
@@ -1630,7 +1645,7 @@ export class Game {
       const off = 1.5 + pulse;
       const aura = { color: '#c89aff', a: 0.55 + 0.35 * pulse };
       for (const [dx, dy] of [[off, 0], [-off, 0], [0, off], [0, -off]]) {
-        drawSprite(ctx, 'knight', frame, p.x + dx, p.y + dy, p.faceLeft, 1, aura);
+        drawSprite(ctx, p.sprite, frame, p.x + dx, p.y + dy, p.faceLeft, 1, aura);
       }
       ctx.restore();
     }
@@ -1638,7 +1653,7 @@ export class Game {
       ctx.globalAlpha = 0.6;   // blink during i-frames
     }
     const tint = p.flash > 0 ? { color: '#ff5a5a', a: 0.6 } : null;
-    drawSprite(ctx, 'knight', frame, p.x, p.y, p.faceLeft, 1, tint);
+    drawSprite(ctx, p.sprite, frame, p.x, p.y, p.faceLeft, 1, tint);
     ctx.globalAlpha = 1;
   }
 

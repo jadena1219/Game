@@ -1,13 +1,18 @@
 // Entry point: load sprites, wire up the menus, run the game.
 import { loadAssets } from './assets.js';
 import { Game } from './game.js';
+import { CONFIG } from './config.js';
+import { drawSprite } from './sprite.js';
 
 const screens = {
   title: document.getElementById('title-screen'),
+  'hero-select': document.getElementById('hero-select'),
   shop: document.getElementById('shop-modal'),
   gameover: document.getElementById('game-over'),
   victory: document.getElementById('victory'),
 };
+
+const HERO_IDS = ['knight', 'rogue', 'paladin'];
 
 let game = null;
 
@@ -16,9 +21,57 @@ const numWrap = (s) => String(s).replace(/(\d+)/g, '<span class="num">$1</span>'
 
 const ui = {
   showScreen(name) {
+    if (name !== 'hero-select') this._heroAnim = false;   // stop preview loop on leave
     for (const [k, el] of Object.entries(screens)) {
       el.classList.toggle('hidden', k !== name);
     }
+  },
+
+  // Hero select — choose your champion (shown after the title 'Begin').
+  showHeroSelect() {
+    const wrap = document.getElementById('hero-cards');
+    wrap.innerHTML = '';
+    const previews = [];
+    HERO_IDS.forEach((id, i) => {
+      const h = CONFIG.heroes[id];
+      const card = document.createElement('button');
+      card.className = 'hero-card';
+      card.style.setProperty('--accent', h.accent);
+      card.style.animationDelay = (i * 0.09) + 's';
+      const pip = (n, on) => Array.from({ length: 5 }, (_, k) => `<i class="${k < n ? 'on' : ''}"></i>`).join('');
+      card.innerHTML =
+        `<div class="hero-stage"><canvas width="96" height="120"></canvas></div>` +
+        `<div class="hero-info">` +
+          `<div class="hero-name">${h.name}</div>` +
+          `<div class="hero-title">${h.title} &middot; ${h.weapon}</div>` +
+          `<div class="hero-blurb">${h.blurb}</div>` +
+          `<div class="hero-stats">` +
+            `<div class="hstat"><span>HEALTH</span><div class="pips">${pip(h.pips.hp)}</div></div>` +
+            `<div class="hstat"><span>SPEED</span><div class="pips">${pip(h.pips.spd)}</div></div>` +
+            `<div class="hstat"><span>POWER</span><div class="pips">${pip(h.pips.pow)}</div></div>` +
+          `</div>` +
+        `</div>`;
+      const cv = card.querySelector('canvas');
+      previews.push({ ctx: cv.getContext('2d'), sprite: h.sprite });
+      card.addEventListener('click', () => { this._heroAnim = false; game.start(id); });
+      wrap.appendChild(card);
+    });
+    this.showScreen('hero-select');
+    // animated idle/walk loop for the previews
+    this._heroAnim = true;
+    const t0 = performance.now();
+    const loop = () => {
+      if (!this._heroAnim) return;
+      const t = (performance.now() - t0) / 1000;
+      for (const p of previews) {
+        p.ctx.clearRect(0, 0, 96, 120);
+        const frame = (t % 0.9) < 0.45 ? 'walkA' : 'walkB';
+        const bob = Math.sin(t * 4) * 2;
+        drawSprite(p.ctx, p.sprite, frame, 48, 110 + bob, false, 1.55);
+      }
+      requestAnimationFrame(loop);
+    };
+    loop();
   },
 
   // Floating prompt while roaming the camp room.
@@ -124,9 +177,9 @@ async function boot() {
   game = new Game(canvas, ui);
   ui.showScreen('title');
 
-  document.getElementById('start-btn').addEventListener('click', () => game.start());
-  document.getElementById('retry-btn').addEventListener('click', () => game.start());
-  document.getElementById('win-btn').addEventListener('click', () => game.start());
+  document.getElementById('start-btn').addEventListener('click', () => ui.showHeroSelect());
+  document.getElementById('retry-btn').addEventListener('click', () => ui.showHeroSelect());
+  document.getElementById('win-btn').addEventListener('click', () => ui.showHeroSelect());
 }
 
 boot();

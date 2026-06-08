@@ -164,7 +164,13 @@ function drawHead(g, spec, skin, body, detail, eye, oy) {
       g.rect(hx0, hy0, hx1, hy1, steel);
       g.rect(hx0, hy0, hx0, hy1, shade(steel, 1.3));
       g.rect(hx0, hy0 + 3, hx1, hy0 + 3, eye); // visor slit
-      g.rect(7, hy0 - 1, 8, hy0 - 1, hex(spec.crest || '#c83737')); // crest
+      const crest = hex(spec.crest || '#c83737');
+      if (spec.plume) {                         // tall feathered plume (paladin)
+        g.rect(7, hy0 - 5, 8, hy0 - 1, crest);
+        g.px(6, hy0 - 4, crest); g.px(9, hy0 - 3, crest); g.px(8, hy0 - 6, crest);
+      } else {
+        g.rect(7, hy0 - 1, 8, hy0 - 1, crest); // small crest
+      }
       break;
     }
     case 'hood': {
@@ -252,6 +258,26 @@ function drawWeapon(g, spec, skin, oy, attack) {
       g.rect(13, 16 + oy, 13, 18 + oy, wood);
       g.px(12, 10 + oy, woodHi);
     }
+  } else if (spec.weapon === 'daggers') {
+    const blade = hex(spec.blade || '#cdd6e2'), edge = hex('#ffffff'), guard = hex(spec.guard || '#8a6a3a');
+    if (attack) {
+      // quick forward stab
+      g.rect(12, 8 + oy, 15, 9 + oy, blade); g.px(15, 8 + oy, edge);
+      g.rect(11, 9 + oy, 12, 10 + oy, guard);
+    } else {
+      // short blade held at the side
+      g.rect(13, 9 + oy, 13, 13 + oy, blade); g.px(13, 9 + oy, edge);
+      g.rect(12, 13 + oy, 14, 13 + oy, guard);
+    }
+  } else if (spec.weapon === 'hammer') {
+    const wood = hex('#6b4a2a'), head = hex(spec.hammerHead || '#9aa6b8'), headHi = shade(hex(spec.hammerHead || '#9aa6b8'), 1.25);
+    if (attack) {
+      g.rect(11, 3 + oy, 15, 6 + oy, head); g.px(15, 3 + oy, headHi); // raised head
+      g.rect(11, 6 + oy, 12, 10 + oy, wood);                          // handle
+    } else {
+      g.rect(13, 8 + oy, 13, 15 + oy, wood);                          // handle down
+      g.rect(11, 14 + oy, 15, 17 + oy, head); g.px(11, 14 + oy, headHi); // head low
+    }
   }
 }
 
@@ -262,6 +288,16 @@ const CHARACTERS = {
     arms: '#5d6b7d', belt: '#7a5230', head: 'helmet', crest: '#c83737',
     emblem: '#d8c24a', weapon: 'greatsword', blade: '#bfe9ff', guard: '#d8c24a',
     scale: 1.0,
+  },
+  rogue: { // nimble dagger hero — dark leather + hood, no beard
+    skin: '#e0b48c', body: '#3a2e22', detail: '#241c14', legs: '#2a2018',
+    arms: '#3a2e22', head: 'hood', head_col: '#241c14', belt: '#6b4a2a',
+    weapon: 'daggers', blade: '#dfe6f0', eye: '#9affc0', scale: 1.0,
+  },
+  paladin: { // heavy hammer hero — holy GOLD plate + tall white plume (distinct from the blue knight)
+    skin: '#e8b894', body: '#e0c24a', detail: '#a8841f', legs: '#b89a2e',
+    arms: '#e0c24a', head: 'helmet', crest: '#f4f7ff', emblem: '#fff6c8', plume: true,
+    belt: '#7a5a16', weapon: 'hammer', hammerHead: '#cfd6e0', eye: '#fff0a0', scale: 1.12,
   },
   skeleton: {
     skin: '#e7e6da', body: '#cfcdbe', detail: '#9a9788', legs: '#cfcdbe',

@@ -12,6 +12,14 @@
       "file": "knight.png",
       "scale": 1
     },
+    "rogue": {
+      "file": "rogue.png",
+      "scale": 1
+    },
+    "paladin": {
+      "file": "paladin.png",
+      "scale": 1.12
+    },
     "skeleton": {
       "file": "skeleton.png",
       "scale": 1

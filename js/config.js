@@ -22,6 +22,36 @@ export const CONFIG = {
     dashInvuln: 0.32,       // s of invulnerability granted by a dash (slip through crowds)
   },
 
+  // Playable heroes — each overrides the base stats with a distinct feel.
+  heroes: {
+    knight: {
+      name: 'Knight', sprite: 'knight', weapon: 'Greatsword', title: 'The Veteran',
+      pips: { hp: 3, spd: 3, pow: 3 }, accent: '#7fb0ff',
+      blurb: 'The balanced veteran. Wide cleaving swings that shove crowds back.',
+      maxHP: 100, speed: 200, swordDamage: 34, swordReach: 78, swordArcDeg: 120,
+      swingCooldown: 0.42, swingActive: 0.16, knockback: 230,
+      dashSpeed: 760, dashDur: 0.18, dashCooldown: 0.85, dashInvuln: 0.32,
+    },
+    rogue: {
+      name: 'Rogue', sprite: 'rogue', weapon: 'Twin Daggers', title: 'The Shadow',
+      pips: { hp: 2, spd: 5, pow: 2 }, accent: '#7affc0',
+      blurb: 'Fragile but lightning fast. A flurry of strikes, constant dashes, deadly crits.',
+      maxHP: 70, speed: 234, swordDamage: 15, swordReach: 56, swordArcDeg: 84,
+      swingCooldown: 0.19, swingActive: 0.11, knockback: 110,
+      dashSpeed: 830, dashDur: 0.18, dashCooldown: 0.48, dashInvuln: 0.44,
+      crit: 0.30, critMult: 2.2,
+    },
+    paladin: {
+      name: 'Paladin', sprite: 'paladin', weapon: 'Warhammer', title: 'The Bulwark',
+      pips: { hp: 5, spd: 1, pow: 5 }, accent: '#ffd86a',
+      blurb: 'A slow, unstoppable wall. Crushing blows send out shockwaves; shrugs off damage.',
+      maxHP: 158, speed: 168, swordDamage: 52, swordReach: 84, swordArcDeg: 132,
+      swingCooldown: 0.62, swingActive: 0.18, knockback: 360,
+      dashSpeed: 660, dashDur: 0.18, dashCooldown: 1.1, dashInvuln: 0.3,
+      damageReduction: 0.15, shockwave: true,
+    },
+  },
+
   // HP restored after clearing each level (capped at maxHP)
   hpRestorePerLevel: 35,
 

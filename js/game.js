@@ -1137,7 +1137,7 @@ export class Game {
   // The Demon Lord's voice: black out, type his words in blood red, then fade
   // back into the dungeon (the camp). Runs as its own state, the field frozen.
   _beginInterlude(line) {
-    const wrapped = this._wrapText(line, 13);                 // short lines → big type
+    const wrapped = this._wrapText(line, 24);                 // longer lines read horizontally
     const totalChars = wrapped.reduce((s, l) => s + l.length, 0);
     this.interlude = { line, wrapped, totalChars, shown: 0, phase: 'in', t: 0 };
     this.state = 'interlude';
@@ -2058,15 +2058,15 @@ export class Game {
     rg.addColorStop(0, 'rgba(60,4,4,0.5)'); rg.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H);
 
-    // BIG type — short wrapped lines sized to fill most of the screen
+    // readable type — longer wrapped lines, sized to fit the width
     const lines = il.wrapped;
     ctx.font = '100px "Silkscreen", monospace';
     let longest = 1; for (const l of lines) longest = Math.max(longest, ctx.measureText(l).width);
-    const sizeW = 100 * (W * 0.9) / longest;               // fill the width
-    const sizeH = (H * 0.7) / (lines.length * 1.38);       // …or the height, whichever's smaller
-    const size = Math.max(14, Math.min(sizeW, sizeH, 60));
+    const sizeW = 100 * (W * 0.86) / longest;              // fill the width
+    const sizeH = (H * 0.6) / (lines.length * 1.5);        // …or the height, whichever's smaller
+    const size = Math.max(12, Math.min(sizeW, sizeH, 30));
     ctx.font = `${size}px "Silkscreen", monospace`;
-    const lh = size * 1.38, cy = H * 0.46 - (lines.length - 1) * lh / 2;
+    const lh = size * 1.5, cy = H * 0.46 - (lines.length - 1) * lh / 2;
 
     const shownN = Math.floor(il.shown);
     let counted = 0, cursorPlaced = false;

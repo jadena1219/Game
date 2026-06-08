@@ -49,7 +49,7 @@ export class Game {
     this.hpGhost = 100;        // lagging "damage taken" chunk
     this.titleT = 0;           // title-scene animation clock
     this.tunnelScroll = 0;     // how far the title corridor has scrolled past
-    this.introFade = null;     // corridor snapshot dissolving into Level 1
+    this.introCut = null;      // iris-to-black blink from the corridor into Level 1
     this.wipeEl = document.getElementById('wipe');
 
     // --- Phase 3b: open world ---
@@ -372,12 +372,9 @@ export class Game {
     const endSx = this.introEnd - this.tunnelScroll;
     if (!this.introFired && (endSx < hx - 90 || this.introT > 6.5)) {
       this.introFired = true;
-      // freeze him standing in the opening, then dissolve that into the arena
-      const buf = this._tunnelBuf || (this._tunnelBuf = document.createElement('canvas'));
-      buf.width = this.vw; buf.height = this.vh;
-      this._drawTunnelScene(buf.getContext('2d'));
-      this.introFade = { t: 0, dur: 0.7 };
-      this.start(this.heroId, false);   // no slash-wipe — the dissolve covers the cut
+      // the dark blinks shut around him; Level 1 is swapped in under full black
+      // (handled by the introCut tick), then the iris opens in the new room.
+      this.introCut = { t: 0, dur: 0.62, fired: false };
     }
   }
 
@@ -930,9 +927,14 @@ export class Game {
     this.titleT += dt;
     // the title corridor scrolls on its own — a slow, careful stroll into the dark
     if (this.state === 'title') this.tunnelScroll += dt * 34;
-    if (this.introFade) {
-      this.introFade.t += dt;
-      if (this.introFade.t >= this.introFade.dur) this.introFade = null;
+    if (this.introCut) {
+      this.introCut.t += dt;
+      // swap to Level 1 at the instant the iris is fully closed (under black)
+      if (!this.introCut.fired && this.introCut.t >= this.introCut.dur * 0.42) {
+        this.introCut.fired = true;
+        this.start(this.heroId, false);   // no slash-wipe — the blink covers the cut
+      }
+      if (this.introCut.t >= this.introCut.dur) this.introCut = null;
     }
     // smoothed health bar
     if (this.player) {
@@ -1289,6 +1291,7 @@ export class Game {
     if (title || this.state === 'intro') {
       ctx.clearRect(0, 0, this.vw, this.vh);
       this._drawTunnelScene(ctx);
+      this._drawIntroCut(ctx);        // the dark blinking shut as he steps through
       this._drawTransition(ctx);
       return;
     }
@@ -1348,7 +1351,7 @@ export class Game {
 
     this._drawAtmos(ctx);           // biome weather (screen overlay)
     this._drawGrade(ctx);           // biome colour grade (screen overlay)
-    this._drawIntroFade(ctx);       // corridor snapshot dissolving into Level 1
+    this._drawIntroCut(ctx);        // iris opening back up inside Level 1
     this._drawDeathOverlay(ctx);    // desaturate + "YOU FELL" during dying/gameover lead-in
     this._drawVictory(ctx);         // golden celebration during the 'won' sequence
 
@@ -1782,14 +1785,22 @@ export class Game {
     ctx.restore();
   }
 
-  // The cut into Level 1: a frozen snapshot of the corridor dissolves away,
-  // revealing the open arena beneath — no white flash, he just walks out.
-  _drawIntroFade(ctx) {
-    if (!this.introFade || !this._tunnelBuf) return;
-    ctx.save();
-    ctx.globalAlpha = Math.max(0, 1 - this.introFade.t / this.introFade.dur);
-    ctx.drawImage(this._tunnelBuf, 0, 0);
-    ctx.restore();
+  // The cut into Level 1: an iris of darkness snaps shut on the knight, the
+  // level is swapped in under full black, then the iris opens in the new room.
+  // No crossfade, no double-image — a hard blink that the dark motivates.
+  _drawIntroCut(ctx) {
+    if (!this.introCut) return;
+    const { t, dur } = this.introCut, half = dur * 0.42;
+    const c = t < half ? t / half : 1 - (t - half) / (dur - half);   // 0..1 darkness
+    const cl = Math.max(0, Math.min(1, c));
+    const W = this.vw, H = this.vh, cx = W * 0.48, cy = H * 0.5;
+    const maxR = Math.hypot(W, H) * 0.62, feather = 80;
+    const r = (1 - cl) * maxR;
+    const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, r + feather);
+    grd.addColorStop(0, 'rgba(0,0,0,0)');
+    grd.addColorStop(Math.max(0, Math.min(1, r / (r + feather))), 'rgba(0,0,0,0)');
+    grd.addColorStop(1, 'rgba(0,0,0,1)');
+    ctx.save(); ctx.fillStyle = grd; ctx.fillRect(0, 0, W, H); ctx.restore();
   }
 
   _drawDeathFx(ctx, fx) {

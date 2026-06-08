@@ -53,6 +53,8 @@ export class Game {
     // --- Phase 2 polish state ---
     this.embers = [];          // ambient floating ember particles
     this.transition = null;    // slash-wipe between scenes
+    this.plunge = null;        // "plunge into darkness" descent sequence
+    this.camDrop = 0;          // world y-offset while falling through the pit
     this.countdown = 0;        // 3..2..1..FIGHT pre-level timer
     this.intro = null;         // level/boss intro card
     this.sweep = null;         // "LEVEL CLEARED" banner sweep
@@ -365,30 +367,91 @@ export class Game {
   }
 
   // ---- camp room props ----
-  _drawCampFloor(ctx) {
-    const t = this.camp.t;
-    // glowing descent door at the bottom wall
-    const d = this.camp.door, pulse = 0.7 + 0.3 * Math.sin(t * 3);
+  // The way down: a yawning pit smashed through the floor, worn steps funnelling
+  // into a red-lit abyss far below, breathing cold mist. Descending is a big deal.
+  _drawDescentPit(ctx, d, t) {
+    const p = this.player;
+    const near = p ? Math.max(0, 1 - Math.hypot(p.x - d.x, p.y - d.y) / 150) : 0;
+    const pulse = 0.5 + 0.5 * Math.sin(t * 2.4);
+    const rx = 58, ry = 38;
     ctx.save();
-    const g = ctx.createRadialGradient(d.x, d.y, 4, d.x, d.y, 60);
-    g.addColorStop(0, `rgba(210,240,255,${0.9 * pulse})`);
-    g.addColorStop(0.5, `rgba(150,210,255,${0.45 * pulse})`);
-    g.addColorStop(1, 'rgba(120,180,255,0)');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(d.x, d.y, 46, 54, 0, 0, Math.PI * 2); ctx.fill();
-    // archway frame
-    ctx.strokeStyle = `rgba(220,245,255,${pulse})`; ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.moveTo(d.x - 22, d.y + 24); ctx.lineTo(d.x - 22, d.y - 10);
-    ctx.arc(d.x, d.y - 10, 22, Math.PI, 0); ctx.lineTo(d.x + 22, d.y + 24); ctx.stroke();
-    // bright core
-    ctx.fillStyle = `rgba(255,255,255,${0.5 * pulse})`;
-    ctx.beginPath(); ctx.ellipse(d.x, d.y + 4, 14, 24, 0, 0, Math.PI * 2); ctx.fill();
-    // rising sparks
-    for (let i = 0; i < 4; i++) {
-      const yy = d.y + 20 - ((t * 30 + i * 18) % 50);
-      ctx.fillStyle = `rgba(210,240,255,${0.6 * pulse})`;
-      ctx.fillRect(d.x - 16 + ((i * 9 + t * 14) % 32), yy, 2, 2);
+
+    // jagged cracks clawing out across the floor from the rim
+    ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+    for (const ca of [0.3, 1.1, 1.9, 2.7, 3.5, 4.2, 5.0, 5.8]) {
+      const jx = Math.cos(ca), jy = Math.sin(ca) * 0.66;
+      ctx.beginPath();
+      ctx.moveTo(d.x + jx * rx * 0.92, d.y + jy * ry * 0.92);
+      let cx = d.x + jx * rx * 1.0, cy = d.y + jy * ry * 1.0;
+      for (let s = 0; s < 3; s++) {
+        cx += jx * (10 + Math.random() * 6) + (Math.random() - 0.5) * 8;
+        cy += jy * (10 + Math.random() * 6) + (Math.random() - 0.5) * 8;
+        ctx.lineTo(cx, cy);
+      }
+      ctx.stroke();
+    }
+
+    // recessed rim shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.beginPath(); ctx.ellipse(d.x, d.y + 3, rx + 6, ry + 5, 0, 0, Math.PI * 2); ctx.fill();
+
+    // funnel of descending stone steps — each smaller, higher (further back), darker
+    const N = 6;
+    for (let i = 0; i < N; i++) {
+      const f = i / N;
+      const sx = rx * (1 - f * 0.8), sy = ry * (1 - f * 0.72);
+      const cy = d.y - f * ry * 0.55;
+      const sh = Math.round(34 * (1 - f));
+      ctx.fillStyle = `rgb(${sh + 8},${sh + 7},${sh + 12})`;
+      ctx.beginPath(); ctx.ellipse(d.x, cy, sx, sy, 0, 0, Math.PI * 2); ctx.fill();
+      // worn tread highlight on the near lip of each step
+      ctx.strokeStyle = `rgba(140,140,165,${0.22 * (1 - f)})`; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.ellipse(d.x, cy, sx, sy, 0, 0.18 * Math.PI, 0.82 * Math.PI); ctx.stroke();
+    }
+
+    // the black throat at the bottom
+    const bx = d.x, by = d.y - ry * 0.55;
+    ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.ellipse(bx, by, rx * 0.2, ry * 0.24, 0, 0, Math.PI * 2); ctx.fill();
+
+    // the Demon Lord's light, bleeding up from far below (brighter as you near)
+    ctx.globalCompositeOperation = 'lighter';
+    const glow = 0.22 + 0.16 * pulse + 0.35 * near;
+    const rg = ctx.createRadialGradient(bx, by, 0, bx, by, rx * 0.7);
+    rg.addColorStop(0, `rgba(255,46,22,${glow})`);
+    rg.addColorStop(0.5, `rgba(150,16,8,${glow * 0.5})`);
+    rg.addColorStop(1, 'rgba(80,0,0,0)');
+    ctx.fillStyle = rg;
+    ctx.beginPath(); ctx.ellipse(bx, by, rx * 0.7, ry * 0.7, 0, 0, Math.PI * 2); ctx.fill();
+    // a few embers floating up from the abyss when you stand close
+    if (near > 0.2) for (let i = 0; i < 3; i++) {
+      const ph = (t * 0.5 + i * 0.33) % 1;
+      ctx.globalAlpha = (1 - ph) * near * 0.9;
+      ctx.fillStyle = i % 2 ? '#ff7a2a' : '#ffd36b';
+      ctx.fillRect(bx - 10 + ((i * 11 + t * 18) % 22), by - ph * 36, 2, 2);
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+
+    // broken flagstone rim around the mouth
+    ctx.strokeStyle = 'rgba(150,150,175,0.4)'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.ellipse(d.x, d.y, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
+
+    // cold mist breathing up over the rim
+    for (let i = 0; i < 5; i++) {
+      const ph = (t * 0.28 + i * 0.21) % 1;
+      ctx.globalAlpha = (1 - ph) * 0.16;
+      ctx.fillStyle = 'rgba(180,200,215,1)';
+      ctx.beginPath();
+      ctx.ellipse(d.x + Math.sin(t * 0.8 + i * 2) * 18, d.y + ry * 0.3 - ph * 34,
+        24 - ph * 6, 9, 0, 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
+  }
+
+  _drawCampFloor(ctx) {
+    const t = this.camp.t;
+    this._drawDescentPit(ctx, this.camp.door, t);
 
     // the sorcerer's table
     const s = this.camp.sorcerer, tx = s.x, ty = s.y + 20;
@@ -1177,8 +1240,9 @@ export class Game {
     this._updateCamera(dt);
     this._updateAmbient(dt);     // embers, transition, intro, sweep, hp bar — run in every state
 
-    // hold the world while the slash-wipe covers the screen
+    // hold the world while the slash-wipe / plunge-fall covers the screen
     if (this.transition && this.transition.t < this.transition.half) return;
+    if (this.plunge && this.plunge.t < this.plunge.half) return;
 
     if (this.state === 'dying') return this._updateDying(dt);
     if (this.state === 'won') return this._updateWon(dt);
@@ -1311,6 +1375,17 @@ export class Game {
       tr.t += dt;
       if (!tr.fired && tr.t >= tr.half) { tr.fired = true; if (tr.mid) tr.mid(); }
       if (tr.t >= tr.dur) this.transition = null;
+    }
+    // plunge-into-darkness descent
+    if (this.plunge) {
+      const pl = this.plunge; pl.t += dt;
+      if (pl.t < pl.half) {                       // falling: accelerate the camera downward + rumble
+        const f = pl.t / pl.half;
+        this.camDrop = 820 * f * f;
+        this.shake = Math.max(this.shake, 3 + 7 * f);
+      } else { this.camDrop = 0; }
+      if (!pl.fired && pl.t >= pl.half) { pl.fired = true; if (pl.mid) pl.mid(); }
+      if (pl.t >= pl.dur) { this.plunge = null; this.camDrop = 0; }
     }
     // intro card timer
     if (this.intro) {
@@ -1657,7 +1732,15 @@ export class Game {
     return { ok: true, kind: 'nothing' };
   }
 
-  descend() { this.nextLevel(); }
+  // Descending the pit is a PLUNGE — the floor swallows you into the dark, the
+  // Demon Lord whispers, and you sink onto the next, deeper floor.
+  descend() {
+    const whispers = ['DEEPER.', 'DOWN YOU COME.', 'CLOSER NOW.', 'I FELT THAT.', 'YES. DESCEND.', 'NEARER TO ME.'];
+    this.plunge = { t: 0, dur: 1.65, half: 0.74, fired: false,
+      whisper: whispers[(Math.random() * whispers.length) | 0],
+      mid: () => this._startLevel(this.level + 1, false) };
+    this.shake = Math.max(this.shake, 4);
+  }
 
   // ---------- render ----------
   _frame(t) {
@@ -1671,7 +1754,7 @@ export class Game {
   _render() {
     const ctx = this.ctx;
     const title = this.state === 'title';
-    const camx = this.cam.x, camy = this.cam.y;
+    const camx = this.cam.x, camy = this.cam.y + (this.camDrop || 0);
 
     // Cold open: the title & intro are a screen-space torch-lit corridor, drawn
     // outside the normal world pipeline so the cut into Level 1 is seamless.
@@ -1782,7 +1865,55 @@ export class Game {
     this._drawFuryButton(ctx);     // floating "unleash fury" button above the hero
     if (this.state === 'camp') this._drawCampToast(ctx);   // event outcome flavour
     this._drawInterlude(ctx);      // Demon Lord taunt: blacks out the whole screen + red typewriter
+    this._drawPlunge(ctx);         // plunge-into-darkness descent overlay
     this._drawTransition(ctx);     // slash-wipe on the very top
+  }
+
+  // The descent: darkness rushes up as you fall, red abyss-light swells from
+  // below, speed-lines streak down, the Demon Lord whispers — then the next
+  // floor fades up out of the black.
+  _drawPlunge(ctx) {
+    if (!this.plunge) return;
+    const pl = this.plunge, W = this.vw, H = this.vh;
+    ctx.save();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    if (pl.t < pl.half) {                          // FALLING
+      const f = pl.t / pl.half;
+      // darkness welling up from the bottom of the screen
+      const grd = ctx.createLinearGradient(0, H, 0, H * (1 - f * 1.15) - 20);
+      grd.addColorStop(0, 'rgba(0,0,0,1)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grd; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = `rgba(0,0,0,${Math.max(0, (f - 0.62) / 0.38)})`; ctx.fillRect(0, 0, W, H);
+      // red abyss glow swelling from below
+      const rg = ctx.createRadialGradient(W / 2, H + 30, 8, W / 2, H + 30, H);
+      rg.addColorStop(0, `rgba(210,34,16,${0.5 * f})`); rg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H);
+      // downward speed-streaks (motion of falling)
+      ctx.globalAlpha = 0.5 * f; ctx.strokeStyle = 'rgba(190,200,220,0.6)'; ctx.lineWidth = 2;
+      for (let i = 0; i < 16; i++) {
+        const x = (i * 97.3) % W, len = 36 + (i * 53) % 90;
+        const y = ((i * 131 + pl.t * 1700) % (H + 140)) - 70;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + len); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      if (f > 0.32) {                              // the whisper from below
+        ctx.globalAlpha = Math.min(1, (f - 0.32) / 0.3) * 0.85;
+        ctx.font = '600 19px "Silkscreen", monospace';
+        ctx.fillStyle = 'rgba(0,0,0,0.9)'; ctx.fillText(pl.whisper, W / 2 + 1, H * 0.5 + 1);
+        ctx.fillStyle = '#c8201a'; ctx.fillText(pl.whisper, W / 2, H * 0.5);
+        ctx.globalAlpha = 1;
+      }
+    } else {                                       // RISING into the new floor
+      const r = (pl.t - pl.half) / (pl.dur - pl.half);
+      ctx.globalAlpha = 1 - r;
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+      if (r < 0.45) {
+        ctx.globalAlpha = (1 - r / 0.45) * 0.8;
+        ctx.font = '600 19px "Silkscreen", monospace';
+        ctx.fillStyle = '#c8201a'; ctx.fillText(pl.whisper, W / 2, H * 0.5);
+      }
+    }
+    ctx.restore();
   }
 
   // A small parchment toast that floats the outcome of an event choice, then fades.

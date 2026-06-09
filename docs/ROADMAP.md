@@ -8,6 +8,20 @@ pitched so nothing gets lost.
 
 ## 🚢 Shipped
 
+### The Prologue — the bargain ✅
+- 5-beat opening cutscene: the golden kingdom → the dark rising → the King's
+  bargain (the **Demon Lord bursts up from the ground**) → the orphan-son reveal
+  → the descent. Uses Jade's keyed castle-horizon PNG + Demon Lord art.
+- Demon Lord pipeline: magenta-key + despill (`pinkLeft=0`), 4-frame anim sheet
+  (627² cells, feet aligned) drives the L20 boss; full-res portrait drives the
+  prologue. Entrance = `_drawDemonRise` (climbs through a ground seam, swelling
+  portal, embers/ash, settle-bob, landing flash + shock ring).
+- Triggered from Start (`main.js`) → flows into the Shrine. **Plays every Start**
+  (not yet gated — easy to make play-once via the `kls_seen_intro` flag it sets).
+- ⏸ **Parked tuning (for later):** rise speed (`pt/3.4`), how buried he starts,
+  ember density, flash punch, his scale (`H*0.54`), prologue framing. All
+  one-line dials inside `_drawDemonRise` / beat 2 of `_drawPrologueArt`.
+
 ### The Living Blade ✅ (v1)
 - Choose one of three swords at the start of a run — **Emberbrand** (burn DoT),
   **Frostfang** (chill → freeze → shatter), **Stormedge** (chain lightning).

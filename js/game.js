@@ -194,23 +194,36 @@ export class Game {
   // shrine of broken weapons for his Dark Knight). Threatening, ceremonial, lit.
   _bakeBossRoom(g, biome, W, H, kind, lava, torch) {
     const cx = W / 2, cy = H / 2;
-    // a blood / shadow wash pooling toward the centre
+    const boss = kind === 'boss';
+    // a wash pooling toward the centre — cold moonlight for the Demon Lord's hall,
+    // the old violet murk for the Dark Knight's shrine.
     const wash = g.createRadialGradient(cx, cy, 40, cx, cy, Math.max(W, H) * 0.6);
-    wash.addColorStop(0, kind === 'boss' ? 'rgba(64,6,10,0.5)' : 'rgba(26,10,40,0.45)');
-    wash.addColorStop(1, 'rgba(0,0,0,0.1)');
+    wash.addColorStop(0, boss ? 'rgba(30,42,78,0.42)' : 'rgba(26,10,40,0.45)');
+    wash.addColorStop(1, 'rgba(0,0,0,0.12)');
     g.fillStyle = wash; g.fillRect(0, 0, W, H);
-    // the great ritual circle scorched into the floor (centred on the spawn)
+    // a shaft of cold moonlight spilling from behind the throne, pooling on the circle
+    if (boss) {
+      g.save(); g.globalCompositeOperation = 'lighter';
+      const moon = g.createRadialGradient(cx, 30, 4, cx, 30, 150);
+      moon.addColorStop(0, 'rgba(206,222,255,0.5)'); moon.addColorStop(0.4, 'rgba(150,178,235,0.18)'); moon.addColorStop(1, 'rgba(150,178,235,0)');
+      g.fillStyle = moon; g.fillRect(cx - 160, -80, 320, 230);
+      const beam = g.createLinearGradient(0, 0, 0, cy + 40);
+      beam.addColorStop(0, 'rgba(166,196,255,0.16)'); beam.addColorStop(1, 'rgba(166,196,255,0)');
+      g.fillStyle = beam; g.beginPath(); g.moveTo(cx - 64, 0); g.lineTo(cx + 64, 0); g.lineTo(cx + W * 0.22, cy + 30); g.lineTo(cx - W * 0.22, cy + 30); g.closePath(); g.fill();
+      g.restore();
+    }
+    // the great ritual circle worked into the floor (centred on the spawn)
     const r = Math.min(W, H) * 0.29;
-    this._bakeRitualCircle(g, cx, cy, r, kind === 'boss' ? '#b81810' : '#6a2ea0');
-    // braziers set on the ring like ritual candles — ceremonial, and they light it
+    this._bakeRitualCircle(g, cx, cy, r, boss ? '#9fb6e8' : '#6a2ea0');
+    // braziers set on the ring like ritual candles — cold soulfire for the throne
     for (let i = 0; i < 6; i++) {
       const a = Math.PI * 2 * i / 6 + Math.PI / 6;
       const bx = Math.round(cx + Math.cos(a) * r), by = Math.round(cy + Math.sin(a) * r);
       this._bakeBrazierPost(g, bx, by);
-      this.braziers.push({ x: bx, y: by, lava, torch: kind === 'boss' ? '#ff5a2a' : torch });
+      this.braziers.push({ x: bx, y: by, lava: boss ? false : lava, torch: boss ? '#aac8ff' : torch });
     }
     // the head of the room
-    if (kind === 'boss') this._bakeThrone(g, cx, 78);
+    if (boss) this._bakeThrone(g, cx, 78);
     else this._bakeWeaponShrine(g, cx, 78);
   }
 
@@ -255,23 +268,23 @@ export class Game {
   _bakeThrone(g, x, y) {
     g.save();
     g.translate(x, y);
-    const stone = '#1b1016', stoneHi = '#2c1c28', stoneDk = '#0d070b';
+    const stone = '#161520', stoneHi = '#2a2840', stoneDk = '#09080e';
     // backrest with jagged spires
     g.fillStyle = stone; g.fillRect(-30, 0, 60, 84);
     g.fillStyle = stoneHi; g.fillRect(-30, 0, 4, 84);
     g.fillStyle = stoneDk; g.fillRect(26, 0, 4, 84);
     g.fillStyle = stone;
     for (const sx of [-30, -14, 14, 22]) { g.beginPath(); g.moveTo(sx, 0); g.lineTo(sx + 8, -18); g.lineTo(sx + 16, 0); g.closePath(); g.fill(); }
-    // smouldering cushion
-    g.shadowColor = '#ff3a1e'; g.shadowBlur = 14; g.fillStyle = '#5a0c10'; g.fillRect(-22, 30, 44, 30); g.shadowBlur = 0;
-    g.fillStyle = '#7a1216'; g.fillRect(-22, 30, 44, 4);
+    // cold cushion, kissed by pale moonlight rather than embers
+    g.shadowColor = '#9fb8ff'; g.shadowBlur = 14; g.fillStyle = '#101524'; g.fillRect(-22, 30, 44, 30); g.shadowBlur = 0;
+    g.fillStyle = '#26304c'; g.fillRect(-22, 30, 44, 4);
     // arms & seat
     g.fillStyle = stone; g.fillRect(-38, 44, 12, 40); g.fillRect(26, 44, 12, 40);
     g.fillStyle = stoneDk; g.fillRect(-38, 80, 76, 6);
-    // a skull set at the crown
-    g.fillStyle = '#d8d0c0'; g.beginPath(); g.arc(0, -6, 8, 0, Math.PI * 2); g.fill();
+    // a skull set at the crown, bone gone cold
+    g.fillStyle = '#cfd6e2'; g.beginPath(); g.arc(0, -6, 8, 0, Math.PI * 2); g.fill();
     g.fillRect(-6, -2, 12, 7);
-    g.fillStyle = '#1b1016'; g.fillRect(-4, -8, 3, 4); g.fillRect(2, -8, 3, 4); g.fillRect(-1, -2, 2, 4);
+    g.fillStyle = '#161520'; g.fillRect(-4, -8, 3, 4); g.fillRect(2, -8, 3, 4); g.fillRect(-1, -2, 2, 4);
     g.restore();
   }
 
@@ -316,7 +329,7 @@ export class Game {
       this._bakePillar(g, W - 42, H * 0.32); this._bakePillar(g, W - 42, H * 0.68);
     } else if (biome.id === 'throne') {
       this._bakeStatue(g, W * 0.3, 44); this._bakeStatue(g, W * 0.7, 44);
-      this._bakeBanner(g, W * 0.5, 36, '#5a1414');
+      this._bakeBanner(g, W * 0.5, 36, '#1e2742');
     }
   }
 
@@ -4463,6 +4476,15 @@ export class Game {
       : e.burnT > 0 ? { color: '#ff7a2a', a: 0.32 + 0.12 * Math.sin(this.time * 18) }
       : (e.state === 'windup' || e.state === 'special' ? { color: '#ff4040', a: 0.5 }
       : (e.elite ? { color: e.affix.color, a: 0.16 } : null));
+    // cold rim/backlight so the all-black Demon Lord reads against the dark throne
+    if (e.boss && this.biome && this.biome.moonlit) {
+      const rl = this.biome.moonlit, sh = e.r * 3.4;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      const halo = ctx.createRadialGradient(e.x, e.y - sh * 0.5, 4, e.x, e.y - sh * 0.5, sh * 0.92);
+      halo.addColorStop(0, this._rgba(rl, 0.26)); halo.addColorStop(0.5, this._rgba(rl, 0.10)); halo.addColorStop(1, this._rgba(rl, 0));
+      ctx.fillStyle = halo; ctx.beginPath(); ctx.ellipse(e.x, e.y - sh * 0.5, sh * 0.62, sh * 0.92, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
     // a gentle breathing bob when idle so foes never look frozen
     const bob = (!e.boss && !e.moving) ? Math.sin(this.time * 2.6 + e.x * 0.07) : 0;
     drawSprite(ctx, e.sprite, frame, e.x, e.y - bob, e.faceLeft, 1, tint);

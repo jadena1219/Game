@@ -65,12 +65,17 @@ const detailKeep = (g, W, H) => flagstones(g, W, H, 303, 'rgba(0,0,0,0.5)', (G, 
   }
 });
 
-const detailThrone = (g, W, H) => flagstones(g, W, H, 404, 'rgba(0,0,0,0.6)', (G, W, H, R) => {
-  // molten cracks bleeding through the obsidian floor
+const detailThrone = (g, W, H) => flagstones(g, W, H, 404, 'rgba(0,0,0,0.62)', (G, W, H, R) => {
+  // polished obsidian: cold moonlit sheen patches + hairline blue cracks (no lava)
+  for (let i = 0; i < (W * H) / 26000; i++) {
+    const x = R() * W, y = R() * H, r = 14 + R() * 30;
+    G.fillStyle = `rgba(150,174,224,${0.04 + R() * 0.06})`;
+    G.beginPath(); G.ellipse(x, y, r, r * 0.5, 0, 0, Math.PI * 2); G.fill();
+  }
   G.lineCap = 'round';
-  for (let i = 0; i < (W * H) / 90000; i++) {
+  for (let i = 0; i < (W * H) / 120000; i++) {
     let x = R() * W, y = R() * H; const len = 4 + (R() * 6 | 0);
-    G.strokeStyle = 'rgba(255,90,20,0.5)'; G.shadowColor = '#ff6a1e'; G.shadowBlur = 8; G.lineWidth = 2;
+    G.strokeStyle = 'rgba(150,184,236,0.42)'; G.shadowColor = '#9fc0ff'; G.shadowBlur = 7; G.lineWidth = 1.5;
     G.beginPath(); G.moveTo(x, y);
     for (let s = 0; s < len; s++) { x += (R() - 0.5) * 44; y += (R() - 0.5) * 44; G.lineTo(x, y); }
     G.stroke();
@@ -124,10 +129,13 @@ export const BIOMES = [
     detail: detailKeep,
   },
   {
+    // Moonlit obsidian throne — the warmth of the world is gone. Cold pale light
+    // rim-lights the all-black Demon Lord; his red eyes & blade are the only heat.
     id: 'throne', name: 'Throne of the Demon Lord', act: 'VII', levels: [20],
-    ground: ['#241320', '#10070d'], wall: '#180a12', cap: '#2c1420',
-    grade: 'rgba(255,70,30,0.12)', dark: 0.55, torch: '#ff7a2a', lava: true,
-    particle: 'embers', pcol: ['#ff5a2a', '#ff9a3a', '#ffce6a'],
+    ground: ['#17161f', '#070609'], wall: '#0e0d15', cap: '#221f2e',
+    grade: 'rgba(74,96,150,0.13)', dark: 0.66, torch: '#bcd2ff', lava: false,
+    moonlit: '#aac4ff',
+    particle: 'pollen', pcol: ['#c6d0e6', '#8893ad'],   // pale ash, drifting cold
     detail: detailThrone,
   },
 ];

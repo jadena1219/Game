@@ -1560,10 +1560,10 @@ export class Game {
     // plunge-into-darkness descent
     if (this.plunge) {
       const pl = this.plunge; pl.t += dt;
-      if (pl.t < pl.half) {                       // falling: accelerate the camera downward + rumble
+      if (pl.t < pl.half) {                       // falling: a long, slow slide into the dark
         const f = pl.t / pl.half;
-        this.camDrop = 820 * (f * f * 0.72 + f * 0.28);   // initial velocity so frame 1 already moves
-        this.shake = Math.max(this.shake, 3 + 7 * f);
+        this.camDrop = 940 * (f * f * 0.72 + f * 0.28);   // initial velocity so frame 1 already moves
+        this.shake = Math.max(this.shake, 1.5 + 3.5 * f);  // a low rumble, not a violent quake
       } else { this.camDrop = 0; }
       if (!pl.fired && pl.t >= pl.half) { pl.fired = true; if (pl.mid) pl.mid(); }
       if (pl.t >= pl.dur) { this.plunge = null; this.camDrop = 0; }
@@ -1966,7 +1966,8 @@ export class Game {
     const whispers = ['DEEPER.', 'DOWN YOU COME.', 'CLOSER NOW.', 'I FELT THAT.', 'YES. DESCEND.', 'NEARER TO ME.'];
     // seed t slightly so the very first rendered frame already shows the fall
     // (darkness welling + camera dropping) rather than a static beat.
-    this.plunge = { t: 0.05, dur: 1.65, half: 0.74, fired: false,
+    // A long, deliberate fall — the red abyss should linger and unsettle.
+    this.plunge = { t: 0.05, dur: 2.85, half: 1.6, fired: false,
       whisper: whispers[(Math.random() * whispers.length) | 0],
       mid: () => this._startLevel(this.level + 1, false) };
     this.shake = Math.max(this.shake, 4);
@@ -2117,21 +2118,23 @@ export class Game {
       const grd = ctx.createLinearGradient(0, H, 0, H * (1 - f * 1.15) - 20);
       grd.addColorStop(0, 'rgba(0,0,0,1)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = grd; ctx.fillRect(0, 0, W, H);
-      ctx.fillStyle = `rgba(0,0,0,${Math.max(0, (f - 0.62) / 0.38)})`; ctx.fillRect(0, 0, W, H);
-      // red abyss glow swelling from below
+      // hold off full black until the very end so the red has room to breathe
+      ctx.fillStyle = `rgba(0,0,0,${Math.max(0, (f - 0.82) / 0.18)})`; ctx.fillRect(0, 0, W, H);
+      // red abyss glow swelling from below — comes up early (pow<1) and lingers
+      const ra = 0.62 * Math.pow(f, 0.7);
       const rg = ctx.createRadialGradient(W / 2, H + 30, 8, W / 2, H + 30, H);
-      rg.addColorStop(0, `rgba(210,34,16,${0.5 * f})`); rg.addColorStop(1, 'rgba(0,0,0,0)');
+      rg.addColorStop(0, `rgba(210,34,16,${ra})`); rg.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H);
-      // downward speed-streaks (motion of falling)
-      ctx.globalAlpha = 0.5 * f; ctx.strokeStyle = 'rgba(190,200,220,0.6)'; ctx.lineWidth = 2;
+      // slow, languid downward streaks (not action speed-lines)
+      ctx.globalAlpha = 0.4 * f; ctx.strokeStyle = 'rgba(190,200,220,0.6)'; ctx.lineWidth = 2;
       for (let i = 0; i < 16; i++) {
         const x = (i * 97.3) % W, len = 36 + (i * 53) % 90;
-        const y = ((i * 131 + pl.t * 1700) % (H + 140)) - 70;
+        const y = ((i * 131 + pl.t * 1050) % (H + 140)) - 70;
         ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + len); ctx.stroke();
       }
       ctx.globalAlpha = 1;
-      if (f > 0.32) {                              // the whisper from below
-        ctx.globalAlpha = Math.min(1, (f - 0.32) / 0.3) * 0.85;
+      if (f > 0.24) {                              // the whisper from below — eases in slowly
+        ctx.globalAlpha = Math.min(1, (f - 0.24) / 0.45) * 0.85;
         ctx.font = '600 19px "Silkscreen", monospace';
         ctx.fillStyle = 'rgba(0,0,0,0.9)'; ctx.fillText(pl.whisper, W / 2 + 1, H * 0.5 + 1);
         ctx.fillStyle = '#c8201a'; ctx.fillText(pl.whisper, W / 2, H * 0.5);
@@ -2141,8 +2144,14 @@ export class Game {
       const r = (pl.t - pl.half) / (pl.dur - pl.half);
       ctx.globalAlpha = 1 - r;
       ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
-      if (r < 0.45) {
-        ctx.globalAlpha = (1 - r / 0.45) * 0.8;
+      // a red afterglow clinging to the dark as the new floor emerges
+      if (r < 0.6) {
+        const rg = ctx.createRadialGradient(W / 2, H * 0.5, 10, W / 2, H * 0.5, Math.max(W, H) * 0.7);
+        rg.addColorStop(0, `rgba(150,18,10,${(1 - r / 0.6) * 0.5})`); rg.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.globalAlpha = 1; ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H);
+      }
+      if (r < 0.5) {
+        ctx.globalAlpha = (1 - r / 0.5) * 0.8;
         ctx.font = '600 19px "Silkscreen", monospace';
         ctx.fillStyle = '#c8201a'; ctx.fillText(pl.whisper, W / 2, H * 0.5);
       }

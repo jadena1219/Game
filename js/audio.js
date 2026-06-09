@@ -252,12 +252,13 @@ class GameAudio {
         this._noise({ filter: 'bandpass', cutoff: 600, cutoff1: 1400, q: 0.8, dur: 0.3, gain: 0.06 * v });
         break;
       }
-      case 'plunge': {                  // the long fall into darkness + impact below
+      case 'plunge': {                  // a long, slow fall into darkness + impact far below
         const t = this._now();
-        this._tone({ type: 'sawtooth', f0: 320, f1: 38, exp: true, dur: 1.3, gain: 0.18 * v, filter: 'lowpass', cutoff: 1200 });
-        this._noise({ filter: 'lowpass', cutoff: 1400, cutoff1: 120, dur: 1.3, gain: 0.16 * v });
-        this._tone({ t0: t + 1.15, type: 'sine', f0: 80, f1: 32, exp: true, dur: 0.7, gain: 0.4 * v });   // boom at the bottom
-        this._duck(0.5, 1.6);
+        this._tone({ type: 'sawtooth', f0: 300, f1: 32, exp: true, dur: 1.7, gain: 0.17 * v, filter: 'lowpass', cutoff: 1100 });
+        this._noise({ filter: 'lowpass', cutoff: 1300, cutoff1: 90, dur: 1.7, gain: 0.15 * v });
+        this._tone({ type: 'sine', f0: 70, f1: 44, exp: true, dur: 1.55, gain: 0.12 * v, a: 0.5 });        // a low dread drone through the fall
+        this._tone({ t0: t + 1.5, type: 'sine', f0: 80, f1: 30, exp: true, dur: 0.8, gain: 0.4 * v });     // impact at the bottom
+        this._duck(0.5, 2.2);
         break;
       }
       case 'bossroar': {                // an entrance growl — dread incarnate

@@ -130,6 +130,7 @@ export class Player {
   }
 
   takeHit(dmg) {
+    if (this.god) return false;                 // GOD MODE: shrug off all damage
     if (this.invuln > 0 || this.dead) return false;
     const dr = Math.min(0.85, this.mods.damageReduction + (this.hero.damageReduction || 0));
     this.hp -= dmg * (1 - dr) * this.eventVuln;

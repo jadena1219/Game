@@ -50,6 +50,7 @@ export class Game {
     this.pendingEscort = null;   // L10 escort held back until the boss enters WRATH
     this.cutscene = null;        // scripted boss-entrance sequence
     this.cutsceneBoss = null;
+    this.godMode = false;        // debug: no damage taken, one-shot foes, floor-skip
     this.spawnTimer = 0;
     this.flashScreen = 0;
     this.kills = 0;
@@ -605,6 +606,7 @@ export class Game {
     const begin = () => {
       const mb = this.metaB = metaBonuses(this.meta);
       this.player = new Player(this.world.w / 2, this.world.h / 2, heroId, mb);
+      this.player.god = this.godMode;         // GOD MODE: immune to enemy damage
       this.player.lockedRelics = new Set();   // meta unlocks disabled — full relic pool
       this.shopSlots = 4 + (mb.slots || 0);
       this.kills = 0; this.level = 1; this.gold = mb.startGold || 0; this.totalGold = 0;
@@ -641,12 +643,23 @@ export class Game {
 
   nextLevel() { this._slashWipe(() => this._startLevel(this.level + 1, false)); }
 
+  // GOD MODE: jump straight to the next floor (full heal) for fast testing.
+  godSkip() {
+    if (!this.godMode) return;
+    if (this.state !== 'playing' && this.state !== 'camp') return;
+    const next = Math.min(LEVELS.length, this.level + 1);
+    if (next === this.level && this.state === 'playing') return;   // already on the last floor
+    this.cutscene = null; this.cutsceneBoss = null; this.plunge = null; this.descentJump = null;
+    this._slashWipe(() => this._startLevel(next, true));
+  }
+
   _startLevel(level, fullHeal) {
     this.level = level;
     this.descentSink = 0;                      // restore visibility after a plunge
     this.watchers = []; this.campWhisper = null; this._watchT = 5 + Math.random() * 4;
     this.cutscene = null; this.cutsceneBoss = null; this.pendingEscort = null;
     if (!this.player) this.player = new Player(this.world.w / 2, this.world.h / 2);
+    this.player.god = this.godMode;            // keep GOD MODE in sync each floor
     this.player.x = this.world.w / 2; this.player.y = this.world.h / 2;
     if (fullHeal) { this.player.hp = this.player.maxHP; }
     this.player.dead = false; this.player.invuln = 0.6;
@@ -730,6 +743,7 @@ export class Game {
 
   hitEnemy(e, dmg, kx = 0, ky = 0, source = 'ability') {
     const wasAlive = !e.dead;
+    if (this.godMode) dmg = 999999;          // GOD MODE: one-shot everything
     e.takeHit(dmg, kx, ky);
     this.spawnDamageNumber(e.x, e.y - e.r - 6, Math.round(dmg), source);
     if (source === 'sword') this._relicOnHit(e, dmg);   // sparks/feedback handled in _applySwingDamage
@@ -2191,15 +2205,22 @@ export class Game {
     if (cs.roared) {
       const since = cs.t - (cs.look + cs.rise * 0.62);
       const a = Math.min(1, since * 2.4);
+      const slam = 1 + Math.max(0, 1 - since * 4) * 0.5;        // SLAMS in, then settles
+      const name = cs.name.toUpperCase(), y = H * 0.26;
       ctx.save();
       ctx.globalAlpha = a; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      const fs = Math.min(34, W / Math.max(9, cs.name.length) * 1.5);
-      ctx.font = `${Math.round(fs)}px "Press Start 2P", monospace`;
+      let size = Math.round(28 * slam);
+      ctx.font = `bold ${size}px "Silkscreen", sans-serif`;
+      const maxW = W * 0.88, tw = ctx.measureText(name).width;
+      if (tw > maxW) { size = Math.floor(size * maxW / tw); ctx.font = `bold ${size}px "Silkscreen", sans-serif`; }
+      // small dread label above the name
+      ctx.font = `bold 11px "Silkscreen", sans-serif`; ctx.fillStyle = 'rgba(190,46,36,0.85)';
+      ctx.fillText('THE WAY IS BARRED BY', W / 2, y - size * 0.7 - 6);
+      ctx.font = `bold ${size}px "Silkscreen", sans-serif`;
       ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,0.85)';
-      ctx.strokeText(cs.name, W / 2, H * 0.2);
-      const grad = ctx.createLinearGradient(0, H * 0.17, 0, H * 0.24);
-      grad.addColorStop(0, '#ffd36b'); grad.addColorStop(1, '#d8231a');
-      ctx.fillStyle = grad; ctx.fillText(cs.name, W / 2, H * 0.2);
+      ctx.strokeText(name, W / 2, y);
+      ctx.shadowColor = '#ff2a1e'; ctx.shadowBlur = 16 * a;
+      ctx.fillStyle = '#e8241a'; ctx.fillText(name, W / 2, y);
       ctx.restore();
     }
   }
@@ -3204,8 +3225,8 @@ export class Game {
     const sh = e.r * 3.6, yoff = (1 - rise) * sh;
     ctx.save();
     ctx.beginPath(); ctx.rect(e.x - e.r * 2.6, e.y - sh - 60, e.r * 5.2, sh + 60); ctx.clip();
-    ctx.globalAlpha = Math.min(1, rise / 0.18);
-    drawSprite(ctx, e.sprite, 'idle', e.x, e.y + yoff, e.faceLeft, 1, { color: '#140208', a: Math.max(0, 0.72 - rise * 0.72) });
+    ctx.globalAlpha = Math.min(1, rise / 0.14);          // just his sprite, fading in as he clears the floor
+    drawSprite(ctx, e.sprite, 'idle', e.x, e.y + yoff, e.faceLeft, 1, null);
     ctx.restore();
     // dark smoke churning at the base to mask the seam
     ctx.save();
@@ -3221,13 +3242,36 @@ export class Game {
   _drawEnemy(ctx, e) {
     if (e.rising != null && e.rising < 1) { this._drawBossRise(ctx, e); return; }   // emerging from the altar
     const frame = pickFrame(e, this.time + e.x * 0.01);
-    // CHARGE telegraph: a red lance showing where the bruiser is about to rush
+    // CHARGE telegraph: a tapering danger lane with chevrons rushing outward and a
+    // charge-glow gathering on the boss — reads clearly as "I'm about to dash here".
     if (e.state === 'windup' && e.spec.charge && this.player) {
       const a = Math.atan2(this.player.y - e.y, this.player.x - e.x);
+      const prog = Math.max(0, Math.min(1, 1 - e.stateT / e.spec.charge.windup));
+      const len = 220 + 40 * prog, w0 = e.r * 0.55, w1 = e.r * 1.5;
       ctx.save();
-      ctx.strokeStyle = `rgba(255,60,40,${0.4 + 0.3 * Math.sin(this.time * 20)})`;
-      ctx.lineWidth = 6; ctx.lineCap = 'round';
-      ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(e.x + Math.cos(a) * 230, e.y + Math.sin(a) * 230); ctx.stroke();
+      ctx.translate(e.x, e.y); ctx.rotate(a);
+      // the danger lane: a red wedge fading along its length
+      const grad = ctx.createLinearGradient(0, 0, len, 0);
+      grad.addColorStop(0, `rgba(255,42,28,${0.26 + 0.2 * prog})`);
+      grad.addColorStop(1, 'rgba(255,42,28,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(0, -w0); ctx.lineTo(len, -w1); ctx.lineTo(len, w1); ctx.lineTo(0, w0); ctx.closePath(); ctx.fill();
+      // chevrons sliding down the lane toward the target
+      ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; ctx.lineWidth = 3;
+      for (let i = 0; i < 3; i++) {
+        const cp = (this.time * 1.7 + i / 3) % 1;
+        const cx = cp * len, cw = w0 + (w1 - w0) * cp;
+        ctx.strokeStyle = `rgba(255,140,90,${(1 - cp) * 0.75 * (0.4 + 0.6 * prog)})`;
+        ctx.beginPath(); ctx.moveTo(cx - 11, -cw * 0.68); ctx.lineTo(cx + 7, 0); ctx.lineTo(cx - 11, cw * 0.68); ctx.stroke();
+      }
+      ctx.restore();
+      // a hot core gathering on the boss as it coils to spring
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      const gr = e.r * (1.0 + 0.6 * prog);
+      const g = ctx.createRadialGradient(e.x, e.y - e.r * 0.4, 0, e.x, e.y - e.r * 0.4, gr);
+      g.addColorStop(0, `rgba(255,70,44,${0.45 * prog})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(e.x, e.y - e.r * 0.4, gr, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
     }
     // boss SLAM telegraph: a growing red danger ring you must leave
@@ -3349,7 +3393,9 @@ export class Game {
     const boss = this.enemies.find((e) => e.boss && !e.dead);
     if (!boss) return;
     const W = this.vw, H = this.vh;
-    const bw = Math.min(W * 0.82, 460), bx = (W - bw) / 2, bh = 15, by = H - 78;
+    // lower-centre, lifted well clear of the joystick / swing / fury controls
+    const bw = Math.min(W * 0.78, 440), bx = (W - bw) / 2, bh = 13;
+    const by = Math.round(Math.min(H - 168, H * 0.78));
     const hpf = Math.max(0, boss.hp / boss.maxHP);
     if (boss._hpShown == null) boss._hpShown = hpf;
     boss._hpShown += (hpf - boss._hpShown) * Math.min(1, 0.016 * 8);   // smooth drain

@@ -400,3 +400,15 @@ p { max-width: 30ch; line-height: 1.5; }
   width: 26px; height: 26px;
   image-rendering: pixelated; image-rendering: crisp-edges;
 }
+
+/* God-mode debug controls */
+#god-btn.god-on { color: #7dff9a; border-color: #2e8b4a; box-shadow: 0 0 14px rgba(60,220,120,0.4); }
+#god-skip {
+  position: fixed; top: 54px; right: 10px; z-index: 50;
+  border: 1px solid rgba(120,220,150,0.5); border-radius: 8px;
+  background: rgba(8, 20, 12, 0.7); color: #7dff9a;
+  font-family: "Silkscreen", monospace; font-size: 12px; padding: 7px 12px;
+  cursor: pointer; -webkit-tap-highlight-color: transparent; user-select: none;
+  backdrop-filter: blur(2px);
+}
+#god-skip:active { transform: scale(0.94); }

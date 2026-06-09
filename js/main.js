@@ -20,6 +20,7 @@ const screens = {
 const HERO_IDS = ['knight', 'rogue', 'paladin'];
 
 let game = null;
+let godMode = (() => { try { return localStorage.getItem('kls_god') === '1'; } catch (e) { return false; } })();
 
 // A pixel-art speaker, generated pixel-by-pixel (no asset file) in the game's
 // parchment/gold palette. `muted` swaps the gold sound-waves for a red slash.
@@ -56,6 +57,9 @@ const ui = {
     for (const [k, el] of Object.entries(screens)) {
       el.classList.toggle('hidden', k !== name);
     }
+    // the God-mode floor-skip button only shows during actual gameplay
+    const gs = document.getElementById('god-skip');
+    if (gs) gs.classList.toggle('hidden', !(godMode && name === null));
   },
 
   // The cold open: lift the title overlay away, revealing the live corridor
@@ -303,6 +307,24 @@ async function boot() {
   syncMute();
   if (muteBtn) muteBtn.addEventListener('click', (e) => { e.stopPropagation(); Sound.unlock(); Sound.toggleMute(); syncMute(); });
   window.addEventListener('keydown', (e) => { if (e.key === 'm' || e.key === 'M') { Sound.toggleMute(); syncMute(); } });
+
+  // ---- God mode (debug/testing): no damage taken, one-shot foes, floor-skip ----
+  game.godMode = godMode;
+  const godBtn = document.getElementById('god-btn');
+  const godSkip = document.getElementById('god-skip');
+  const syncGod = () => {
+    if (godBtn) { godBtn.textContent = 'God Mode: ' + (godMode ? 'On' : 'Off'); godBtn.classList.toggle('god-on', godMode); }
+  };
+  syncGod();
+  if (godBtn) godBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    godMode = !godMode;
+    try { localStorage.setItem('kls_god', godMode ? '1' : '0'); } catch (err) { /* ignore */ }
+    game.godMode = godMode;
+    if (game.player) game.player.god = godMode;
+    syncGod();
+  });
+  if (godSkip) godSkip.addEventListener('click', (e) => { e.stopPropagation(); game.godSkip(); });
 
   // Hero select stays built for a future unlock; for now every run is the Knight.
   document.getElementById('start-btn').addEventListener('click', () => { Sound.unlock(); game.beginIntro('knight'); });

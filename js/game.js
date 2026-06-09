@@ -922,6 +922,22 @@ export class Game {
     }
   }
 
+  // A boss broke a phase threshold: roar, flash, embers, and a banner. The boss
+  // is briefly untouchable (handled in its AI) and the player gets a grace window
+  // so the chaos never lands a cheap hit.
+  onBossPhase(boss, def) {
+    this.shake = Math.max(this.shake, 16);
+    this.flashScreen = Math.max(this.flashScreen, 0.4);
+    this.hitStop = Math.max(this.hitStop, 0.12);
+    Sound.play('bossroar');
+    Sound.setScene('boss');
+    this._spawnEmberBurst();
+    this.addEffect({ kind: 'boom', x: boss.x, y: boss.y, r: boss.r * 3.0, t: 0, dur: 0.5 });
+    this.addEffect({ kind: 'ring', x: boss.x, y: boss.y, r: boss.r * 2, color: def.emberAura ? '#ff3a1e' : '#ff7a2a', t: 0, dur: 0.5 });
+    if (this.player) this.player.invuln = Math.max(this.player.invuln, 0.7);
+    this.bossPhase = { title: def.title, t: 0, dur: 2.0 };
+  }
+
   spawnDamageNumber(x, y, amount, source) {
     const big = source === 'ultimate';   // crits & the ultimate land BIG and gold
     const color = source === 'sword' ? '#ffffff' : source === 'ultimate' ? '#ffd36b' : '#bfe3ff';
@@ -1261,6 +1277,7 @@ export class Game {
     this.time += dt;
     if (this.shake > 0) this.shake = Math.max(0, this.shake - dt * 24);
     if (this.flashScreen > 0) this.flashScreen -= dt;
+    if (this.bossPhase) { this.bossPhase.t += dt; if (this.bossPhase.t >= this.bossPhase.dur) this.bossPhase = null; }
 
     this._updateCamera(dt);
     this._updateAmbient(dt);     // embers, transition, intro, sweep, hp bar — run in every state
@@ -2933,6 +2950,31 @@ export class Game {
       ctx.beginPath(); ctx.arc(e.x, e.y, e.slamR * prog, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
     }
+    // PHASE-SHIFT enrage: a violent expanding shock-ring while the boss is untouchable
+    if (e.state === 'enrage') {
+      const prog = 1 - e.stateT / 1.0;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = `rgba(255,${Math.round(150 - 110 * prog)},50,${(1 - prog) * 0.8 + 0.2})`;
+      ctx.lineWidth = 3 + 5 * (0.5 + 0.5 * Math.sin(this.time * 30));
+      ctx.beginPath(); ctx.arc(e.x, e.y - e.r * 0.4, e.r * (1.1 + prog * 1.8), 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
+    // APOCALYPSE ember aura: flames rising off the Demon Lord
+    if (e.emberAura) {
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < 7; i++) {
+        const ph = (this.time * 0.6 + i / 7) % 1;
+        const ang = i * 2.39 + this.time * 0.5;
+        const ox = e.x + Math.cos(ang) * e.r * (0.6 + 0.6 * ph);
+        const oy = (e.y - e.r * 0.2) - ph * e.r * 2.2;
+        const mr = 3.2 * (1 - ph);
+        const gg = ctx.createRadialGradient(ox, oy, 0, ox, oy, mr * 3);
+        gg.addColorStop(0, ph < 0.5 ? '#ffd36b' : '#ff6a2a'); gg.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.globalAlpha = (1 - ph) * 0.9; ctx.fillStyle = gg;
+        ctx.beginPath(); ctx.arc(ox, oy, mr * 3, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
+    }
     // boss menace: a heavy cast shadow + a slow roiling aura of dread
     if (e.boss) {
       ctx.save();
@@ -2995,7 +3037,8 @@ export class Game {
         ctx.restore();
       }
     }
-    const tint = e.flash > 0 ? { color: '#ffffff', a: 0.7 }
+    const tint = e.state === 'enrage' ? { color: '#ffffff', a: 0.45 + 0.35 * Math.sin(this.time * 30) }
+      : e.flash > 0 ? { color: '#ffffff', a: 0.7 }
       : (e.state === 'windup' || e.state === 'special' ? { color: '#ff4040', a: 0.5 }
       : (e.elite ? { color: e.affix.color, a: 0.16 } : null));
     // a gentle breathing bob when idle so foes never look frozen
@@ -3021,6 +3064,7 @@ export class Game {
     if (boss._hpShown == null) boss._hpShown = hpf;
     boss._hpShown += (hpf - boss._hpShown) * Math.min(1, 0.016 * 8);   // smooth drain
     const name = (BOSS_NAMES[boss.type] || 'BOSS').toUpperCase();
+    const fillCol = ['#d8231a', '#ff5a2a', '#ffb12a'][boss.phase] || '#ffb12a';   // hotter each phase
     ctx.save();
     // name above the bar
     ctx.font = '14px "Silkscreen", monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
@@ -3031,9 +3075,32 @@ export class Game {
     ctx.strokeStyle = 'rgba(120,16,12,0.9)'; ctx.lineWidth = 2; this._roundRect(ctx, bx - 4, by - 4, bw + 8, bh + 8, 5); ctx.stroke();
     ctx.fillStyle = '#2a0606'; ctx.fillRect(bx, by, bw, bh);
     ctx.fillStyle = 'rgba(255,120,90,0.4)'; ctx.fillRect(bx, by, bw * boss._hpShown, bh);  // drain ghost
-    ctx.fillStyle = '#d8231a'; ctx.fillRect(bx, by, bw * hpf, bh);
-    ctx.fillStyle = 'rgba(255,160,130,0.6)'; ctx.fillRect(bx, by, bw * hpf, 3);             // top sheen
+    ctx.fillStyle = fillCol; ctx.fillRect(bx, by, bw * hpf, bh);
+    if (boss.invuln) { ctx.fillStyle = `rgba(255,255,255,${0.3 + 0.3 * Math.sin(this.time * 30)})`; ctx.fillRect(bx, by, bw * hpf, bh); }
+    ctx.fillStyle = 'rgba(255,200,170,0.6)'; ctx.fillRect(bx, by, bw * hpf, 3);             // top sheen
+    // phase-threshold notches so the player can read the fight's structure
+    if (boss.phaseDefs) {
+      for (const ph of boss.phaseDefs) {
+        const nx = bx + bw * ph.at;
+        ctx.fillStyle = 'rgba(20,4,4,0.9)'; ctx.fillRect(nx - 1, by - 1, 2, bh + 2);
+        ctx.fillStyle = 'rgba(255,220,150,0.5)'; ctx.fillRect(nx, by - 1, 1, bh + 2);
+      }
+    }
     ctx.restore();
+    // the phase-break banner ("WRATH" / "APOCALYPSE")
+    if (this.bossPhase) {
+      const bp = this.bossPhase, k = bp.t / bp.dur;
+      const a = Math.min(1, (1 - k) * 4) * Math.min(1, bp.t * 6);
+      ctx.save(); ctx.globalAlpha = a; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const fs = 34 + (1 - Math.min(1, bp.t * 3)) * 26;       // punches in
+      ctx.font = `${Math.round(fs)}px "Press Start 2P", monospace`;
+      ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+      ctx.strokeText(bp.title, W / 2, H * 0.34);
+      const grad = ctx.createLinearGradient(0, H * 0.3, 0, H * 0.38);
+      grad.addColorStop(0, '#ffd36b'); grad.addColorStop(1, '#ff3a1e');
+      ctx.fillStyle = grad; ctx.fillText(bp.title, W / 2, H * 0.34);
+      ctx.restore();
+    }
   }
 
   _rgba(hex, a) {

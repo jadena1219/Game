@@ -185,11 +185,22 @@ export class Enemy {
     this.fireCD = base.ranged ? Math.random() * 1.2 + 0.6 : 0;
     this.chargeCD = base.charge ? base.charge.cooldown * (0.5 + Math.random() * 0.5) : 0;
     this.specialCD = base.specials ? base.specials.interval * (0.6 + Math.random() * 0.4) : 0;
-    this.state = 'walk';               // walk | windup | charging | special
+    this.state = 'walk';               // walk | windup | charging | special | enrage
     this.stateT = 0;
     this.cdmg = this.damage;           // current contact damage (boosted while charging)
     this.slowT = 0;                    // >0 while chilled (frost)
     this.elite = null; this.affix = null; this.armor = 0;
+
+    // ---- boss phase escalation ----
+    this.phaseDefs = base.phases || null;
+    this.phase = 0;                    // 0 = base; each entry in phaseDefs is a transition
+    this.baseSpeed = this.speed;
+    this.invuln = false;               // true during a phase-shift (untouchable telegraph)
+    this.canCharge = !!base.charge && !base.chargeGated;
+    this.cdMul = 1; this.novaBonus = 0; this.summonBonus = 0;
+    this.tripleCharge = false; this.shockwave = 0; this.spiral = false;
+    this.doubleRing = false; this.emberAura = false;
+    this.chargesLeft = 0; this.spiralA = 0;
   }
 
   // Empower a regular enemy with an elite affix.
@@ -204,6 +215,7 @@ export class Enemy {
   }
 
   takeHit(dmg, kx, ky) {
+    if (this.invuln) { this.flash = 0.1; return; }   // mid phase-shift: blade glances off
     this.hp -= dmg * (1 - this.armor);
     this.flash = 0.12;
     this.kbx += kx; this.kby += ky;
@@ -233,6 +245,18 @@ export class Enemy {
     // vampiric elites slowly knit themselves back together
     if (this.affix && this.affix.regen) this.hp = Math.min(this.maxHP, this.hp + this.maxHP * this.affix.regen * dt);
 
+    // ---- boss phase shift: a brief, untouchable enrage when HP crosses a threshold ----
+    if (this.state === 'enrage') {
+      this.stateT -= dt; this.moving = false; this.attackAnim = 0.3;
+      if (this.stateT <= 0) { this.state = 'walk'; this.invuln = false; }
+      return this._finish(game);
+    }
+    if (this.phaseDefs && this.phase < this.phaseDefs.length &&
+        this.hp / this.maxHP <= this.phaseDefs[this.phase].at) {
+      this._enterPhase(this.phaseDefs[this.phase], game);
+      return this._finish(game);
+    }
+
     // ---- boss special attacks: telegraphed SLAM / SUMMON ----
     if (specials) {
       if (this.state === 'special') {
@@ -245,13 +269,13 @@ export class Enemy {
         this.pendingSpecial = Math.random() < 0.5 ? 'slam' : 'summon';
         this.slamR = specials.slam.r;
         this.state = 'special'; this.stateT = 0.95; this.specMax = 0.95;
-        this.specialCD = specials.interval;
+        this.specialCD = specials.interval * this.cdMul;
         return this._finish(game);
       }
     }
 
-    // ---- charge attack (miniboss/boss) ----
-    if (charge) {
+    // ---- charge attack (miniboss always; boss only once a phase unlocks it) ----
+    if (charge && this.canCharge) {
       this.chargeCD -= dt;
       if (this.state === 'windup') {
         this.stateT -= dt;
@@ -270,11 +294,21 @@ export class Enemy {
         this.x += this.cdx * charge.speed * dt;
         this.y += this.cdy * charge.speed * dt;
         this.moving = true;
-        if (this.stateT <= 0) { this.state = 'walk'; this.chargeCD = charge.cooldown; this.cdmg = this.damage; }
+        if (this.stateT <= 0) {
+          this.cdmg = this.damage;
+          if (this.shockwave) this._shockwave(game);              // erupt a ring of slow bolts
+          if (this.chargesLeft > 0) {                             // triple-charge: re-aim and go again
+            this.chargesLeft--;
+            this.state = 'windup'; this.stateT = charge.windup * 0.45;
+          } else {
+            this.state = 'walk'; this.chargeCD = charge.cooldown * this.cdMul;
+          }
+        }
         return this._finish(game);
       }
       if (this.chargeCD <= 0 && dist < 380) {
         this.state = 'windup'; this.stateT = charge.windup;
+        if (this.tripleCharge) this.chargesLeft = 2;              // this charge + two more
         return this._finish(game);
       }
     }
@@ -284,7 +318,7 @@ export class Enemy {
       this.fireCD -= dt;
       if (this.fireCD <= 0 && dist < ranged.range) {
         this._fire(game, nx, ny, ranged);
-        this.fireCD = ranged.cooldown;
+        this.fireCD = ranged.cooldown * this.cdMul;
         this.attackAnim = 0.25;
       }
       // kiting behaviour for non-boss casters
@@ -310,13 +344,49 @@ export class Enemy {
       game.shake = Math.max(game.shake, 11);
       if (Math.hypot(p.x - this.x, p.y - this.y) < R + p.r) { if (p.takeHit(this.damage * sp.slam.dmg)) game.shake = 13; }
     } else {
-      const s = sp.summon;
-      for (let i = 0; i < s.count; i++) {
+      const s = sp.summon, count = s.count + this.summonBonus;
+      for (let i = 0; i < count; i++) {
         const a = Math.random() * TAU;
         game.enemies.push(new Enemy(s.type, this.x + Math.cos(a) * 64, this.y + Math.sin(a) * 64, game.level));
       }
       game.addEffect({ kind: 'ring', x: this.x, y: this.y, r: 74, color: '#b06bff', t: 0, dur: 0.45 });
     }
+  }
+
+  // Enter the next boss phase: enrage (briefly untouchable), then come out faster
+  // and with new tricks unlocked.
+  _enterPhase(def, game) {
+    this.phase++;
+    this.state = 'enrage'; this.stateT = 1.0; this.invuln = true; this.moving = false;
+    if (def.speed) this.speed = this.baseSpeed * def.speed;
+    if (def.cd) this.cdMul = def.cd;
+    this.novaBonus += def.novaBonus || 0;
+    this.summonBonus += def.summonBonus || 0;
+    this.tripleCharge = this.tripleCharge || !!def.tripleCharge;
+    if (def.shockwave) this.shockwave = def.shockwave;
+    this.spiral = this.spiral || !!def.spiral;
+    this.doubleRing = this.doubleRing || !!def.doubleRing;
+    this.emberAura = this.emberAura || !!def.emberAura;
+    if (def.enableCharge) this.canCharge = true;
+    // shorten the next attack so the new phase comes out swinging
+    this.chargeCD = Math.min(this.chargeCD, 0.7);
+    this.specialCD = Math.min(this.specialCD, 1.0);
+    this.fireCD = Math.min(this.fireCD, 0.9);
+    if (game.onBossPhase) game.onBossPhase(this, def);
+  }
+
+  // A radial burst of slow bolts — the aftershock of a WRATH charge.
+  _shockwave(game) {
+    const n = this.shockwave, sp = 150;
+    const dmg = this.damage * 0.6;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * TAU + Math.random() * 0.12;
+      game.projectiles.push(new Projectile(
+        this.x + Math.cos(a) * (this.r + 6), this.y + Math.sin(a) * (this.r + 6),
+        Math.cos(a) * sp, Math.sin(a) * sp, dmg, true));
+    }
+    game.addEffect({ kind: 'ring', x: this.x, y: this.y, r: this.r + 26, color: '#ff5a2a', t: 0, dur: 0.4 });
+    game.shake = Math.max(game.shake, 8);
   }
 
   _step(nx, ny, dt) {
@@ -331,17 +401,19 @@ export class Enemy {
   }
 
   _fire(game, nx, ny, ranged) {
-    const make = (ax, ay) => {
+    const dmg = ranged.projDmg * (1 + CONFIG.scaling.dmgPerLevel * (game.level - 1));
+    const make = (ax, ay, sm = 1) => {
       game.projectiles.push(new Projectile(
         this.x + ax * (this.r + 6), this.y + ay * (this.r + 6),
-        ax * ranged.projSpeed, ay * ranged.projSpeed,
-        ranged.projDmg * (1 + CONFIG.scaling.dmgPerLevel * (game.level - 1)),
-        this.boss));
+        ax * ranged.projSpeed * sm, ay * ranged.projSpeed * sm, dmg, this.boss));
     };
     if (ranged.nova) {
-      for (let i = 0; i < ranged.nova; i++) {
-        const a = (i / ranged.nova) * TAU;
-        make(Math.cos(a), Math.sin(a));
+      const n = ranged.nova + this.novaBonus;
+      this.spiralA += 0.4;                                  // each volley rotates (spiral)
+      const off = this.spiral ? this.spiralA : 0;
+      for (let i = 0; i < n; i++) { const a = (i / n) * TAU + off; make(Math.cos(a), Math.sin(a)); }
+      if (this.doubleRing) {                                // a second, faster ring threaded between
+        for (let i = 0; i < n; i++) { const a = (i / n) * TAU + off + Math.PI / n; make(Math.cos(a), Math.sin(a), 1.4); }
       }
     } else {
       make(nx, ny);

@@ -81,12 +81,23 @@ export const ENEMY_TYPES = {
   bomber:  { sprite: 'bomber',   hp: 24,  speed: 116, damage: 6,  radius: 12, touch: true,
              explode: { r: 70, dmg: 26 } },
   // Mini-boss (Dark Knight, L10): a GIGANTIC dread-knight — telegraphed CHARGE that rushes you down.
+  // Phase 2 (WRATH, <=50% HP): enrages into a triple-charge that erupts a shockwave nova.
   miniboss:{ sprite: 'miniboss', hp: 950, speed: 82,  damage: 22, radius: 46, touch: true, boss: true,
-             charge: { windup: 0.62, dur: 0.52, speed: 500, cooldown: 2.7 } },
+             charge: { windup: 0.62, dur: 0.52, speed: 500, cooldown: 2.7 },
+             phases: [
+               { at: 0.5, title: 'WRATH', speed: 1.2, cd: 0.62, tripleCharge: true, shockwave: 11 },
+             ] },
   // Final boss (Demon Lord, L20): nova volleys + telegraphed ground SLAM + SUMMONS.
+  // Phase 2 (FURY, <=66%): gains a CHARGE rush and spiralling novas. Phase 3
+  // (APOCALYPSE, <=33%): double-ring novas, more summons, an ember aura — the climax.
   boss:    { sprite: 'boss',     hp: 1350, speed: 60, damage: 17, radius: 42, touch: true, boss: true,
              ranged: { range: 9999, keep: 0, cooldown: 2.4, projSpeed: 185, projDmg: 14, nova: 14 },
-             specials: { interval: 4.6, slam: { r: 175, dmg: 1.8 }, summon: { type: 'swarmer', count: 5 } } },
+             specials: { interval: 4.6, slam: { r: 175, dmg: 1.8 }, summon: { type: 'swarmer', count: 5 } },
+             charge: { windup: 0.68, dur: 0.5, speed: 470, cooldown: 6.5 }, chargeGated: true,
+             phases: [
+               { at: 0.66, title: 'FURY', speed: 1.12, cd: 0.74, enableCharge: true, spiral: true, novaBonus: 2 },
+               { at: 0.33, title: 'APOCALYPSE', speed: 1.24, cd: 0.5, novaBonus: 6, summonBonus: 3, doubleRing: true, emberAura: true },
+             ] },
 };
 
 // Elite affixes — a rare enemy spawns "empowered" with a glowing aura, buffed

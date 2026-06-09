@@ -21,6 +21,31 @@ const HERO_IDS = ['knight', 'rogue', 'paladin'];
 
 let game = null;
 
+// A pixel-art speaker, generated pixel-by-pixel (no asset file) in the game's
+// parchment/gold palette. `muted` swaps the gold sound-waves for a red slash.
+function drawMuteIcon(cv, muted) {
+  const W = 16, H = 16, s = (cv.width / W) | 0;
+  const g = cv.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  g.clearRect(0, 0, cv.width, cv.height);
+  const body = Array.from({ length: H }, () => new Array(W).fill(0));
+  const put = (x, y) => { if (x >= 0 && x < W && y >= 0 && y < H) body[y][x] = 1; };
+  for (let c = 2; c <= 4; c++) for (let r = 6; r <= 9; r++) put(c, r);          // magnet box
+  for (let c = 5; c <= 8; c++) for (let r = 6 - (c - 5); r <= 9 + (c - 5); r++) put(c, r);  // flaring cone
+  const px = (x, y, col) => { g.fillStyle = col; g.fillRect(x * s, y * s, s, s); };
+  // dark outline: every empty cell touching the body
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (body[y][x]) continue;
+    if (body[y - 1]?.[x] || body[y + 1]?.[x] || body[y]?.[x - 1] || body[y]?.[x + 1]) px(x, y, '#14101a');
+  }
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (body[y][x]) px(x, y, '#e9dcc3');
+  if (!muted) {
+    for (const [x, y] of [[10, 7], [10, 8], [11, 6], [11, 9], [12, 5], [12, 10], [13, 4], [13, 11]]) px(x, y, '#f4c95d');
+  } else {
+    for (let i = 0; i < 9; i++) { px(7 + i, 13 - i, '#d4453a'); px(7 + i, 12 - i, '#7a1410'); }   // bold slash
+  }
+}
+
 // wrap digit runs so numbers render in the clear Press Start 2P font
 const numWrap = (s) => String(s).replace(/(\d+)/g, '<span class="num">$1</span>');
 
@@ -272,7 +297,9 @@ async function boot() {
   window.addEventListener('keydown', unlock);
   // a small mute toggle in the corner (and the 'M' key)
   const muteBtn = document.getElementById('mute-btn');
-  const syncMute = () => { if (muteBtn) muteBtn.textContent = Sound.muted ? '🔇' : '🔊'; };
+  let muteCv = null;
+  if (muteBtn) { muteCv = document.createElement('canvas'); muteCv.width = muteCv.height = 32; muteBtn.appendChild(muteCv); }
+  const syncMute = () => { if (muteCv) drawMuteIcon(muteCv, Sound.muted); };
   syncMute();
   if (muteBtn) muteBtn.addEventListener('click', (e) => { e.stopPropagation(); Sound.unlock(); Sound.toggleMute(); syncMute(); });
   window.addEventListener('keydown', (e) => { if (e.key === 'm' || e.key === 'M') { Sound.toggleMute(); syncMute(); } });

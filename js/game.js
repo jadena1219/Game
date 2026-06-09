@@ -3921,11 +3921,11 @@ export class Game {
   // fast cut → follow-through), the hand reaching into the cut, with a fading
   // motion-blur trail of the blade so the slash reads as one flowing motion.
   _drawHeldBlade(ctx, p, breath = 0) {
-    const sword = Assets.bladeSwords && Assets.bladeSwords[p.blade];
+    const sword = (Assets.bladeHeld && Assets.bladeHeld[p.blade]) || (Assets.bladeSwords && Assets.bladeSwords[p.blade]);
     if (!sword || p.dead) return;
-    const cw = 30, ch = 104, gripY = 84, sc = CONFIG.pixelScale * 0.3;
+    const cw = 18, ch = 64, gripY = 52, sc = CONFIG.pixelScale * 0.31;   // simpler/slimmer; sized to fit him
     const faceSign = p.faceLeft ? -1 : 1, bd = bladeById(p.blade);
-    let hx = p.x + faceSign * 13, hy = p.y - 22 - breath;
+    let hx = p.x + faceSign * 10, hy = p.y - 20 - breath;
     const poses = [];
     if (p.swingTimer > 0) {
       const sp = Math.min(1, p.swingProgress);
@@ -3942,7 +3942,7 @@ export class Game {
     } else if (p.dashing) {
       poses.push({ aim: p.facingAngle + Math.PI * 0.85, a: 1 });
     } else {
-      poses.push({ aim: -Math.PI / 2 + faceSign * 0.6 + Math.sin(this.time * 2.3) * 0.05, a: 1 });   // ready guard, breathing
+      poses.push({ aim: -Math.PI / 2 + faceSign * 0.22 + Math.sin(this.time * 2.3) * 0.04, a: 1 });   // upright ready guard (not stuck out)
     }
     // an elemental glow at the hilt so the blade never blends into him
     ctx.save(); ctx.globalCompositeOperation = 'lighter';

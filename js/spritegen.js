@@ -147,19 +147,19 @@ function dreadcaller(ctx, ox, f) {
 function knightUnarmed(ctx, ox, f) {
   const p = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(ox + x, y, w, h); };
   const K = '#14141d', K2 = '#262632', EDGE = '#4a4a5e', SIL = '#828299', GLOW = '#74e0ff';
-  const GOLD = '#caa54a', CAPE = '#181820', CAPEL = '#7c1623', GREV = '#0b0b11';
+  const GOLD = '#caa54a', CAPE = '#23232f', CAPE2 = '#34344a', GREV = '#0b0b11';
   const bob = (f === 1 || f === 2) ? -1 : 0, lean = f === 3 ? 1 : 0;
-  // cape, trailing and fluttering
+  // a dark steel cape, trailing and fluttering (no shield)
   const cx = f === 1 ? 1 : f === 3 ? 3 : 2;
-  p(cx, 6 + bob, 5, 14, CAPE); p(cx, 6 + bob, 1, 14, CAPEL); p(cx + 1, 18 + bob, 5, 3, CAPE);
+  p(cx, 6 + bob, 5, 14, CAPE); p(cx, 6 + bob, 1, 14, CAPE2); p(cx + 1, 18 + bob, 5, 3, CAPE);
   // legs — a clear alternating stride
   const leg = (x, y, h) => { p(x, y, 2, h, K); p(x, y, 1, h, K2); p(x, y + 2, 2, 1, SIL); p(x, y + h - 1, 2, 1, GREV); };
   if (f === 0) { leg(6, 17, 6); leg(9, 17, 6); }
   else if (f === 1) { leg(5, 18, 5); leg(10, 16, 6); }
   else if (f === 2) { leg(6, 16, 6); leg(9, 18, 5); }
   else { leg(4, 18, 5); leg(11, 18, 5); }
-  // back arm + small angular shield
-  p(4 + lean, 11 + bob, 2, 5, K); p(3 + lean, 12 + bob, 2, 4, K2); p(3 + lean, 12 + bob, 1, 4, EDGE);
+  // back arm
+  p(4 + lean, 11 + bob, 2, 5, K); p(4 + lean, 11 + bob, 1, 5, K2);
   // cuirass — slim, tapered, sharp
   p(6 + lean, 9 + bob, 5, 8, K); p(6 + lean, 9 + bob, 5, 1, EDGE); p(6 + lean, 9 + bob, 1, 8, K2);
   p(7 + lean, 10 + bob, 3, 4, K2); p(8 + lean, 11 + bob, 1, 1, GLOW);   // chest gem
@@ -191,7 +191,8 @@ export const CREATURES = [
 export function registerGeneratedSprites() {
   if (!Assets.manifest || !Assets.manifest.sprites) return;
   for (const c of CREATURES) sheet(c.name, c.scale, c.draw);
-  Assets.bladeSwords = buildBladeSwords();   // full-res sword canvases for the shrine
+  Assets.bladeSwords = buildBladeSwords();   // ornate sword canvases for the shrine
+  Assets.bladeHeld = buildBladeHeld();       // simpler, slimmer blades the knight holds in-level
 }
 
 // ---------------------------------------------------------------------------
@@ -300,5 +301,35 @@ export function buildBladeIcons() {
 export function buildBladeSwords() {
   const out = {};
   for (const id of Object.keys(BLADE_PAL)) out[id] = swordCanvas(id);
+  return out;
+}
+
+// A cleaner, slimmer, shorter blade for the knight to actually HOLD in-level —
+// the ornate fairytale sword overpowers his silhouette, so the held version is
+// pared back so it reads as his weapon, not a prop.
+const HSW_W = 18, HSW_H = 64;
+function simpleBlade(ctx, pal) {
+  const P = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(Math.round(x), Math.round(y), Math.max(1, Math.round(w)), Math.max(1, Math.round(h))); };
+  const CX = 9, tip = 3, guard = 44, L = guard - tip;
+  for (let y = tip; y < guard; y++) {
+    const t = (y - tip) / L, hw = Math.max(1, Math.round(1 + 2.6 * Math.pow(t, 0.7)));
+    P(CX - hw, y, hw * 2, 1, pal.steelDk);
+    P(CX - hw + 1, y, hw * 2 - 2, 1, pal.steel);
+    P(CX - 1, y, 1, 1, pal.edge);
+    P(CX + hw - 1, y, 1, 1, pal.glow);
+  }
+  P(CX, tip, 1, 2, '#ffffff');
+  P(CX - 6, guard, 12, 2, GOLD); P(CX - 6, guard, 12, 1, GOLD_L); P(CX - 2, guard - 1, 4, 3, pal.gem); P(CX - 1, guard, 1, 1, '#fff');
+  for (let y = guard + 3; y < guard + 14; y += 3) { P(CX - 1, y, 3, 2, GRIP); P(CX - 1, y + 2, 3, 1, GRIP_D); }
+  P(CX - 2, guard + 14, 4, 3, GOLD); P(CX - 1, guard + 15, 2, 2, pal.gem);
+}
+export function buildBladeHeld() {
+  const out = {};
+  for (const id of Object.keys(BLADE_PAL)) {
+    const c = document.createElement('canvas'); c.width = HSW_W; c.height = HSW_H;
+    const ctx = c.getContext('2d'); ctx.imageSmoothingEnabled = false;
+    simpleBlade(ctx, BLADE_PAL[id]);
+    out[id] = c;
+  }
   return out;
 }

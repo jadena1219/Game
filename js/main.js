@@ -190,6 +190,16 @@ const ui = {
     else { b.textContent = 'Descend'; b.className = 'door'; b.onclick = () => game.campDescend(); }
   },
 
+  // Prompt to draw a sword in the Shrine of Blades.
+  setShrinePrompt(sword) {
+    const b = document.getElementById('camp-prompt');
+    if (!sword) { b.classList.add('hidden'); b.onclick = null; return; }
+    const bl = BLADES.find((x) => x.id === sword.id);
+    b.textContent = `Take ${bl ? bl.name : 'the Blade'}`;
+    b.className = 'door'; b.classList.remove('hidden');
+    b.onclick = () => game.chooseShrineBlade(sword.id);
+  },
+
   // A dungeon event — risk/reward decision at the shrine.
   // The Living Blade picker shown at the start of a run.
   buildBladeSelect() {
@@ -388,7 +398,7 @@ async function boot() {
   if (godSkip) godSkip.addEventListener('click', (e) => { e.stopPropagation(); game.godSkip(); });
 
   // Hero select stays built for a future unlock; for now every run is the Knight.
-  document.getElementById('start-btn').addEventListener('click', () => { Sound.unlock(); ui.buildBladeSelect(); });
+  document.getElementById('start-btn').addEventListener('click', () => { Sound.unlock(); game.startShrine(); });
   document.getElementById('retry-btn').addEventListener('click', () => game.start('knight'));
   document.getElementById('win-btn').addEventListener('click', () => game.start('knight'));
   // return to the title after a run (resets game state so the corridor shows)

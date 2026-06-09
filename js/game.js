@@ -378,6 +378,96 @@ export class Game {
     g.fillStyle = 'rgba(0,0,0,0.2)'; g.fillRect(x + 4, y - 6, 4, 38);
   }
 
+  // ---------- The Shrine of Blades render ----------
+  _renderShrine(ctx) {
+    const W = this.vw, H = this.vh, sh = this.shrine, p = this.player;
+    ctx.clearRect(0, 0, W, H);
+    ctx.save();
+    if (this.shake > 0) ctx.translate((Math.random() - 0.5) * this.shake, (Math.random() - 0.5) * this.shake);
+    ctx.fillStyle = this.voidColor || '#070510'; ctx.fillRect(-30, -30, W + 60, H + 60);
+    if (this.shrineBg) ctx.drawImage(this.shrineBg, 0, 0);
+    for (const s of sh.swords) this._drawPedestal(ctx, s.x, s.y + 46);
+    // depth-sort the knight among the swords
+    const list = sh.swords.map((s) => ({ s, y: s.y })); list.push({ player: true, y: p.y });
+    list.sort((a, b) => a.y - b.y);
+    for (const it of list) {
+      if (it.player) drawSprite(ctx, p.sprite, pickFrame(p, this.time), p.x, p.y, p.faceLeft, 1);
+      else this._drawShrineSword(ctx, it.s);
+    }
+    ctx.restore();
+    // labels + title (screen space; cam is at the origin so world == screen)
+    ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    if (!sh.chosen) {
+      ctx.globalAlpha = Math.min(1, sh.t * 1.5);
+      ctx.font = 'bold 15px "Silkscreen", sans-serif'; ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+      ctx.strokeText('TAKE UP A BLADE', W / 2, H * 0.12); ctx.fillStyle = '#e9c84a'; ctx.fillText('TAKE UP A BLADE', W / 2, H * 0.12);
+      ctx.globalAlpha = 1;
+      for (const s of sh.swords) {
+        const bd = bladeById(s.id), isNear = sh.near === s;
+        ctx.font = `bold ${isNear ? 13 : 11}px "Silkscreen", sans-serif`;
+        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+        ctx.strokeText(bd.name, s.x, s.y + 64); ctx.fillStyle = bd.color; ctx.fillText(bd.name, s.x, s.y + 64);
+      }
+      const n = sh.near;
+      if (n) {                                            // the near blade explains itself
+        const bd = bladeById(n.id);
+        ctx.font = '11px "Silkscreen", sans-serif';
+        for (const [li, line] of this._wrapText(bd.sig, 34).entries()) {
+          ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+          ctx.strokeText(line, W / 2, H * 0.88 + li * 16); ctx.fillStyle = '#e7dcf2'; ctx.fillText(line, W / 2, H * 0.88 + li * 16);
+        }
+      }
+    }
+    ctx.restore();
+    if (this.state === 'shrine' && !sh.chosen) this.input.draw(ctx);   // joystick feedback
+    if (this.flashScreen > 0) { ctx.save(); ctx.globalAlpha = Math.min(0.6, this.flashScreen * 2); ctx.fillStyle = '#fff7e0'; ctx.fillRect(0, 0, W, H); ctx.restore(); }
+    this._drawTransition(ctx);
+  }
+
+  _drawPedestal(ctx, x, y) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(x, y + 7, 24, 7, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#322d42'; ctx.fillRect(x - 17, y - 7, 34, 13);
+    ctx.fillStyle = '#473f5c'; ctx.fillRect(x - 17, y - 7, 34, 3);
+    ctx.fillStyle = '#221d30'; ctx.fillRect(x - 13, y + 6, 26, 7);
+    ctx.restore();
+  }
+
+  _drawShrineSword(ctx, s) {
+    const sh = this.shrine, bd = bladeById(s.id), sword = Assets.bladeSwords && Assets.bladeSwords[s.id];
+    const t = this.time;
+    let cx = s.x, cy = s.y, alpha = 1, scale = 1.35, glowR = 44;
+    if (sh.chosen) {
+      if (s.id === sh.chosen) { const k = Math.min(1, sh.drawT / 0.9); cx = s.x + (this.player.x - s.x) * k; cy = (s.y) + (this.player.y - 24 - s.y) * k; scale = 1.35 - 0.55 * k; glowR = 44 + 70 * k * (1 - k); }
+      else { alpha = Math.max(0, 1 - sh.drawT * 2.6); }
+    }
+    if (alpha <= 0) return;
+    const bob = (sh.chosen === s.id) ? 0 : Math.sin(t * 1.5 + s.x * 0.05) * 4;
+    const sway = Math.sin(t * 1.1 + s.x * 0.07) * 0.08;
+    cy += bob;
+    ctx.save(); ctx.globalAlpha = alpha;
+    ctx.globalCompositeOperation = 'lighter';
+    const pulse = 0.5 + 0.5 * Math.sin(t * 3 + s.x);
+    const g = ctx.createRadialGradient(cx, cy, 2, cx, cy, glowR);
+    g.addColorStop(0, this._rgba(bd.color, 0.45 + 0.2 * pulse)); g.addColorStop(1, this._rgba(bd.color, 0));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, glowR, 0, Math.PI * 2); ctx.fill();
+    // rising/falling element motes
+    for (let i = 0; i < 6; i++) {
+      const ph = (t * 0.5 + i * 0.17 + s.x * 0.1) % 1;
+      const px = cx + Math.sin(t * 1.4 + i * 2) * 18;
+      const py = s.id === 'frost' ? cy - 34 + ph * 66 : cy + 32 - ph * 66;
+      ctx.globalAlpha = alpha * (1 - ph) * 0.85; ctx.fillStyle = ph < 0.5 ? '#ffffff' : bd.color;
+      ctx.fillRect(Math.round(px), Math.round(py), 2, 2);
+    }
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = alpha;
+    if (sword) {
+      const w = 30 * scale, h = 104 * scale;
+      ctx.translate(cx, cy); ctx.rotate(sway); ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(sword, -w / 2, -h / 2, w, h);
+    }
+    ctx.restore(); ctx.globalAlpha = 1;
+  }
+
   // Cinderstep's burning footprints — animated pixel flames over an ember bed.
   _drawFireTrail(ctx, fx) {
     const k = fx.t / fx.dur;
@@ -641,6 +731,72 @@ export class Game {
     this.ui.swipeTitleAway();           // CSS lift-and-blur on the title overlay
   }
 
+  // ---------- The Shrine of Blades: the run-opening sword choice ----------
+  startShrine() {
+    if (this.state !== 'title') return;
+    this.heroId = 'knight';
+    this.biome = biomeForLevel(1);
+    this._buildShrineRoom();
+    const mb = this.metaB = metaBonuses(this.meta);
+    this.player = new Player(this.world.w / 2, this.world.h / 2, 'knight', mb);
+    this.player.blade = null;                            // weaponless until he takes one up
+    const W = this.vw, H = this.vh, sy = H * 0.42;
+    this.cam.x = 0; this.cam.y = 0;                      // screen-sized chamber at the origin
+    this.player.x = W / 2; this.player.y = H * 0.82; this.player.faceLeft = false;
+    this.bounds = { minX: 40, minY: H * 0.52, maxX: W - 40, maxY: H - 46 };
+    this.shrine = { t: 0, chosen: null, drawT: 0, fired: false, near: null, promptFor: undefined,
+      swords: [ { id: 'ember', x: W * 0.26, y: sy }, { id: 'frost', x: W * 0.5, y: sy - 10 }, { id: 'storm', x: W * 0.74, y: sy } ] };
+    this.state = 'shrine';
+    Sound.setScene('camp');
+    this.ui.swipeTitleAway();
+  }
+
+  _buildShrineRoom() {
+    const W = this.vw, H = this.vh, b = this.biome;
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const g = c.getContext('2d');
+    const grd = g.createLinearGradient(0, 0, 0, H); grd.addColorStop(0, b.ground[0]); grd.addColorStop(1, b.ground[1]);
+    g.fillStyle = grd; g.fillRect(0, 0, W, H);
+    if (b.detail) b.detail(g, W, H);
+    const rg = g.createRadialGradient(W / 2, H * 0.42, 10, W / 2, H * 0.42, Math.max(W, H) * 0.42);
+    rg.addColorStop(0, 'rgba(120,90,170,0.16)'); rg.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = rg; g.fillRect(0, 0, W, H);
+    this._campTorchScreen = [[52, 84], [W - 52, 84]];
+    for (const [tx, ty] of this._campTorchScreen) this._bakeBrazierPost(g, tx, ty);
+    this._bakeWalls(g, b, W, H);
+    const v = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.26, W / 2, H / 2, Math.max(W, H) * 0.62);
+    v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.64)');
+    g.fillStyle = v; g.fillRect(0, 0, W, H);
+    this.shrineBg = c;
+  }
+
+  _updateShrine(dt) {
+    const sh = this.shrine, p = this.player; sh.t += dt;
+    if (sh.chosen) {                                     // the chosen blade flies to his hand, then we descend
+      sh.drawT += dt;
+      if (sh.drawT >= 0.9 && !sh.fired) { sh.fired = true; this._slashWipe(() => this.start('knight')); }
+      return;
+    }
+    this.input.poll();
+    const mv = this.input.move, ml = Math.hypot(mv.x, mv.y);
+    if (ml > 0.08) { const spd = p.moveSpeed; p.x += (mv.x / ml) * spd * Math.min(1, ml) * dt; p.y += (mv.y / ml) * spd * Math.min(1, ml) * dt; p.fx = mv.x / ml; p.fy = mv.y / ml; p.faceLeft = p.fx < 0; p.moving = true; } else p.moving = false;
+    const b = this.bounds; p.x = Math.max(b.minX, Math.min(b.maxX, p.x)); p.y = Math.max(b.minY, Math.min(b.maxY, p.y));
+    let near = null, nd = 80; for (const s of sh.swords) { const d = Math.hypot(p.x - s.x, p.y - (s.y + 20)); if (d < nd) { nd = d; near = s; } }
+    sh.near = near;
+    const id = near && near.id, was = sh.promptFor && sh.promptFor.id;
+    if (id !== was) { sh.promptFor = near; this.ui.setShrinePrompt(near); }
+  }
+
+  chooseShrineBlade(id) {
+    if (!this.shrine || this.shrine.chosen) return;
+    this.shrine.chosen = id; this.shrine.drawT = 0; this.shrine.fired = false;
+    this.setBlade(id);
+    this.ui.setShrinePrompt(null);
+    Sound.play('relic'); Sound.play('furyready');
+    this.flashScreen = Math.max(this.flashScreen, 0.3);
+    this.shake = Math.max(this.shake, 6);
+  }
+
   _updateIntro(dt) {
     this.introT += dt;
     // a slow, careful walk that only gently gathers pace
@@ -833,6 +989,26 @@ export class Game {
   }
 
   // ---------- The Living Blade ----------
+  // Elemental particles flung along the swing arc — fire embers, ice shards, sparks.
+  _bladeSwingFx(p) {
+    const a = p.facingAngle, arc = p.arcDeg * Math.PI / 180, reach = p.reach, oy = p.y - 16;
+    for (let i = 0; i < 11; i++) {
+      const u = Math.random(), ang = a - arc / 2 + u * arc, r = reach * (0.45 + Math.random() * 0.55);
+      const x = p.x + Math.cos(ang) * r, y = oy + Math.sin(ang) * r;
+      const tang = ang + Math.PI / 2;          // fling tangent to the arc
+      if (p.blade === 'ember') {
+        this._mote(x, y, Math.random() < 0.5 ? '#ff7a2a' : '#ffd36b',
+          { vx: Math.cos(ang) * 30, vy: Math.sin(ang) * 30 - 26, g: -36, r: 1.4 + Math.random() * 1.6, twinkle: 1, dur: 0.4 + Math.random() * 0.3 });
+      } else if (p.blade === 'frost') {
+        this.effects.push({ kind: 'spark', x, y, vx: Math.cos(tang) * (90 + Math.random() * 90) * (Math.random() < 0.5 ? 1 : -1),
+          vy: Math.sin(tang) * (90 + Math.random() * 90), t: 0, dur: 0.34, col: Math.random() < 0.5 ? '#eaffff' : '#bfe9ff' });
+      } else {
+        this.effects.push({ kind: 'spark', x, y, vx: Math.cos(tang) * 170 * (Math.random() < 0.5 ? 1 : -1),
+          vy: Math.sin(tang) * 170, t: 0, dur: 0.2, col: Math.random() < 0.5 ? '#cdbfff' : '#f0eaff', streak: true });
+      }
+    }
+  }
+
   _bladeOnHit(e, dmg) {
     const p = this.player; if (!p || !p.blade) return;
     const up = p.bladeUp;
@@ -1457,8 +1633,10 @@ export class Game {
     const dur = style === 'stab' ? 0.2 : 0.32;
     // anchor at the torso, not the feet (sprites are feet-anchored) so the slash
     // radiates from the knight's body evenly in every facing direction
-    this.effects.push({ kind: 'swing', t: 0, dur, style,
+    this.effects.push({ kind: 'swing', t: 0, dur, style, blade: player.blade,
       x: player.x, y: player.y - 16, angle: player.facingAngle });
+    // each Living Blade throws its own elemental flourish off the cut
+    if (player.blade) this._bladeSwingFx(player);
     // Trail of Cinders (Emberbrand evolution): the swing scorches the ground
     if (player.bladeUp && player.bladeUp.has('ember_trail')) {
       const a = player.facingAngle;
@@ -1693,7 +1871,7 @@ export class Game {
   // Camera follows the hero with a GENTLE ease (restores the smooth feel; the
   // actual move speed is constant because that bug was in the joystick, not here).
   _updateCamera(dt) {
-    if (this.state === 'camp' || this.cutscene) return;   // camp is fixed; the cutscene drives its own camera
+    if (this.state === 'camp' || this.state === 'shrine' || this.cutscene) return;   // these scenes own the camera
     const cw = this.world.w - this.vw, ch = this.world.h - this.vh;
     if (this.state === 'title' || !this.player) {
       this.cam.x = Math.max(0, Math.min(cw, this.world.w / 2 - this.vw / 2));
@@ -1725,6 +1903,7 @@ export class Game {
     if (this.state === 'dying') return this._updateDying(dt);
     if (this.state === 'won') return this._updateWon(dt);
     if (this.state === 'camp') return this._updateCamp(dt);
+    if (this.state === 'shrine') return this._updateShrine(dt);
     if (this.state === 'intro') return this._updateIntro(dt);
     if (this.state === 'interlude') return this._updateInterlude(dt);
     if (this.state !== 'playing') return;
@@ -2349,6 +2528,8 @@ export class Game {
       this._drawTransition(ctx);
       return;
     }
+
+    if (this.state === 'shrine') { this._renderShrine(ctx); return; }
 
     ctx.clearRect(0, 0, this.vw, this.vh);
     ctx.save();
@@ -3889,8 +4070,11 @@ export class Game {
       // shaft, so it reads as a sword cut, not a spear thrust.
       const slam = style === 'slam';
       const rMid = reach * 0.68;                            // sits inside the hitbox, not beyond it
-      const bloom = slam ? '150,90,25' : '60,150,255';
-      const body  = slam ? '255,190,90' : '150,220,255';
+      // the Living Blade recolours the whole cut to its element
+      const ELSW = { ember: ['150,50,10', '255,140,40'], frost: ['50,120,190', '160,225,255'], storm: ['95,60,190', '190,160,255'] };
+      const elc = fx.blade && ELSW[fx.blade];
+      const bloom = elc ? elc[0] : (slam ? '150,90,25' : '60,150,255');
+      const body  = elc ? elc[1] : (slam ? '255,190,90' : '150,220,255');
       const outer = reach * (slam ? 0.46 : 0.4);           // crescent thickness
       // helper: trace the convex outer rim of the crescent from u=lo..hi
       const rim = (lo, hi) => {

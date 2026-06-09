@@ -14,9 +14,14 @@ pitched so nothing gets lost.
 - The blade **evolves at floors 5 / 10 / 15** — pick 1 of 2 upgrades each time
   (3-tier tree per blade). HUD chip shows blade + evolution pips.
 - Generated sword icons; status visuals (flames, frost casing).
-- **NEXT:** replace the picker screen with an in-world **discovery cutscene** —
-  the weaponless knight finds a shrine of three floating, glowing, animated
-  swords and chooses one. (Jade's idea — greenlit.)
+- **The Shrine of Blades** ✅ — the run opens in a chamber where three ornate,
+  glowing, floating swords hover on pedestals; walk up and take one. Replaced
+  the picker screen.
+- Swords redrawn as long, curved, rune-etched fairytale blades (ornateBlade in
+  spritegen). Each blade has its own **elemental swing effect** (fire embers /
+  ice shards / violet sparks + recoloured slash).
+- TODO polish: a truly weaponless knight pose for the shrine (uses the normal
+  sprite for now).
 
 ### Build variety — runs with identity ✅
 - **Keystones**: Cinderstep (dash fire-trail), Mirror Aegis (no dash, reflect

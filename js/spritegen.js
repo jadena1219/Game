@@ -153,6 +153,7 @@ export const CREATURES = [
 export function registerGeneratedSprites() {
   if (!Assets.manifest || !Assets.manifest.sprites) return;
   for (const c of CREATURES) sheet(c.name, c.scale, c.draw);
+  Assets.bladeSwords = buildBladeSwords();   // full-res sword canvases for the shrine
 }
 
 // ---------------------------------------------------------------------------
@@ -197,25 +198,69 @@ export function buildKeystoneIcons() {
 }
 
 // ---------------------------------------------------------------------------
-// The three Living Blades — glowing elemental swords for the choosing.
-function bladeBase(p, blade, edge, glow) {
-  // upright sword: blade, crossguard, grip, pommel
-  p(11, 3, 2, 12, blade); p(10, 5, 1, 9, edge); p(13, 5, 1, 9, glow);   // blade + edges
-  p(11, 3, 2, 2, '#fff');                                                // bright tip
-  p(8, 15, 8, 2, '#9a8350'); p(8, 15, 8, 1, '#c8b072');                  // crossguard
-  p(11, 17, 2, 4, '#5a3a22');                                            // grip
-  p(10, 21, 4, 2, '#c8b072');                                           // pommel
-}
-export const BLADE_ICON_DRAWERS = {
-  ember: (p) => { bladeBase(p, '#ff8a3a', '#ffd36b', '#e2470f', '#3a1a08');
-    p(7, 6, 2, 3, '#ff7a2a'); p(15, 5, 2, 4, '#ffb02a'); p(8, 10, 1, 3, '#ffd86b'); p(15, 10, 1, 3, '#ff7a2a'); p(11, 1, 2, 2, '#ffd86b'); },
-  frost: (p) => { bladeBase(p, '#bfe9ff', '#eaffff', '#5aa6d8', '#0e2030');
-    p(8, 6, 1, 1, '#eaffff'); p(15, 8, 1, 1, '#eaffff'); p(7, 11, 2, 1, '#bfe9ff'); p(15, 4, 1, 2, '#bfe9ff'); p(9, 3, 1, 1, '#fff'); p(14, 13, 1, 1, '#bfe9ff'); },
-  storm: (p) => { bladeBase(p, '#cdbfff', '#f0eaff', '#7a5ad8', '#1a1030');
-    p(8, 5, 2, 1, '#e0d6ff'); p(9, 6, 1, 2, '#b9a6ff'); p(15, 7, 2, 1, '#e0d6ff'); p(14, 8, 1, 2, '#b9a6ff'); p(7, 12, 2, 1, '#f0eaff'); },
+// The three Living Blades — long, curved, ornate fairytale swords. Drawn at a
+// native 30×104 resolution (tip up) so they stay crisp scaled to icons or huge
+// in the shrine.
+const BLADE_PAL = {
+  ember: { steel: '#ff9a4a', steelDk: '#c2531a', edge: '#ffe6b0', glow: '#ff4e10', gem: '#ff2a0e', rune: '#fff0c0' },
+  frost: { steel: '#bfe9ff', steelDk: '#56a0d4', edge: '#ffffff', glow: '#7fd0ff', gem: '#2f9bff', rune: '#eaffff' },
+  storm: { steel: '#cdbfff', steelDk: '#6f4fd6', edge: '#f3eeff', glow: '#9a78ff', gem: '#7a36ff', rune: '#f0eaff' },
 };
+const GOLD = '#e9c84a', GOLD_L = '#fff3b0', GOLD_D = '#9a7a1e', GRIP = '#4a2e16', GRIP_D = '#2a190c';
+const SW_W = 30, SW_H = 104;
+
+function ornateBlade(ctx, pal) {
+  const P = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(Math.round(x), Math.round(y), Math.max(1, Math.round(w)), Math.max(1, Math.round(h))); };
+  const CX = 15, tip = 5, guard = 64, L = guard - tip;
+  // --- the long, curved blade ---
+  for (let y = tip; y < guard; y++) {
+    const t = (y - tip) / L;                       // 0 tip .. 1 guard
+    const cx = CX + 6 * Math.sin((1 - t) * 1.5);   // a scimitar sweep toward the tip
+    const hw = Math.max(1, Math.round(1 + 4.6 * Math.pow(t, 0.82)));
+    P(cx - hw, y, hw * 2, 1, pal.steelDk);
+    P(cx - hw + 1, y, hw * 2 - 2, 1, pal.steel);
+    P(cx - 1, y, 1, 1, pal.edge);                  // fuller / spine highlight
+    P(cx + hw - 1, y, 1, 1, pal.glow);             // glowing cutting edge
+    if (y % 9 === 0 && t > 0.2) P(cx, y, 1, 1, pal.rune);   // etched runes
+  }
+  P(CX + 6 * Math.sin(1.5) - 0, tip, 1, 2, '#ffffff');     // bright point
+  // --- ornate swept crossguard with a central gem ---
+  P(CX - 10, guard, 20, 3, GOLD); P(CX - 10, guard, 20, 1, GOLD_L); P(CX - 10, guard + 2, 20, 1, GOLD_D);
+  P(CX - 11, guard - 3, 2, 5, GOLD); P(CX + 9, guard - 3, 2, 5, GOLD);     // upswept quillon tips
+  P(CX - 12, guard - 4, 2, 2, GOLD_L); P(CX + 10, guard - 4, 2, 2, GOLD_L);
+  P(CX - 2, guard - 1, 4, 5, pal.gem); P(CX - 1, guard, 2, 2, '#ffffff');  // socketed gem
+  // --- wrapped grip ---
+  for (let y = guard + 4; y < guard + 24; y += 3) { P(CX - 2, y, 4, 2, GRIP); P(CX - 2, y + 2, 4, 1, GRIP_D); }
+  // --- jewelled pommel ---
+  const py = guard + 24;
+  P(CX - 3, py, 6, 5, GOLD); P(CX - 3, py, 6, 1, GOLD_L); P(CX - 4, py + 1, 1, 3, GOLD_D); P(CX + 3, py + 1, 1, 3, GOLD_D);
+  P(CX - 2, py + 1, 4, 3, pal.gem); P(CX - 1, py + 1, 1, 1, '#ffffff');
+}
+
+function swordCanvas(id) {
+  const c = document.createElement('canvas'); c.width = SW_W; c.height = SW_H;
+  const ctx = c.getContext('2d'); ctx.imageSmoothingEnabled = false;
+  ornateBlade(ctx, BLADE_PAL[id]);
+  return c;
+}
+
+// square icon (transparent letterbox) so the tall sword isn't squished in the UI
 export function buildBladeIcons() {
   const out = {};
-  for (const [id, draw] of Object.entries(BLADE_ICON_DRAWERS)) out[id] = iconCanvas(draw);
+  for (const id of Object.keys(BLADE_PAL)) {
+    const sc = swordCanvas(id);
+    const ic = document.createElement('canvas'); ic.width = ic.height = 52;
+    const x = ic.getContext('2d'); x.imageSmoothingEnabled = false;
+    const h = 50, w = SW_W * (h / SW_H);
+    x.drawImage(sc, (52 - w) / 2, (52 - h) / 2, w, h);
+    out[id] = ic.toDataURL();
+  }
+  return out;
+}
+
+// full-resolution sword canvases for the shrine cutscene
+export function buildBladeSwords() {
+  const out = {};
+  for (const id of Object.keys(BLADE_PAL)) out[id] = swordCanvas(id);
   return out;
 }

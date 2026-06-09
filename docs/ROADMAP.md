@@ -8,6 +8,30 @@ pitched so nothing gets lost.
 
 ## 🚢 Shipped
 
+### The Sanctum is LIVE — souls, permanent upgrades, lore ✅
+- Souls bank at the end of every run (god-mode runs bank nothing) and spend in
+  the Sanctum: 6 permanent upgrades now genuinely apply at run start.
+- Executioner's Seal + Thunderbrand sealed behind 70-soul unlocks.
+- **Every upgrade reveals a lore fragment** (Garrick, the coffers, the sorcerer
+  who fled) — the grind tells the story, per STORY.md Phase 1.
+- Entrances: title button w/ souls badge + straight from the death screen.
+
+### Run summary + quick wins ✅
+- Death/victory screens tell the run: blade + tier pips, time, kills, best
+  combo, gold, relics, souls banked — and **"Slain by …"** names your killer.
+- Prologue plays ONCE (title gains Replay); dash double-tap widened to 0.38s;
+  God Mode hidden unless already on or `?god`/`#god` in the URL.
+
+### Combat depth pass ✅
+- Foes approach on curved, per-foe flanking paths — packs envelop, not queue.
+- **Dark Knight SLAM** cracks the floor into molten fissures (the greenlit
+  arena mechanic): warning crack → ignition → 6.5s of burning ground.
+- **Demon Lord can't be corner-pinned**: holds ~120px casting range with
+  wall-tangent sidestepping; charge live from phase 1 (long cooldown).
+- Curve: dmg/level 8.5%→7.2%, late density up instead; L12 tank gauntlet,
+  L16 swarm flood. Blade tiers: 'Kindled Fury' (burn ticks → Fury) and 'Ride
+  the Lightning' (dash looses an arc) replace two flat +% picks.
+
 ### The Prologue — the bargain ✅
 - 5-beat opening cutscene: the golden kingdom → the dark rising → the King's
   bargain (the **Demon Lord bursts up from the ground**) → the orphan-son reveal
@@ -56,10 +80,15 @@ pitched so nothing gets lost.
 - A tentpole boss around **L5 or L7** (an elite "herald"). Two bosses across
   20 floors is thin — a third keeps the descent escalating.
 
-### 2. Boss arena mechanics
-- The Dark Knight's slam **cracks the floor into lava**.
-- The Demon Lord's nova leaves **safe-gaps** you must read.
+### 2. Boss arena mechanics (half done)
+- ~~The Dark Knight's slam **cracks the floor into lava**~~ ✅ shipped.
+- The Demon Lord's nova leaves **safe-gaps** you must read — still open.
 - Turn bullet-dodging into spatial puzzles, not just movement.
+
+### 3. Mobile ship-blockers (reviewed, not yet built)
+- Pause/resume on `visibilitychange` (game loop + audio scheduler + AudioContext
+  resume on iOS), per-asset load fallbacks, notch safe-areas, storage guards,
+  WebAudio node disconnects. Full findings in the 2026-06-09 review.
 
 ---
 

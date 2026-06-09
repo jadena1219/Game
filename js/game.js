@@ -1012,23 +1012,29 @@ export class Game {
   _drawKingdomScene(ctx, fire) {
     const W = this.vw, H = this.vh, t = this.time, horizon = H * 0.66;
     const k = fire ? Math.min(1, this.prologue.t / 2.6) : 0;
-    // sky
-    const sky = ctx.createLinearGradient(0, 0, 0, horizon);
-    if (!fire) { sky.addColorStop(0, '#e0a84e'); sky.addColorStop(1, '#f4e0a4'); }
-    else { sky.addColorStop(0, `rgb(${(28 + 80 * (1 - k)) | 0},${(12 + 44 * (1 - k)) | 0},${(14 + 18 * (1 - k)) | 0})`); sky.addColorStop(1, `rgb(${(150 + 70 * (1 - k)) | 0},${(60 + 80 * (1 - k)) | 0},${(34 + 36 * (1 - k)) | 0})`); }
-    ctx.fillStyle = sky; ctx.fillRect(0, 0, W, horizon);
-    if (!fire) { const s = ctx.createRadialGradient(W * 0.5, horizon - 4, 4, W * 0.5, horizon - 4, 220); s.addColorStop(0, 'rgba(255,248,222,0.55)'); s.addColorStop(1, 'rgba(255,232,176,0)'); ctx.fillStyle = s; ctx.fillRect(0, 0, W, horizon + 50); }
-    // the kingdom
-    const img = Assets.kingdomImg;
-    if (img && img.complete && img.naturalWidth) {
-      const dw = W, dh = dw * img.naturalHeight / img.naturalWidth;
-      ctx.imageSmoothingEnabled = false; ctx.drawImage(img, 0, horizon - dh * 0.82, dw, dh);
+    const img = Assets.kingdomImg, haveImg = img && img.complete && img.naturalWidth;
+    if (haveImg) {
+      // fit the panorama to the width, then EDGE-EXTEND: stretch its top row up to
+      // fill the sky and its bottom row down to fill the ground, so it blends into
+      // the screen seamlessly (no letterbox, no colour mismatch).
+      const iw = img.naturalWidth, ih = img.naturalHeight;
+      const dw = W, dh = dw * ih / iw, dy = Math.round(horizon - dh * 0.82), by = Math.round(dy + dh);
+      ctx.imageSmoothingEnabled = true;
+      if (dy > 0) ctx.drawImage(img, 0, 0, iw, 2, 0, 0, W, dy + 1);          // sky bleed up
+      if (by < H) ctx.drawImage(img, 0, ih - 2, iw, 2, 0, by - 1, W, H - by + 1);  // ground bleed down
+      ctx.drawImage(img, 0, dy, dw, dh);                                     // the kingdom itself
     } else {
+      const sky = ctx.createLinearGradient(0, 0, 0, horizon);
+      if (!fire) { sky.addColorStop(0, '#e0a84e'); sky.addColorStop(1, '#f4e0a4'); }
+      else { sky.addColorStop(0, `rgb(${(28 + 80 * (1 - k)) | 0},${(12 + 44 * (1 - k)) | 0},${(14 + 18 * (1 - k)) | 0})`); sky.addColorStop(1, `rgb(${(150 + 70 * (1 - k)) | 0},${(60 + 80 * (1 - k)) | 0},${(34 + 36 * (1 - k)) | 0})`); }
+      ctx.fillStyle = sky; ctx.fillRect(0, 0, W, horizon);
+      if (!fire) { const s = ctx.createRadialGradient(W * 0.5, horizon - 4, 4, W * 0.5, horizon - 4, 220); s.addColorStop(0, 'rgba(255,248,222,0.55)'); s.addColorStop(1, 'rgba(255,232,176,0)'); ctx.fillStyle = s; ctx.fillRect(0, 0, W, horizon + 50); }
       this._drawKingdomProc(ctx, horizon, fire);
+      ctx.fillStyle = fire ? '#160c08' : '#1c1408'; ctx.fillRect(0, horizon, W, H - horizon);
     }
-    ctx.fillStyle = fire ? '#160c08' : '#1c1408'; ctx.fillRect(0, horizon, W, H - horizon);
     if (!fire) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; for (let i = 0; i < 24; i++) { const ph = ((t * 0.16) + i * 0.04) % 1; ctx.globalAlpha = (1 - ph) * 0.4; ctx.fillStyle = '#ffe9a8'; ctx.fillRect((i * 53.7) % W, horizon - ph * horizon, 2, 2); } ctx.restore(); ctx.globalAlpha = 1; }
     if (fire) {
+      ctx.save(); ctx.fillStyle = `rgba(120,24,10,${0.32 * k})`; ctx.fillRect(0, 0, W, H); ctx.restore();   // redden the gold
       ctx.save(); ctx.globalCompositeOperation = 'lighter';
       const fg = ctx.createLinearGradient(0, horizon, 0, horizon - 140); fg.addColorStop(0, `rgba(255,90,20,${0.45 * k})`); fg.addColorStop(1, 'rgba(255,40,0,0)'); ctx.fillStyle = fg; ctx.fillRect(0, horizon - 140, W, 140);
       ctx.restore();

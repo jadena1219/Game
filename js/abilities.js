@@ -22,7 +22,7 @@ export const BASE_MODS = () => ({
   maxHPMult: 1,            // multiplier on max HP
   damageTakenMult: 1,      // multiplier on incoming damage (after reduction)
   noHeal: false,           // all healing is blocked
-  reflect: false,          // projectiles are batted back, doubled
+  projDamageMult: 1,       // multiplier on incoming projectile damage
   dashRangeMult: 1,        // multiplier on dash distance
   dashFireTrail: false,    // dashes leave a burning trail
   furyLocked: false,       // Fury builds endlessly toward a near-constant ultimate
@@ -67,19 +67,19 @@ export const RELICS = [
 
   // ---- KEYSTONES: each rewrites a rule of how you play ----
   { id: 'cinderstep', icon: '🔥', name: 'Cinderstep', cost: 70, keystone: true,
-    flavor: 'Your every step scorches the stone.', desc: 'KEYSTONE — Dashing leaves a trail of fire that burns all it touches.' },
+    flavor: 'Your every step scorches the stone.', desc: 'Dashing leaves a trail of fire that burns all it touches.' },
   { id: 'aegis', icon: '🪞', name: 'Mirror Aegis', cost: 72, keystone: true,
-    flavor: 'It drinks the dark and spits it back.', desc: 'KEYSTONE — Projectiles that strike you are hurled back with DOUBLE damage, and your dash flies much farther.' },
+    flavor: 'Swift enough to outrun the dark — barely.', desc: 'Your dash flies far across the room, but projectiles deal DOUBLE damage to you.' },
   { id: 'bloodfury', icon: '💥', name: 'Heart of Fury', cost: 68, keystone: true,
-    flavor: 'A rage that never banks its fire.', desc: 'KEYSTONE — Fury builds on its own (an ultimate every ~11s) — but you take DOUBLE damage.' },
+    flavor: 'A rage that never banks its fire.', desc: 'Fury builds on its own (an ultimate every ~11s) — but you take DOUBLE damage.' },
 
   // ---- CURSED: enormous power, a price paid in blood ----
   { id: 'glassdagger', icon: '🗡️', name: 'Glass Dagger', cost: 40, cursed: true,
-    flavor: 'Lethal, and just as fragile as you.', desc: 'CURSED — +55% sword damage, but −30% max HP.' },
+    flavor: 'Lethal, and just as fragile as you.', desc: '+55% sword damage, but −30% max HP.' },
   { id: 'famine', icon: '💀', name: 'Famine Crown', cost: 44, cursed: true,
-    flavor: 'It feeds on everything but you.', desc: 'CURSED — +70% gold & +25% damage, but you can no longer heal.' },
+    flavor: 'It feeds on everything but you.', desc: '+70% gold & +25% damage, but you can no longer heal.' },
   { id: 'stoneblood', icon: '🪨', name: 'Stoneblood', cost: 46, cursed: true,
-    flavor: 'Your veins run slow and cold as rock.', desc: 'CURSED — Take 35% less damage, but move and strike 22% slower.' },
+    flavor: 'Your veins run slow and cold as rock.', desc: 'Take 35% less damage, but move and strike 22% slower.' },
 ];
 
 export function relicById(id) { return RELICS.find((r) => r.id === id); }
@@ -104,7 +104,7 @@ export function recompute(player) {
   if (R.has('wind')) { m.dashCooldownMult *= 0.7; m.dashInvulnBonus += 0.15; }
   // keystones — rewrite a rule
   if (R.has('cinderstep')) m.dashFireTrail = true;
-  if (R.has('aegis')) { m.reflect = true; m.dashRangeMult *= 1.7; }
+  if (R.has('aegis')) { m.projDamageMult *= 2; m.dashRangeMult *= 1.8; }
   if (R.has('bloodfury')) { m.furyLocked = true; m.damageTakenMult *= 2; }
   // cursed — power with a price
   if (R.has('glassdagger')) { m.swordDamageMult *= 1.55; m.maxHPMult *= 0.7; }

@@ -1689,27 +1689,11 @@ export class Game {
         }
       }
     }
-    // collisions: projectiles vs player (Mirror Aegis bats them back, doubled)
+    // collisions: projectiles vs player (Mirror Aegis makes these hit twice as hard)
     for (const pr of this.projectiles) {
-      if (pr.dead || pr.ally) continue;
+      if (pr.dead) continue;
       const dx = p.x - pr.x, dy = p.y - pr.y;
-      if (Math.hypot(dx, dy) < p.r + pr.r) {
-        if (p.mods.reflect) {
-          pr.vx = -pr.vx; pr.vy = -pr.vy; pr.ally = true; pr.boss = false; pr.dmg *= 2; pr.life = 3;
-          this.addEffect({ kind: 'hitring', x: p.x, y: p.y, r: 26, t: 0, dur: 0.16 });
-          this.shake = Math.max(this.shake, 3); Sound.play('hit', { vol: 0.5 });
-        } else { if (p.takeHit(pr.dmg)) this.shake = 5; pr.dead = true; }
-      }
-    }
-    // reflected projectiles now hunt the enemies that fired them
-    for (const pr of this.projectiles) {
-      if (pr.dead || !pr.ally) continue;
-      for (const e of this.enemies) {
-        if (e.dead) continue;
-        if (Math.hypot(e.x - pr.x, e.y - pr.y) < e.r + pr.r) {
-          this.hitEnemy(e, pr.dmg, pr.vx * 0.2, pr.vy * 0.2, 'ability'); pr.dead = true; break;
-        }
-      }
+      if (Math.hypot(dx, dy) < p.r + pr.r) { if (p.takeHit(pr.dmg * (p.mods.projDamageMult || 1))) this.shake = 5; pr.dead = true; }
     }
 
     this.enemies = this.enemies.filter((e) => !e.dead);

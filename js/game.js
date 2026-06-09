@@ -1018,11 +1018,16 @@ export class Game {
       // fill the sky and its bottom row down to fill the ground, so it blends into
       // the screen seamlessly (no letterbox, no colour mismatch).
       const iw = img.naturalWidth, ih = img.naturalHeight;
-      const dw = W, dh = dw * ih / iw, dy = Math.round(horizon - dh * 0.82), by = Math.round(dy + dh);
+      const OVER = 1.08, NUDGE = 0.03;                                       // overscan + a small rightward nudge to centre the castle on the text
+      const dw = W * OVER, dh = dw * ih / iw, dx = Math.round((W - dw) / 2 + W * NUDGE);
+      // tile the three regions edge-to-edge with INTEGER boundaries (no overlap,
+      // no gap) so they never seam — even mid-fade. The sky/ground bleeds use the
+      // image's own top/bottom row (same horizontal mapping) so the colours match.
+      const dy = Math.max(0, Math.round(horizon - dh * 0.82)), by = Math.min(H, Math.round(dy + dh));
       ctx.imageSmoothingEnabled = true;
-      if (dy > 0) ctx.drawImage(img, 0, 0, iw, 2, 0, 0, W, dy + 1);          // sky bleed up
-      if (by < H) ctx.drawImage(img, 0, ih - 2, iw, 2, 0, by - 1, W, H - by + 1);  // ground bleed down
-      ctx.drawImage(img, 0, dy, dw, dh);                                     // the kingdom itself
+      if (dy > 0) ctx.drawImage(img, 0, 0, iw, 1, dx, 0, dw, dy);            // sky (top row, stretched up)
+      ctx.drawImage(img, dx, dy, dw, by - dy);                              // the kingdom itself
+      if (by < H) ctx.drawImage(img, 0, ih - 1, iw, 1, dx, by, dw, H - by);  // ground (bottom row, stretched down)
     } else {
       const sky = ctx.createLinearGradient(0, 0, 0, horizon);
       if (!fire) { sky.addColorStop(0, '#e0a84e'); sky.addColorStop(1, '#f4e0a4'); }

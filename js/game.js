@@ -971,7 +971,8 @@ export class Game {
   _drawPrologueArt(ctx, i, a) {
     const W = this.vw, H = this.vh, t = this.time, pt = this.prologue.t;
     const PA = Assets.prologueArt || {};
-    const blit = (img, cx, by, s) => { if (!img) return; ctx.imageSmoothingEnabled = false; ctx.drawImage(img, Math.round(cx - img.width * s / 2), Math.round(by - img.height * s), Math.round(img.width * s), Math.round(img.height * s)); };
+    // blit an image (sprite canvas OR loaded PNG) sized to a target on-screen height
+    const blit = (img, cx, by, targetH) => { if (!img) return; const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height; if (!ih) return; const s = targetH / ih; ctx.imageSmoothingEnabled = true; ctx.drawImage(img, Math.round(cx - iw * s / 2), Math.round(by - targetH), Math.round(iw * s), Math.round(targetH)); };
     ctx.save(); ctx.globalAlpha = a;
     if (i === 0) {                                            // the realm, golden
       this._drawKingdomScene(ctx, false);
@@ -981,8 +982,8 @@ export class Game {
       ctx.fillStyle = '#0b0712'; ctx.fillRect(0, 0, W, H);
       const cx = W * 0.5, baseY = H * 0.7, rise = Math.min(1, pt / 3);
       const pg = ctx.createRadialGradient(cx, baseY + 40, 4, cx, baseY + 40, 220); pg.addColorStop(0, 'rgba(210,30,16,0.55)'); pg.addColorStop(1, 'rgba(40,0,0,0)'); ctx.fillStyle = pg; ctx.fillRect(0, 0, W, H);
-      blit(PA.demon, cx, baseY + 24 - rise * 10, 4.4);        // the Demon Lord, looming
-      blit(PA.king, cx - W * 0.24, baseY, 1.9);               // the King, small before it
+      blit(PA.demon, cx, baseY + 8 - rise * 16, H * 0.5);     // the Demon Lord, looming huge
+      blit(PA.king, cx - W * 0.26, baseY, H * 0.13);          // the King, small before it
       drawSprite(ctx, 'knight', 'idle', cx + W * 0.24, baseY, false, 1.3);   // the price
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; const sg = 0.4 + 0.4 * Math.sin(t * 3);
       ctx.strokeStyle = `rgba(225,30,20,${sg * rise})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx + W * 0.24, baseY - 26, 22, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
@@ -992,7 +993,7 @@ export class Game {
       ctx.fillStyle = '#191322'; ctx.fillRect(cx - 96, baseY - 150, 192, 150);
       ctx.fillStyle = '#060410'; ctx.beginPath(); ctx.moveTo(cx - 40, baseY); ctx.lineTo(cx - 40, baseY - 84); ctx.arc(cx, baseY - 84, 40, Math.PI, 0); ctx.lineTo(cx + 40, baseY); ctx.closePath(); ctx.fill();
       const tg = ctx.createRadialGradient(cx, baseY - 46, 4, cx, baseY - 46, 130); tg.addColorStop(0, 'rgba(120,40,30,0.35)'); tg.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = tg; ctx.fillRect(0, 0, W, H);
-      blit(PA.king, cx - W * 0.16, baseY, 2.1);
+      blit(PA.king, cx - W * 0.16, baseY, H * 0.16);
       ctx.fillStyle = `rgba(180,220,255,${0.4 + 0.6 * Math.abs(Math.sin(t * 1.6))})`; ctx.fillRect(cx - W * 0.16 - 6, baseY - 48, 2, 3);   // a tear
       drawSprite(ctx, 'knight', 'idle', cx + W * 0.14, baseY, true, 1.45);
     } else {                                                  // the descent

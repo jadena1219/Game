@@ -20,10 +20,11 @@ let _tintCv = null, _tintCx = null;
 export function drawSprite(ctx, name, frameLabel, x, y, faceLeft, extraScale = 1, tint = null) {
   const m = Assets.manifest;
   const img = Assets.images[name];
-  if (!img) return;
-  const fw = m.frameW, fh = m.frameH;
+  if (!img || (img.tagName === 'IMG' && !img.complete)) return;
+  const sp = m.sprites[name] || {};
+  const fw = sp.fw || m.frameW, fh = sp.fh || m.frameH;   // per-sprite frame size (custom sheets)
   const col = m.frames[frameLabel] ?? 0;
-  const scale = CONFIG.pixelScale * (m.sprites[name]?.scale || 1) * extraScale;
+  const scale = CONFIG.pixelScale * (sp.scale || 1) * extraScale;
   const dw = fw * scale, dh = fh * scale;
 
   ctx.save();

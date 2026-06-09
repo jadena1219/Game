@@ -999,14 +999,7 @@ export class Game {
     const depth = this._depth();
     if (depth <= 0.04) return;
 
-    // eyes in the dark: rare & pale up top, frequent & blood-red in the depths;
-    // the safe room watches you most of all (it shouldn't feel safe).
-    this._watchT -= dt;
-    if (this._watchT <= 0) {
-      this._watchT = ((inCamp ? 6.5 : 10) - depth * 4.5) * (0.7 + Math.random() * 0.7);
-      const n = (depth > 0.6 && Math.random() < 0.4) ? 2 : 1;
-      for (let i = 0; i < n; i++) this._spawnWatcher(depth);
-    }
+    // (eyes-in-the-dark "watchers" are disabled for now — revisit later)
 
     // intrusive whispers — only in the camp, where you decide whether to go on
     if (inCamp) {
@@ -2146,8 +2139,6 @@ export class Game {
     this._drawAtmos(ctx);           // biome weather (screen overlay)
     this._drawGrade(ctx);           // biome colour grade (screen overlay)
     this._drawDread(ctx);           // depth/low-HP dread vignette pressing in
-    // eyes glow in WORLD space (anchored to the dark), painted over the shadow
-    ctx.save(); ctx.translate(-this.cam.x, -this.cam.y); this._drawWatchers(ctx); ctx.restore();
     this._drawIntroCut(ctx);        // iris opening back up inside Level 1
     this._drawInterludeFade(ctx);   // black fading out of a Demon Lord taunt into the camp
     this._drawDeathOverlay(ctx);    // desaturate + "YOU FELL" during dying/gameover lead-in

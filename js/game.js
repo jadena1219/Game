@@ -395,6 +395,7 @@ export class Game {
       else this._drawShrineSword(ctx, it.s);
     }
     ctx.restore();
+    this._drawShrineAmbiance(ctx, sh);   // volcano / blizzard / storm weather, faded by proximity
     // labels + title (screen space; cam is at the origin so world == screen)
     ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     if (!sh.chosen) {
@@ -422,6 +423,54 @@ export class Game {
     if (this.state === 'shrine' && !sh.chosen) this.input.draw(ctx);   // joystick feedback
     if (this.flashScreen > 0) { ctx.save(); ctx.globalAlpha = Math.min(0.6, this.flashScreen * 2); ctx.fillStyle = '#fff7e0'; ctx.fillRect(0, 0, W, H); ctx.restore(); }
     this._drawTransition(ctx);
+  }
+
+  // The room transforms into the element of whichever blade you stand before.
+  _drawShrineAmbiance(ctx, sh) {
+    const amb = sh.amb; if (amb <= 0.01 || !sh.ambId) return;
+    const W = this.vw, H = this.vh, t = this.time;
+    ctx.save();
+    if (sh.ambId === 'ember') {                                  // VOLCANO — lava glow, cracks, rising embers
+      const g = ctx.createLinearGradient(0, H, 0, 0);
+      g.addColorStop(0, `rgba(255,70,15,${0.34 * amb})`); g.addColorStop(0.5, `rgba(170,40,10,${0.12 * amb})`); g.addColorStop(1, 'rgba(50,8,0,0)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+      ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+      for (let i = 0; i < 5; i++) {
+        const x = (i * 137.3) % (W - 60) + 20, y = H * 0.6 + (i * 53) % (H * 0.32), pulse = 0.5 + 0.5 * Math.sin(t * 3 + i);
+        ctx.strokeStyle = `rgba(255,${(120 + 90 * pulse) | 0},30,${0.5 * amb})`; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 16, y + 7); ctx.lineTo(x + 30, y + 1); ctx.lineTo(x + 52, y + 11); ctx.stroke();
+      }
+      for (let i = 0; i < 36; i++) {
+        const ph = (t * 0.5 + i * 0.137) % 1, x = (i * 73.7) % W + Math.sin(t * 2 + i) * 8, y = H - ph * H * 1.05;
+        ctx.globalAlpha = amb * (1 - ph) * 0.85; ctx.fillStyle = i % 2 ? '#ffb02a' : '#ff6a1e'; ctx.fillRect(x | 0, y | 0, 2, 2 + (i % 2));
+      }
+    } else if (sh.ambId === 'frost') {                           // BLIZZARD — cold grade, whiteout, driving snow
+      ctx.fillStyle = `rgba(170,215,255,${0.15 * amb})`; ctx.fillRect(0, 0, W, H);
+      const v = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.18, W / 2, H / 2, Math.max(W, H) * 0.7);
+      v.addColorStop(0, 'rgba(255,255,255,0)'); v.addColorStop(1, `rgba(225,242,255,${0.42 * amb})`);
+      ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = `rgba(220,245,255,${0.12 * amb})`;
+      for (let i = 0; i < 6; i++) { const x = (i * 131) % W; ctx.beginPath(); ctx.ellipse(x, H - 20 - (i % 2) * 14, 30, 8, 0, 0, Math.PI * 2); ctx.fill(); }
+      for (let i = 0; i < 72; i++) {
+        const sp = (i % 3) + 1, x = ((i * 53.3) + t * 70 * sp) % (W + 40) - 20 + Math.sin(t + i) * 6, y = ((i * 71.1) + t * 130 * sp) % (H + 40) - 20;
+        ctx.globalAlpha = amb * 0.85; ctx.fillStyle = '#eaffff'; ctx.fillRect(x | 0, y | 0, sp, sp);
+      }
+    } else if (sh.ambId === 'storm') {                           // STORM — dark, driving rain, purple lightning
+      ctx.fillStyle = `rgba(18,12,42,${0.36 * amb})`; ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = `rgba(180,168,235,${0.5 * amb})`; ctx.lineWidth = 1;
+      for (let i = 0; i < 64; i++) {
+        const x = ((i * 61.7) + t * 130) % (W + 60) - 30, y = ((i * 47.3) + t * 520) % (H + 60) - 30;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 6, y + 16); ctx.stroke();
+      }
+      if (sh.flash > 0) {
+        ctx.fillStyle = `rgba(170,135,255,${0.5 * sh.flash * amb})`; ctx.fillRect(0, 0, W, H);
+        ctx.strokeStyle = `rgba(230,212,255,${sh.flash * amb})`; ctx.lineWidth = 2;
+        let bx = sh.boltX || W * 0.5, by = 0; ctx.beginPath(); ctx.moveTo(bx, by);
+        for (let s = 0; s < 6; s++) { bx += ((s * 97 + (sh.boltX | 0)) % 80 - 40) * 0.8; by += H / 6; ctx.lineTo(bx, by); }
+        ctx.stroke();
+      }
+    }
+    ctx.restore(); ctx.globalAlpha = 1;
   }
 
   _drawPedestal(ctx, x, y) {
@@ -745,6 +794,7 @@ export class Game {
     this.player.x = W / 2; this.player.y = H * 0.82; this.player.faceLeft = false;
     this.bounds = { minX: 40, minY: H * 0.52, maxX: W - 40, maxY: H - 46 };
     this.shrine = { t: 0, chosen: null, drawT: 0, fired: false, near: null, promptFor: undefined,
+      amb: 0, ambId: null, flash: 0, lightT: 0,            // scenery-morph state (volcano/blizzard/storm)
       swords: [ { id: 'ember', x: W * 0.26, y: sy }, { id: 'frost', x: W * 0.5, y: sy - 10 }, { id: 'storm', x: W * 0.74, y: sy } ] };
     this.state = 'shrine';
     Sound.setScene('camp');
@@ -773,6 +823,8 @@ export class Game {
   _updateShrine(dt) {
     const sh = this.shrine, p = this.player; sh.t += dt;
     if (sh.chosen) {                                     // the chosen blade flies to his hand, then we descend
+      sh.amb = Math.min(1, sh.amb + dt * 3);             // its element surges as you take it up
+      this._shrineWeather(sh, dt);
       sh.drawT += dt;
       if (sh.drawT >= 0.9 && !sh.fired) { sh.fired = true; this._slashWipe(() => this.start('knight')); }
       return;
@@ -785,6 +837,19 @@ export class Game {
     sh.near = near;
     const id = near && near.id, was = sh.promptFor && sh.promptFor.id;
     if (id !== was) { sh.promptFor = near; this.ui.setShrinePrompt(near); }
+    // the chamber morphs into whichever element you stand before, and melts back
+    const target = near ? near.id : null;
+    if (sh.ambId === target) sh.amb += ((target ? 1 : 0) - sh.amb) * Math.min(1, dt * 5);
+    else { sh.amb -= sh.amb * Math.min(1, dt * 6); if (sh.amb < 0.04) { sh.amb = 0; sh.ambId = target; } }
+    this._shrineWeather(sh, dt);
+  }
+
+  _shrineWeather(sh, dt) {
+    if (sh.ambId === 'storm' && sh.amb > 0.3) {
+      sh.lightT -= dt;
+      if (sh.lightT <= 0) { sh.lightT = 0.8 + Math.random() * 2.4; sh.flash = 1; sh.boltX = Math.random() * this.vw; }
+    }
+    if (sh.flash > 0) sh.flash = Math.max(0, sh.flash - dt * 5);
   }
 
   chooseShrineBlade(id) {

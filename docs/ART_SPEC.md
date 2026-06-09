@@ -1,115 +1,118 @@
-# Bladelight Art Spec — character commissions
+# Bladelight Art Spec — character commissions (SIMPLE style)
 
-The pipeline is proven (the Demon Lord went magenta-PNG → keyed → animated boss
-with zero fringe). This is the spec for the rest of the cast. **Your Demon Lord
-is the style anchor** — everything should look like it lives in the same world.
+**The lesson from round one:** the generator made the sprites too *detailed* —
+smooth shading, ornate filigree, high contrast. They read like rendered
+illustrations dropped into a chunky pixel game (the Knight especially looked
+like "a diamond in a pile of dirt"). A game cast has to be **cohesive and
+simple**, not individually impressive.
 
-Every prompt below is **complete and standalone** — copy the whole block,
-paste it, generate. No assembly required.
+**The one rule that fixes it — flat, low-detail pixel art:**
+> Limited palette (~5–6 colors), **flat cel-shading** (one shadow shade + one
+> highlight shade per color, nothing more), **no gradients, no rendering, no
+> painterly texture, no fine ornate detail.** Fewer, bigger shapes. Bold
+> readable silhouette with a clean dark outline. Chunky low-res pixels.
 
----
-
-## Why the prompts say what they say (reference, not required reading)
-
-- **Magenta `#FF00FF`, background left ON** — I key + despill it losslessly.
-  Never ask the generator for "transparent background" (most can't, and they
-  soften edges trying).
-- **4 equal square cells, one row** — `idle | walk A | walk B | attack`; the
-  engine flip-books them. Feet must sit at the same height in every cell or
-  the character "swims."
-- **The Bladelight rule** — foes live half their lives as silhouettes in the
-  dark: dark bodies, **glowing eyes always** (colors below are wired in-game),
-  one signature glow, strong silhouette.
-- **Export:** PNG, any consistent cell size ≥ 256×256 (bigger is fine — I
-  downscale cleanly). **Don't resize after export**; if you must, Nearest
-  Neighbor only.
+Every prompt below already bakes this in. Copy a whole block, paste, generate.
+**Use the same STYLE+EXPORT footer on all of them — that identical footer is
+what makes the cast match.**
 
 ---
 
-## 1. THE KNIGHT (the hero — do this one first)
+## Why the footer says what it says (reference)
 
-```
-Pixel-art character sprite sheet: exactly 4 frames in one horizontal row, in equal square cells.
-A lone knight in sleek black plate armor, elegant and battle-worn, with a dark tattered half-cape. NO shield. NO weapon in his hands. Subtle cold-silver trim on the armor edges, and a faint pale-blue glow from the visor slit. Deep muted dark-fantasy colors; the visor glow is the only bright element.
-Frames left to right: (1) standing vigil at rest, (2) mid-stride walking, (3) the opposite walking stride, (4) a powerful attack pose with the right arm swung forward, open-handed, as if swinging a sword the image does not show.
-The knight is the exact same size and position in every cell, feet resting on the bottom edge of each cell, always facing right.
-Flat solid magenta background, hex #FF00FF, one uniform color filling everything behind the character, no gradient.
-Hard-edged retro pixel art: no anti-aliasing, no soft or feathered edges, no drop shadow, no ground shadow, no outline glow, no reflections, no vignette, no text, no borders or dividing lines between cells.
-```
-
-## 2. SKELETON (chaser — eyes `#ff5040` red)
-
-```
-Pixel-art character sprite sheet: exactly 4 frames in one horizontal row, in equal square cells.
-A hunched skeletal soldier in rusted scraps of armor with one broken pauldron, gripping a jagged rusted shortsword. Bone is dull and aged, armor is corroded iron. Glowing red pinpoint eye-lights (hex #ff5040) burning in black eye sockets — the eyes are the only bright element. Deep muted dark-fantasy colors.
-Frames left to right: (1) standing with a slight dead sway, (2) mid-shamble step, (3) the opposite shamble step, (4) an overhead chop with the rusted sword.
-The skeleton is the exact same size and position in every cell, feet resting on the bottom edge of each cell, always facing right.
-Flat solid magenta background, hex #FF00FF, one uniform color filling everything behind the character, no gradient.
-Hard-edged retro pixel art: no anti-aliasing, no soft or feathered edges, no drop shadow, no ground shadow, no outline glow, no reflections, no vignette, no text, no borders or dividing lines between cells.
-```
-
-## 3. IMP (swarmer — eyes `#ffb24a` amber)
-
-```
-Pixel-art character sprite sheet: exactly 4 frames in one horizontal row, in equal square cells.
-A small wiry demon with ash-grey skin, large bat-like ears, needle teeth bared in a grin, and long claws. Glowing amber eyes (hex #ffb24a), plus a faint ember-orange glow seeping from cracks across its chest — the eyes and chest cracks are the only bright elements. Deep muted dark-fantasy colors.
-Frames left to right: (1) crouched and coiled, (2) mid-scurry on all fours, (3) the opposite scurry step, (4) a leaping slash with claws extended forward.
-The imp is the exact same size and position in every cell, feet resting on the bottom edge of each cell, always facing right.
-Flat solid magenta background, hex #FF00FF, one uniform color filling everything behind the character, no gradient.
-Hard-edged retro pixel art: no anti-aliasing, no soft or feathered edges, no drop shadow, no ground shadow, no outline glow, no reflections, no vignette, no text, no borders or dividing lines between cells.
-```
-
-## 4. OGRE (tank — eyes `#ff4040` red)
-
-```
-Pixel-art character sprite sheet: exactly 4 frames in one horizontal row, in equal square cells.
-A massive hulking ogre brute with mottled stone-grey hide and crude iron plates bolted onto its shoulders and chest, dragging a huge stone club. Small furious glowing red eyes (hex #ff4040), and thin cracks of dim red heat glowing along the stone club — the eyes and club cracks are the only bright elements. Deep muted dark-fantasy colors.
-Frames left to right: (1) heavy looming stand, (2) ponderous mid-trudge step, (3) the opposite trudge step, (4) a two-handed downward club smash.
-The ogre is the exact same size and position in every cell, feet resting on the bottom edge of each cell, always facing right.
-Flat solid magenta background, hex #FF00FF, one uniform color filling everything behind the character, no gradient.
-Hard-edged retro pixel art: no anti-aliasing, no soft or feathered edges, no drop shadow, no ground shadow, no outline glow, no reflections, no vignette, no text, no borders or dividing lines between cells.
-```
-
-## 5. DARK MAGE (caster — eyes `#b06bff` violet)
-
-```
-Pixel-art character sprite sheet: exactly 4 frames in one horizontal row, in equal square cells.
-A gaunt robed sorcerer, the hood swallowing the face entirely except two glowing violet eye-lights (hex #b06bff). Tattered robe hem floating as if weightless. One skeletal hand cradles a crackling violet spell-orb — the eyes and the orb are the only bright elements. Deep muted dark-fantasy colors.
-Frames left to right: (1) hovering at rest with the orb held low, (2) drifting forward, (3) the opposite drift pose, (4) casting — the orb thrust forward in an outstretched hand, flaring.
-The mage is the exact same size and position in every cell, the robe hem at the bottom edge of each cell, always facing right.
-Flat solid magenta background, hex #FF00FF, one uniform color filling everything behind the character, no gradient.
-Hard-edged retro pixel art: no anti-aliasing, no soft or feathered edges, no drop shadow, no ground shadow, no outline glow, no reflections, no vignette, no text, no borders or dividing lines between cells.
-```
-
-## 6. BOMBER (eyes `#ffd23a` gold)
-
-```
-Pixel-art character sprite sheet: exactly 4 frames in one horizontal row, in equal square cells.
-A twitchy goblin-like creature hugging a black iron bomb bigger than its own head. Glowing manic gold eyes (hex #ffd23a), and the bomb's fuse burns with a bright orange spark — the eyes and the burning fuse are the only bright elements. Deep muted dark-fantasy colors.
-Frames left to right: (1) clutching the bomb close, (2) mid-sprint stride, (3) the opposite sprint stride, (4) arms thrust upward holding the bomb overhead, about to detonate.
-The bomber is the exact same size and position in every cell, feet resting on the bottom edge of each cell, always facing right.
-Flat solid magenta background, hex #FF00FF, one uniform color filling everything behind the character, no gradient.
-Hard-edged retro pixel art: no anti-aliasing, no soft or feathered edges, no drop shadow, no ground shadow, no outline glow, no reflections, no vignette, no text, no borders or dividing lines between cells.
-```
-
-## 7. THE DARK KNIGHT (miniboss — Sir Garrick, the First Sacrifice)
-
-```
-Pixel-art character sprite sheet: exactly 4 frames in one horizontal row, in equal square cells.
-A colossal dead knight in scorched black-and-violet plate armor — a dark mirror of a hero: hollow, heavy, wrong. He drags a cracked greatsword one-handed. Violet fire (hex #b06bff) seeps from his visor and from the joints between armor plates — the violet fire is the only bright element. Deep muted dark-fantasy colors, ash and char on the armor.
-Frames left to right: (1) looming idle stand, (2) heavy advancing stride dragging the sword, (3) the opposite stride, (4) a two-handed overhead slam with the greatsword.
-The knight is the exact same size and position in every cell, feet resting on the bottom edge of each cell, always facing right.
-Flat solid magenta background, hex #FF00FF, one uniform color filling everything behind the character, no gradient.
-Hard-edged retro pixel art: no anti-aliasing, no soft or feathered edges, no drop shadow, no ground shadow, no outline glow, no reflections, no vignette, no text, no borders or dividing lines between cells.
-```
-
-*(He's huge in-game — generate at a larger canvas if you can, 512+ per cell.)*
+- **Magenta `#FF00FF`, background ON** — I key + despill it losslessly.
+- **4 equal square cells, one row** — `idle | walk A | walk B | attack`; feet
+  at the same height in every cell.
+- **Bladelight identity (kept, but simple):** dark body, **two glowing dot
+  eyes** (color per character below), at most one other small glow. The glow is
+  the character in the dark — keep the body muted and flat.
+- **Export:** PNG, square cells ≥ 256×256. Don't resize after export.
 
 ---
+
+## 1. THE KNIGHT (the hero — redo this one first)
+
+```
+Simple retro pixel-art character sprite sheet of a knight.
+A plain knight in dark charcoal-black plate armor with only a few flat steel-grey edge highlights, a short dark cape, and a small glowing pale-blue slit for the visor. NO shield, NO weapon in his hands. Muted and plain — not shiny, not ornate, not realistic.
+Frames left to right: (1) standing at rest, (2) mid-walk stride, (3) the opposite walk stride, (4) right arm swung forward in an attack motion (no weapon shown).
+STYLE: simple, clean 16-bit retro pixel art. Limited palette of about 5 colors. FLAT cel-shading — at most one darker shade and one lighter shade per color; no gradients, no soft or blurry shading, no painterly rendering, no realistic texture, no tiny ornate filigree. Chunky low-resolution pixels, bold readable silhouette, clean dark outline. Keep it minimal: fewer, bigger shapes, not fine detail.
+EXPORT: exactly 4 frames in one horizontal row, equal square cells, the character the exact same size and feet position in every cell, always facing right, feet on the bottom edge of each cell. Flat solid magenta background, hex #FF00FF, one uniform color filling everything behind the character, no gradient. No anti-aliasing, no drop shadow, no ground shadow, no outline glow, no reflections, no vignette, no text, no borders or dividing lines between cells.
+```
+
+## 2. SKELETON (chaser — eyes red `#ff5040`)
+
+```
+Simple retro pixel-art character sprite sheet of a skeleton warrior.
+A plain skeleton, bone-white with one grey shadow shade, wearing a couple of flat rusted-brown scraps of armor and holding a plain rusty shortsword. Two small glowing red dot eyes in dark sockets. Simple and bold, not detailed.
+Frames left to right: (1) standing with a slight sway, (2) mid-shamble step, (3) the opposite shamble step, (4) an overhead sword chop.
+STYLE: simple, clean 16-bit retro pixel art. Limited palette of about 5 colors. FLAT cel-shading — at most one darker shade and one lighter shade per color; no gradients, no soft or blurry shading, no painterly rendering, no realistic texture, no tiny ornate filigree. Chunky low-resolution pixels, bold readable silhouette, clean dark outline. Keep it minimal: fewer, bigger shapes, not fine detail.
+EXPORT: exactly 4 frames in one horizontal row, equal square cells, the character the exact same size and feet position in every cell, always facing right, feet on the bottom edge of each cell. Flat solid magenta background, hex #FF00FF, one uniform color filling everything behind the character, no gradient. No anti-aliasing, no drop shadow, no ground shadow, no outline glow, no reflections, no vignette, no text, no borders or dividing lines between cells.
+```
+
+## 3. IMP (swarmer — eyes amber `#ffb24a`)
+
+```
+Simple retro pixel-art character sprite sheet of a small imp.
+A small plain demon imp, flat ash-grey body with one darker shade, big pointed ears, simple claws, and two glowing amber dot eyes. Bold and simple, not detailed.
+Frames left to right: (1) crouched and coiled, (2) mid-scurry, (3) the opposite scurry step, (4) a leaping claw swipe with arms forward.
+STYLE: simple, clean 16-bit retro pixel art. Limited palette of about 5 colors. FLAT cel-shading — at most one darker shade and one lighter shade per color; no gradients, no soft or blurry shading, no painterly rendering, no realistic texture, no tiny ornate filigree. Chunky low-resolution pixels, bold readable silhouette, clean dark outline. Keep it minimal: fewer, bigger shapes, not fine detail.
+EXPORT: exactly 4 frames in one horizontal row, equal square cells, the character the exact same size and feet position in every cell, always facing right, feet on the bottom edge of each cell. Flat solid magenta background, hex #FF00FF, one uniform color filling everything behind the character, no gradient. No anti-aliasing, no drop shadow, no ground shadow, no outline glow, no reflections, no vignette, no text, no borders or dividing lines between cells.
+```
+
+## 4. OGRE (tank — eyes red `#ff4040`)
+
+```
+Simple retro pixel-art character sprite sheet of a big ogre.
+A large plain ogre brute, flat muddy grey-green skin with one darker shade, one simple iron shoulder plate, dragging a plain grey stone club. Two small glowing red dot eyes. Big bulky simple shape, not detailed.
+Frames left to right: (1) heavy stand, (2) slow trudge step, (3) the opposite trudge step, (4) a two-handed downward club smash.
+STYLE: simple, clean 16-bit retro pixel art. Limited palette of about 5 colors. FLAT cel-shading — at most one darker shade and one lighter shade per color; no gradients, no soft or blurry shading, no painterly rendering, no realistic texture, no tiny ornate filigree. Chunky low-resolution pixels, bold readable silhouette, clean dark outline. Keep it minimal: fewer, bigger shapes, not fine detail.
+EXPORT: exactly 4 frames in one horizontal row, equal square cells, the character the exact same size and feet position in every cell, always facing right, feet on the bottom edge of each cell. Flat solid magenta background, hex #FF00FF, one uniform color filling everything behind the character, no gradient. No anti-aliasing, no drop shadow, no ground shadow, no outline glow, no reflections, no vignette, no text, no borders or dividing lines between cells.
+```
+
+## 5. DARK MAGE (caster — eyes violet `#b06bff`)
+
+```
+Simple retro pixel-art character sprite sheet of a hooded mage.
+A plain hooded sorcerer in a dark robe (one flat color plus one shadow shade), face hidden in the hood, two glowing violet dot eyes, holding one small glowing violet orb. Simple and bold, not detailed.
+Frames left to right: (1) floating at rest with the orb held low, (2) drifting forward, (3) the opposite drift pose, (4) thrusting the orb forward to cast, the orb flaring.
+STYLE: simple, clean 16-bit retro pixel art. Limited palette of about 5 colors. FLAT cel-shading — at most one darker shade and one lighter shade per color; no gradients, no soft or blurry shading, no painterly rendering, no realistic texture, no tiny ornate filigree. Chunky low-resolution pixels, bold readable silhouette, clean dark outline. Keep it minimal: fewer, bigger shapes, not fine detail.
+EXPORT: exactly 4 frames in one horizontal row, equal square cells, the character the exact same size and feet position in every cell, always facing right, the robe hem on the bottom edge of each cell. Flat solid magenta background, hex #FF00FF, one uniform color filling everything behind the character, no gradient. No anti-aliasing, no drop shadow, no ground shadow, no outline glow, no reflections, no vignette, no text, no borders or dividing lines between cells.
+```
+
+## 6. BOMBER (eyes gold `#ffd23a`)
+
+```
+Simple retro pixel-art character sprite sheet of a small bomber goblin.
+A small plain goblin holding a plain round black bomb, flat dark-green body with one darker shade, two glowing gold dot eyes, and a short bright-orange fuse spark on the bomb. Simple and bold, not detailed.
+Frames left to right: (1) holding the bomb close, (2) mid-run stride, (3) the opposite run stride, (4) the bomb raised overhead with both arms.
+STYLE: simple, clean 16-bit retro pixel art. Limited palette of about 5 colors. FLAT cel-shading — at most one darker shade and one lighter shade per color; no gradients, no soft or blurry shading, no painterly rendering, no realistic texture, no tiny ornate filigree. Chunky low-resolution pixels, bold readable silhouette, clean dark outline. Keep it minimal: fewer, bigger shapes, not fine detail.
+EXPORT: exactly 4 frames in one horizontal row, equal square cells, the character the exact same size and feet position in every cell, always facing right, feet on the bottom edge of each cell. Flat solid magenta background, hex #FF00FF, one uniform color filling everything behind the character, no gradient. No anti-aliasing, no drop shadow, no ground shadow, no outline glow, no reflections, no vignette, no text, no borders or dividing lines between cells.
+```
+
+## 7. THE DARK KNIGHT (miniboss — Sir Garrick — eyes/glow violet `#b06bff`)
+
+```
+Simple retro pixel-art character sprite sheet of a large dead knight.
+A big plain dead knight in flat black armor with two glowing violet dot eyes and a few thin violet glow lines at the armor joints, dragging a plain cracked grey greatsword. A dark mirror of a hero knight, but larger and grimmer. Bold and simple, not detailed or ornate.
+Frames left to right: (1) looming idle stand, (2) heavy advancing stride dragging the sword, (3) the opposite stride, (4) a two-handed overhead greatsword slam.
+STYLE: simple, clean 16-bit retro pixel art. Limited palette of about 5 colors. FLAT cel-shading — at most one darker shade and one lighter shade per color; no gradients, no soft or blurry shading, no painterly rendering, no realistic texture, no tiny ornate filigree. Chunky low-resolution pixels, bold readable silhouette, clean dark outline. Keep it minimal: fewer, bigger shapes, not fine detail.
+EXPORT: exactly 4 frames in one horizontal row, equal square cells, the character the exact same size and feet position in every cell, always facing right, feet on the bottom edge of each cell. Flat solid magenta background, hex #FF00FF, one uniform color filling everything behind the character, no gradient. No anti-aliasing, no drop shadow, no ground shadow, no outline glow, no reflections, no vignette, no text, no borders or dividing lines between cells.
+```
+
+---
+
+## On the Demon Lord
+
+He's the exception — he already reads well because he's near-black, so his
+detail dissolves into silhouette in the dark. You don't have to redo him. But
+if you want *total* cohesion, regenerate him with the same STYLE footer (flat,
+~5 colors, no gradients) and I'll swap him in too.
 
 ## What happens on my side
 
-Tell me the filename(s) after upload. I key + despill, align feet across
-frames, build the sheet into the engine, wire eye-glow colors, and scale
-in-game. One character at a time is fine — **the Knight first** if you only
-do one.
+Re-upload with any filenames — tell me which is which. I key + despill, align
+feet, rebuild the sheet, and the manifest scales already in place will fit the
+simpler art (same cell layout). **Do the Knight first**, eyeball him in the
+dungeon, and if the flat style reads right, run the rest through the same
+footer.

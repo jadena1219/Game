@@ -200,7 +200,7 @@ export function registerGeneratedSprites() {
   // the Demon Lord — a transparent 4-frame sheet (627x627 cells) overrides the
   // final boss, and a big standalone fuels his rise + the prologue's bargain.
   const dl = new Image();
-  dl.onload = () => { Assets.images.boss = dl; Assets.manifest.sprites.boss = { fw: 627, fh: 627, scale: 0.14 }; };
+  dl.onload = () => { Assets.images.boss = dl; Assets.manifest.sprites.boss = { fw: 627, fh: 627, scale: 0.14, anim: { walk: ['idle', 'walkA', 'walkB', 'walkA'], walkFps: 4 } }; };
   dl.src = 'assets/sprites/demonlord_sheet.png';
   const db = new Image();
   db.onload = () => { Assets.demonBig = db; if (Assets.prologueArt) Assets.prologueArt.demon = db; };

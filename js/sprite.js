@@ -5,6 +5,16 @@ import { CONFIG } from './config.js';
 // Pick which frame label to show based on entity motion/attack state.
 export function pickFrame(entity, time) {
   if (entity.attackAnim > 0) return 'attack';
+  // Per-sprite animation override. The Demon Lord defines a slow, smooth flap that
+  // cycles ADJACENT poses (idle→walkA→walkB→walkA) instead of snapping between two
+  // far-apart wing-spread frames at 6fps — which read as a seizure on a big sprite.
+  const sp = entity.sprite && Assets.manifest.sprites[entity.sprite];
+  if (sp && sp.anim) {
+    const a = sp.anim;
+    const seq = entity.moving ? (a.walk || ['walkA', 'walkB']) : (a.idle || ['idle']);
+    const fps = entity.moving ? (a.walkFps || 4) : (a.idleFps || 2);
+    return seq[Math.floor(Math.max(0, time) * fps) % seq.length];
+  }
   if (entity.moving) {
     // ~6 fps walk cycle
     return Math.floor(time * 6) % 2 === 0 ? 'walkA' : 'walkB';

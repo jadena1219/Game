@@ -60,7 +60,14 @@
       "file": "miniboss.png",
       "fw": 627,
       "fh": 614,
-      "scale": 0.1197
+      "scale": 0.1197,
+      "anim": {
+        "walk": [
+          "walkA",
+          "idle"
+        ],
+        "walkFps": 3
+      }
     },
     "boss": {
       "file": "boss.png",

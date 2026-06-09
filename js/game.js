@@ -4503,7 +4503,9 @@ export class Game {
     if (!sword || p.dead) return;
     const cw = 18, ch = 64, gripY = 52, sc = CONFIG.pixelScale * 0.31;   // simpler/slimmer; sized to fit him
     const faceSign = p.faceLeft ? -1 : 1, bd = bladeById(p.blade);
-    let hx = p.x + faceSign * 10, hy = p.y - 20 - breath;
+    // grip sits IN his gauntlet — measured from the new knight art (hand at
+    // +13.7,-23.9 from the feet anchor; grip a hair inside the fist edge)
+    let hx = p.x + faceSign * 12, hy = p.y - 22 - breath;
     const poses = [];
     if (p.swingTimer > 0) {
       const sp = Math.min(1, p.swingProgress);
@@ -4520,7 +4522,7 @@ export class Game {
     } else if (p.dashing) {
       poses.push({ aim: p.facingAngle + Math.PI * 0.85, a: 1 });
     } else {
-      poses.push({ aim: -Math.PI / 2 + faceSign * 0.22 + Math.sin(this.time * 2.3) * 0.04, a: 1 });   // upright ready guard (not stuck out)
+      poses.push({ aim: -Math.PI / 2 + faceSign * 0.34 + Math.sin(this.time * 2.3) * 0.04, a: 1 });   // resting in the lowered hand, tip angled up-forward
     }
     // an elemental glow at the hilt so the blade never blends into him
     ctx.save(); ctx.globalCompositeOperation = 'lighter';

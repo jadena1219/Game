@@ -3,6 +3,13 @@ import { CONFIG, ENEMY_TYPES } from './config.js';
 import { BASE_MODS } from './abilities.js';
 
 const TAU = Math.PI * 2;
+
+// Display names for the death screen's "Slain by …" line.
+export const FOE_NAMES = {
+  chaser: 'a Skeleton', swarmer: 'an Imp', tank: 'an Ogre', caster: 'a Dark Mage',
+  bomber: 'a Bomber', miniboss: 'the Dark Knight', boss: 'the Demon Lord',
+};
+
 function norm(x, y) { const l = Math.hypot(x, y) || 1; return [x / l, y / l]; }
 function angDiff(a, b) { let d = (a - b) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; }
 
@@ -135,25 +142,26 @@ export class Player {
     }
   }
 
-  takeHit(dmg) {
+  takeHit(dmg, source = null) {
     if (this.god) return false;                 // GOD MODE: shrug off all damage
     if (this.invuln > 0 || this.dead) return false;
     const dr = Math.min(0.85, this.mods.damageReduction + (this.hero.damageReduction || 0));
     this.hp -= dmg * (1 - dr) * this.eventVuln * (this.mods.damageTakenMult || 1);
     this.invuln = CONFIG.player.invuln;
     this.flash = 0.25;
-    if (this.hp <= 0) { this.hp = 0; this.dead = true; }
+    if (this.hp <= 0) { this.hp = 0; this.dead = true; this.killedBy = source; }   // for the run summary
     return true;
   }
 }
 
 export class Projectile {
-  constructor(x, y, vx, vy, dmg, fromBoss) {
+  constructor(x, y, vx, vy, dmg, fromBoss, srcName = null) {
     this.x = x; this.y = y; this.vx = vx; this.vy = vy;
     this.dmg = dmg; this.r = fromBoss ? 9 : 7;
     this.life = 4;
     this.dead = false;
     this.boss = fromBoss;
+    this.srcName = srcName;            // who fired it (for the death summary)
   }
   update(dt, game) {
     this.x += this.vx * dt; this.y += this.vy * dt;
@@ -354,7 +362,7 @@ export class Enemy {
       const p = game.player, R = sp.slam.r;
       game.addEffect({ kind: 'boom', x: this.x, y: this.y, r: R, t: 0, dur: 0.4 });
       game.shake = Math.max(game.shake, 11);
-      if (Math.hypot(p.x - this.x, p.y - this.y) < R + p.r) { if (p.takeHit(this.damage * sp.slam.dmg)) game.shake = 13; }
+      if (Math.hypot(p.x - this.x, p.y - this.y) < R + p.r) { if (p.takeHit(this.damage * sp.slam.dmg, (FOE_NAMES[this.type] || 'the dark') + "'s slam")) game.shake = 13; }
     } else {
       const s = sp.summon, count = s.count + this.summonBonus;
       for (let i = 0; i < count; i++) {
@@ -414,10 +422,11 @@ export class Enemy {
 
   _fire(game, nx, ny, ranged) {
     const dmg = ranged.projDmg * (1 + CONFIG.scaling.dmgPerLevel * (game.level - 1));
+    const who = (this.named && this.named.name) || FOE_NAMES[this.type] || 'the dark';
     const make = (ax, ay, sm = 1) => {
       game.projectiles.push(new Projectile(
         this.x + ax * (this.r + 6), this.y + ay * (this.r + 6),
-        ax * ranged.projSpeed * sm, ay * ranged.projSpeed * sm, dmg, this.boss));
+        ax * ranged.projSpeed * sm, ay * ranged.projSpeed * sm, dmg, this.boss, who));
     };
     if (ranged.nova) {
       const n = ranged.nova + this.novaBonus;

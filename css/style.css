@@ -154,7 +154,13 @@ p { max-width: 30ch; line-height: 1.5; }
 }
 @keyframes crownFloat { 0%,100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-8px) rotate(3deg); } }
 #victory h2 { text-shadow: 0 0 30px rgba(240,207,90,0.6), 0 3px 0 #3a2c0a; }
-#victory-stats { margin: 6px 0 14px; display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 320px; }
+#victory-stats, #go-stats { margin: 6px 0 14px; display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 320px; }
+.vstat .bladetier { letter-spacing: 2px; }
+.souls-banked {
+  display: flex; align-items: center; gap: 7px; margin: -4px 0 12px;
+  font-size: 13px; color: #c9b6ee; text-shadow: 0 0 12px rgba(154,108,224,0.5);
+}
+.souls-banked .num { color: #d8c2ff; }
 .vstat {
   display: flex; justify-content: space-between; align-items: center; gap: 16px;
   padding: 9px 16px; background: rgba(40,30,52,0.6); border: 1px solid #6b5a3a; border-radius: 8px;

@@ -325,16 +325,39 @@ const ui = {
   hideShop() { this.showScreen(null); },
   _campMsg(t) { const el = document.getElementById('camp-msg'); if (el) el.textContent = t; },
 
-  gameOver(level) {
-    document.getElementById('go-sub').innerHTML = numWrap(`You reached Level ${level} of ${LEVELS.length}`);
+  // m:ss for the run clock
+  _fmtTime(s) { s = Math.max(0, Math.round(s || 0)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; },
+
+  // The shared end-of-run stat rows (death + victory): the run told as numbers.
+  _runRows(s) {
+    const tier = (n) => '◆'.repeat(n || 0) + '◇'.repeat(Math.max(0, 3 - (n || 0)));
+    let h = '';
+    if (s.blade) h += `<div class="vstat">${s.blade}<span class="num bladetier">${tier(s.bladeTier)}</span></div>`;
+    h += `<div class="vstat">Run time<span class="num">${this._fmtTime(s.time)}</span></div>`;
+    h += `<div class="vstat">Foes slain<span class="num">${s.kills}</span></div>`;
+    if (s.bestCombo >= 3) h += `<div class="vstat">Best combo<span class="num">${s.bestCombo}</span></div>`;
+    h += `<div class="vstat">Gold gathered<span class="num">${s.gold}</span></div>`;
+    h += `<div class="vstat">Relics claimed<span class="num">${s.relics}</span></div>`;
+    return h;
+  },
+  _soulsLine(el, n) {
+    el.classList.toggle('hidden', !(n > 0));
+    if (n > 0) el.innerHTML = `<span class="soul-dot small"></span>+<span class="num">${n}</span> souls banked for the Sanctum`;
+  },
+
+  gameOver(level, stats) {
+    const s = stats || {};
+    document.getElementById('go-sub').innerHTML = numWrap(
+      s.killedBy ? `Slain by ${s.killedBy} — Floor ${level} of ${LEVELS.length}`
+                 : `You reached Floor ${level} of ${LEVELS.length}`);
+    document.getElementById('go-stats').innerHTML = stats ? this._runRows(s) : '';
+    this._soulsLine(document.getElementById('go-souls'), s.souls);
     this.showScreen('gameover');
   },
   victory(stats) {
     if (stats) {
-      document.getElementById('victory-stats').innerHTML =
-        `<div class="vstat">Foes slain<span class="num">${stats.kills}</span></div>` +
-        `<div class="vstat">Gold gathered<span class="num">${stats.gold}</span></div>` +
-        `<div class="vstat">Relics claimed<span class="num">${stats.relics}</span></div>`;
+      document.getElementById('victory-stats').innerHTML = this._runRows(stats);
+      this._soulsLine(document.getElementById('win-souls'), stats.souls);
     }
     this.showScreen('victory');
   },
@@ -380,9 +403,12 @@ async function boot() {
   window.addEventListener('keydown', (e) => { if (e.key === 'm' || e.key === 'M') { Sound.toggleMute(); syncMute(); } });
 
   // ---- God mode (debug/testing): no damage taken, one-shot foes, floor-skip ----
+  // Dev-only: the toggle stays hidden unless it's already on, or the page is
+  // opened with "god" in the URL (?god / #god) — players never stumble into it.
   game.godMode = godMode;
   const godBtn = document.getElementById('god-btn');
   const godSkip = document.getElementById('god-skip');
+  if (godBtn && !godMode && !/\bgod\b/.test(location.search + location.hash)) godBtn.classList.add('hidden');
   const syncGod = () => {
     if (godBtn) { godBtn.textContent = 'God Mode: ' + (godMode ? 'On' : 'Off'); godBtn.classList.toggle('god-on', godMode); }
   };
@@ -399,6 +425,13 @@ async function boot() {
 
   // Hero select stays built for a future unlock; for now every run is the Knight.
   document.getElementById('start-btn').addEventListener('click', () => { Sound.unlock(); game.startPrologue(); });
+  // The prologue plays once; afterwards the title offers a replay.
+  const prologueBtn = document.getElementById('prologue-btn');
+  const seenIntro = (() => { try { return localStorage.getItem('kls_seen_intro') === '1'; } catch (e) { return false; } })();
+  if (prologueBtn && seenIntro) {
+    prologueBtn.classList.remove('hidden');
+    prologueBtn.addEventListener('click', () => { Sound.unlock(); game.startPrologue(true); });
+  }
   document.getElementById('retry-btn').addEventListener('click', () => game.start('knight'));
   document.getElementById('win-btn').addEventListener('click', () => game.start('knight'));
   // return to the title after a run (resets game state so the corridor shows)

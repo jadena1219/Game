@@ -52,7 +52,7 @@ export class Input {
         // move side: detect a quick double-tap to dash (works even while holding
         // the joystick, since the 2nd finger lands here too)
         const now = performance.now() / 1000;
-        if (now - this._lastMoveTap < 0.32) { this.dashQueued = true; this._lastMoveTap = 0; }
+        if (now - this._lastMoveTap < 0.38) { this.dashQueued = true; this._lastMoveTap = 0; }
         else this._lastMoveTap = now;
         if (!this.stick.active) {
           this.stick.active = true; this.stick.id = id;

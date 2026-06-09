@@ -1,6 +1,6 @@
 // Core game: state machine, wave spawning, collisions, rendering, HUD.
 import { CONFIG, LEVELS, ELITE_AFFIXES } from './config.js';
-import { Player, Enemy, inSwingArc } from './entities.js';
+import { Player, Enemy, inSwingArc, FOE_NAMES } from './entities.js';
 import { drawSprite, pickFrame } from './sprite.js';
 import { Input } from './input.js';
 import { recompute, rollStock, RELICS, relicById } from './abilities.js';
@@ -932,8 +932,13 @@ export class Game {
   }
 
   // ---------- The Prologue: an animated legend told before the descent ----------
-  startPrologue() {
+  // Plays in full the first time; afterwards Begin skips straight to the Shrine
+  // (the title screen offers a Replay button, which passes force=true).
+  startPrologue(force = false) {
     if (this.state !== 'title') return;
+    let seen = false;
+    try { seen = localStorage.getItem('kls_seen_intro') === '1'; } catch (e) { /* */ }
+    if (seen && !force) { this.ui.swipeTitleAway(); this.startShrine(); return; }
     this.heroId = 'knight';
     this.prologue = { i: 0, t: 0, beats: [
       { lines: ['The kingdom stood in gold,', 'and the King ruled it well —', 'just, and beloved by all.'], dur: 9.0 },
@@ -1338,6 +1343,7 @@ export class Game {
       this.player.lockedRelics = new Set();   // meta unlocks disabled — full relic pool
       this.shopSlots = 4 + (mb.slots || 0);
       this.kills = 0; this.level = 1; this.gold = mb.startGold || 0; this.totalGold = 0;
+      this.bestCombo = 0; this.runT = 0; this.lastRunSouls = 0;   // run-summary stats
       this.runSouls = 0;
       this._campsSinceEvent = 0; this._eventsRecent = [];   // event pacing (see openCamp)
       this.hpDisplay = this.hpGhost = this.player.maxHP;
@@ -1599,6 +1605,7 @@ export class Game {
     }
     this.kills++;
     this.combo++; this.comboT = 2.6; this.comboPop = 1;     // feed the kill streak
+    if (this.combo > (this.bestCombo || 0)) this.bestCombo = this.combo;
     // hit-pause on meaningful kills (skip trash so swarms stay fluid)
     if (e.boss) this.hitStop = Math.max(this.hitStop, 0.14);
     else if (e.type === 'tank' || e.elite) this.hitStop = Math.max(this.hitStop, 0.06);
@@ -1666,7 +1673,7 @@ export class Game {
     Sound.play('explode');
     this.shake = Math.max(this.shake, 7);
     const p = this.player;
-    if (Math.hypot(p.x - e.x, p.y - e.y) < cfg.r + p.r) { if (p.takeHit(lvlDmg)) this.shake = 9; }
+    if (Math.hypot(p.x - e.x, p.y - e.y) < cfg.r + p.r) { if (p.takeHit(lvlDmg, (this._foeName(e) || 'a bomber') + "'s blast")) this.shake = 9; }
     // also harms other enemies caught in the blast
     for (const o of this.enemiesInRadius(e.x, e.y, cfg.r)) {
       if (o === e) continue;
@@ -2490,6 +2497,8 @@ export class Game {
     if (this.transition && this.transition.t < this.transition.half) return;
     if (this.plunge && this.plunge.t < this.plunge.half) return;
 
+    if (this.state === 'playing' || this.state === 'camp' || this.state === 'shrine') this.runT = (this.runT || 0) + dt;
+
     if (this.state === 'dying') return this._updateDying(dt);
     if (this.state === 'won') return this._updateWon(dt);
     if (this.state === 'camp') return this._updateCamp(dt);
@@ -2550,7 +2559,7 @@ export class Game {
     for (const e of this.enemies) {
       const dx = p.x - e.x, dy = p.y - e.y;
       if (Math.hypot(dx, dy) < p.r + e.r) {
-        if (p.takeHit(e.cdmg || e.damage)) {
+        if (p.takeHit(e.cdmg || e.damage, this._foeName(e))) {
           this.shake = Math.max(this.shake, 6);
           if (e.elite === 'icy') p.slowT = 1.3;                 // Frostbound chills you
           if (e.type === 'bomber') { e.dead = true; this._explodeEnemy(e); } // detonates on contact
@@ -2561,7 +2570,7 @@ export class Game {
     for (const pr of this.projectiles) {
       if (pr.dead) continue;
       const dx = p.x - pr.x, dy = p.y - pr.y;
-      if (Math.hypot(dx, dy) < p.r + pr.r) { if (p.takeHit(pr.dmg * (p.mods.projDamageMult || 1))) this.shake = 5; pr.dead = true; }
+      if (Math.hypot(dx, dy) < p.r + pr.r) { if (p.takeHit(pr.dmg * (p.mods.projDamageMult || 1), pr.srcName || 'a dark bolt')) this.shake = 5; pr.dead = true; }
     }
 
     this.enemies = this.enemies.filter((e) => !e.dead);
@@ -2763,7 +2772,7 @@ export class Game {
     if (this.dying <= 0) {
       this.timeScale = 1;
       this.state = 'gameover';
-      this.ui.gameOver(this.level);
+      this.ui.gameOver(this.level, this._runSummary());
     }
   }
 
@@ -2779,7 +2788,7 @@ export class Game {
     }
     if (this.wonT >= 3.6) {
       this.state = 'victory';
-      this.ui.victory({ kills: this.kills, gold: this.totalGold, relics: this.player.relics.size });
+      this.ui.victory(this._runSummary());
     }
   }
 
@@ -2835,7 +2844,31 @@ export class Game {
     this.state = 'dying';
     this.dying = 1.5;
     this.shake = Math.max(this.shake, 9);
+    this._awardSouls(false);
     Sound.setScene('gameover'); Sound.play('lose');
+  }
+
+  // Display name for a foe — its elite title if it has one, else its kind.
+  _foeName(e) {
+    if (!e) return null;
+    return (e.named && e.named.name) || FOE_NAMES[e.type] || 'the dark';
+  }
+
+  // Everything the end-of-run screens need, gathered in one place.
+  _runSummary() {
+    const p = this.player || {};
+    const blade = p.blade ? bladeById(p.blade) : null;
+    return {
+      floor: this.level, floors: LEVELS.length,
+      time: this.runT || 0,
+      kills: this.kills || 0,
+      gold: this.totalGold || 0,
+      bestCombo: this.bestCombo || 0,
+      relics: p.relics ? p.relics.size : 0,
+      blade: blade ? blade.name : null, bladeTier: p.bladeTier || 0,
+      killedBy: p.killedBy || null,
+      souls: this.lastRunSouls || 0,
+    };
   }
 
   _win() {
@@ -2846,6 +2879,7 @@ export class Game {
       this.shake = Math.max(this.shake, 10);
       this.flashScreen = 0.3;
       this._spawnEmberBurst();
+      this._awardSouls(true);
       Sound.setScene('victory'); Sound.play('win');
     } else {
       // "LEVEL CLEARED" sweep, then the camp shop

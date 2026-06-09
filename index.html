@@ -24,6 +24,7 @@
       <h1>Knight's<br />Last Stand</h1>
       <p class="tag">Twenty floors. One blade. No retreat.</p>
       <button class="btn" id="start-btn">Begin the Stand</button>
+      <button class="btn ghost small hidden" id="prologue-btn">Replay the Prologue</button>
       <button class="btn small" id="god-btn">God Mode: Off</button>
       <p class="hint">Left side to move &middot; double-tap left to dash &middot; right button to swing</p>
     </div>
@@ -85,6 +86,8 @@
     <div class="screen hidden" id="game-over">
       <h2 class="danger">You Fell</h2>
       <p id="go-sub">You reached Level 1</p>
+      <div id="go-stats"></div>
+      <p id="go-souls" class="souls-banked hidden"></p>
       <button class="btn" id="retry-btn">Try Again</button>
       <button class="btn ghost small" id="go-menu-btn">Main Menu</button>
     </div>
@@ -94,8 +97,9 @@
       <img class="victory-crown" src="assets/icons/ember.png" alt="">
 
       <h2 class="gold">The Demon Lord Falls</h2>
-      <p>Ten levels of dark. One blade unbroken.<br>The realm is saved.</p>
+      <p>Twenty floors of dark. One blade unbroken.<br>The realm is saved.</p>
       <div id="victory-stats"></div>
+      <p id="win-souls" class="souls-banked hidden"></p>
       <button class="btn" id="win-btn">Begin Anew</button>
       <button class="btn ghost small" id="win-menu-btn">Main Menu</button>
     </div>

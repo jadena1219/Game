@@ -576,6 +576,117 @@ export class Game {
     ctx.globalAlpha = 1;
   }
 
+  // One flickering pixel-flame tongue (shared by burning foes, lava, eruption).
+  _flameColumn(ctx, x, baseY, h, seed, alpha) {
+    const t = this.time, cell = 2;
+    const flick = 0.55 + 0.45 * Math.sin(t * 13 + seed) + 0.22 * Math.sin(t * 27 + seed * 1.7);
+    const cols = Math.max(2, Math.round(h * (0.55 + 0.5 * Math.max(0, flick)) / cell));
+    for (let c = 0; c < cols; c++) {
+      const f = c / cols;
+      const col = f < 0.2 ? '#d8330e' : f < 0.45 ? '#ff6a1e' : f < 0.72 ? '#ffa828' : f < 0.9 ? '#ffe06b' : '#fff6d6';
+      const w = Math.max(1, Math.round((1 - f) * 4));
+      const sway = Math.sin(t * 10 + c * 0.4 + seed) * (1 + f * 3);
+      ctx.globalAlpha = alpha * (1 - f * 0.35);
+      ctx.fillStyle = col;
+      ctx.fillRect(Math.round(x - w / 2 + sway), Math.round(baseY - c * cell), w, cell);
+    }
+  }
+
+  // Detailed living flames covering a burning foe (Emberbrand).
+  _drawBurning(ctx, e) {
+    const t = this.time, base = e.y + 1;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const gr = ctx.createRadialGradient(e.x, e.y - e.r * 0.7, 2, e.x, e.y - e.r * 0.7, e.r * 1.9);
+    gr.addColorStop(0, 'rgba(255,140,40,0.4)'); gr.addColorStop(0.6, 'rgba(255,60,0,0.14)'); gr.addColorStop(1, 'rgba(255,40,0,0)');
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(e.x, e.y - e.r * 0.7, e.r * 1.9, 0, Math.PI * 2); ctx.fill();
+    const tongues = Math.max(4, Math.round(e.r / 2.6));
+    for (let i = 0; i < tongues; i++) {
+      const fx = e.x + (i / (tongues - 1) - 0.5) * e.r * 1.7;
+      const h = e.r * (1.6 + 0.9 * (0.5 + 0.5 * Math.sin(t * 9 + i * 1.9)));
+      this._flameColumn(ctx, fx, base, h, i * 3.1 + e.x * 0.1, 0.9);
+    }
+    for (let i = 0; i < 5; i++) {
+      const ph = (t * 1.2 + i * 0.21 + e.x * 0.1) % 1;
+      ctx.globalAlpha = (1 - ph) * 0.8; ctx.fillStyle = i % 2 ? '#ffce5a' : '#ff7a2a';
+      ctx.fillRect((e.x + Math.sin(t * 3 + i) * e.r) | 0, (e.y - e.r * 0.6 - ph * e.r * 2.4) | 0, 2, 2);
+    }
+    ctx.restore(); ctx.globalAlpha = 1;
+  }
+
+  // 🔥 the lingering lake of fire left by Eruption
+  _drawLavaField(ctx, fx) {
+    const k = fx.t / fx.dur, t = this.time, R = fx.r;
+    const a = Math.min(1, fx.t * 3) * (k > 0.78 ? (1 - (k - 0.78) / 0.22) : 1);
+    if (a <= 0) return;
+    ctx.save();
+    // molten pool
+    ctx.globalAlpha = a;
+    const g = ctx.createRadialGradient(fx.x, fx.y, 4, fx.x, fx.y, R);
+    g.addColorStop(0, '#ffe49a'); g.addColorStop(0.3, '#ff7a2a'); g.addColorStop(0.7, '#c8200a'); g.addColorStop(1, 'rgba(70,8,0,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(fx.x, fx.y, R, R * 0.6, 0, 0, Math.PI * 2); ctx.fill();
+    // cooling-rock crust blotches drifting on the surface
+    for (let i = 0; i < 8; i++) { const ang = i * 0.785 + t * 0.2, rr = R * 0.55 * ((i % 3) / 3 + 0.3); ctx.globalAlpha = a * 0.5; ctx.fillStyle = '#3a1408'; ctx.beginPath(); ctx.ellipse(fx.x + Math.cos(ang) * rr, fx.y + Math.sin(ang) * rr * 0.6, 8 + (i % 3) * 3, 5, 0, 0, Math.PI * 2); ctx.fill(); }
+    // bubbling glow + flame tongues around the rim
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 12; i++) { const ph = (t * 0.6 + i * 0.09) % 1, ang = i * 2.39, rr = R * 0.72 * (0.3 + (i % 4) / 4); ctx.globalAlpha = a * (1 - Math.abs(ph - 0.5) * 2) * 0.8; ctx.fillStyle = '#ffe49a'; ctx.fillRect((fx.x + Math.cos(ang) * rr) | 0, (fx.y + Math.sin(ang) * rr * 0.6) | 0, 3, 3); }
+    for (let i = 0; i < 9; i++) { const ang = (i / 9) * Math.PI * 2 + t * 0.1, rr = R * 0.8; this._flameColumn(ctx, fx.x + Math.cos(ang) * rr, fx.y + Math.sin(ang) * rr * 0.55, 14 + (i % 3) * 6, i * 2.7 + fx.x, a * 0.85); }
+    this._flameColumn(ctx, fx.x, fx.y, 22, fx.x, a);
+    ctx.restore(); ctx.globalAlpha = 1;
+  }
+
+  // 🔥 the eruption burst — shockwave ring + a pillar of fire
+  _drawErupt(ctx, fx) {
+    const k = fx.t / fx.dur, a = 1 - k, R = fx.r;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const rr = R * Math.min(1, k * 1.7);
+    ctx.globalAlpha = a; ctx.lineWidth = 7 * (1 - k) + 1; ctx.strokeStyle = `rgba(255,${(210 - 130 * k) | 0},120,${a})`;
+    ctx.beginPath(); ctx.ellipse(fx.x, fx.y, rr, rr * 0.62, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.lineWidth = 2; ctx.strokeStyle = `rgba(255,255,255,${a * 0.8})`; ctx.beginPath(); ctx.ellipse(fx.x, fx.y, rr * 0.88, rr * 0.62 * 0.88, 0, 0, Math.PI * 2); ctx.stroke();
+    const ph = (1 - k);
+    for (let i = 0; i < 6; i++) this._flameColumn(ctx, fx.x + (i - 2.5) * 9, fx.y - 2, 30 + ph * 70 - Math.abs(i - 2.5) * 8, i * 4 + fx.x, a);
+    ctx.restore(); ctx.globalAlpha = 1;
+  }
+
+  // ❄️ the freezing shockwave + radiating shards
+  _drawFrostNova(ctx, fx) {
+    const k = fx.t / fx.dur, a = 1 - k, rr = 560 * Math.min(1, k * 1.8);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = a; ctx.lineWidth = 6 * (1 - k) + 1; ctx.strokeStyle = `rgba(200,240,255,${a})`;
+    ctx.beginPath(); ctx.arc(fx.x, fx.y, rr, 0, Math.PI * 2); ctx.stroke();
+    ctx.lineWidth = 2; ctx.strokeStyle = `rgba(255,255,255,${a * 0.85})`; ctx.beginPath(); ctx.arc(fx.x, fx.y, rr * 0.9, 0, Math.PI * 2); ctx.stroke();
+    for (let i = 0; i < 24; i++) { const ang = i * 0.2618, ix = fx.x + Math.cos(ang) * rr * 0.92, iy = fx.y + Math.sin(ang) * rr * 0.92; ctx.globalAlpha = a * 0.85; ctx.fillStyle = '#eaffff'; ctx.save(); ctx.translate(ix, iy); ctx.rotate(ang + Math.PI / 2); ctx.fillRect(-1, -5, 2, 10); ctx.restore(); }
+    ctx.restore(); ctx.globalAlpha = 1;
+  }
+
+  // ⚡ the storm overlay covering the arena while Thunderstorm rages
+  _drawStormOverlay(ctx, fx) {
+    const k = fx.t / fx.dur, a = (k < 0.15 ? k / 0.15 : k > 0.8 ? (1 - k) / 0.2 : 1), W = this.vw, H = this.vh, t = this.time, ox = this.cam.x, oy = this.cam.y;
+    ctx.save();
+    ctx.fillStyle = `rgba(16,10,40,${0.4 * a})`; ctx.fillRect(ox, oy, W, H);
+    ctx.strokeStyle = `rgba(195,182,255,${0.55 * a})`; ctx.lineWidth = 2;
+    for (let i = 0; i < 80; i++) { const x = ox + ((i * 61.7) + t * 240) % (W + 60) - 30, y = oy + ((i * 47.3) + t * 980) % (H + 60) - 30; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 10, y + 24); ctx.stroke(); }
+    ctx.restore();
+  }
+
+  _boltPath(ctx, x0, y0, x1, y1, seed) {
+    ctx.beginPath(); ctx.moveTo(x0, y0); const segs = 9;
+    for (let i = 1; i <= segs; i++) { const f = i / segs; const jx = i < segs ? Math.sin(seed + i * 1.7) * 26 * (1 - f) : 0; ctx.lineTo(x0 + (x1 - x0) * f + jx, y0 + (y1 - y0) * f); }
+  }
+
+  // ⚡ a colossal bolt crashing from the sky onto a foe
+  _drawMegabolt(ctx, fx) {
+    const k = fx.t / fx.dur, a = 1 - k, topY = this.cam.y - 24;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = `rgba(170,140,255,${a * 0.5})`; ctx.lineWidth = 8 * a + 1; ctx.lineCap = 'round';
+    this._boltPath(ctx, fx.x, topY, fx.x, fx.y, fx.seed); ctx.stroke();
+    ctx.strokeStyle = `rgba(245,235,255,${a})`; ctx.lineWidth = 2.5;
+    this._boltPath(ctx, fx.x, topY, fx.x, fx.y, fx.seed); ctx.stroke();
+    const g = ctx.createRadialGradient(fx.x, fx.y, 0, fx.x, fx.y, 44); g.addColorStop(0, `rgba(225,205,255,${a})`); g.addColorStop(1, 'rgba(120,80,255,0)');
+    ctx.globalAlpha = a; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(fx.x, fx.y, 44, 0, Math.PI * 2); ctx.fill();
+    ctx.restore(); ctx.globalAlpha = 1;
+  }
+
   _drawPickup(ctx, pk) {
     const x = pk.x, y = pk.y + Math.sin((this.titleT + pk.x * 0.05) * 4) * 2;
     ctx.save();
@@ -1561,20 +1672,100 @@ export class Game {
   _ultimate() {
     const p = this.player;
     Sound.play('ultimate');
-    const dmg = 120 * p.mods.abilityDmgMult;
-    for (const e of this.enemies) {
-      const a = Math.atan2(e.y - p.y, e.x - p.x);
-      const wasAlive = !e.dead;
-      e.takeHit(dmg, Math.cos(a) * 420, Math.sin(a) * 420);
-      e.applySlow(1.5);
-      this.spawnDamageNumber(e.x, e.y - e.r - 6, Math.round(dmg), 'ultimate');
-      if (wasAlive && e.dead) this.onEnemyKilled(e, 'ultimate');
-    }
+    this.shake = Math.max(this.shake, 13);
+    this.hitStop = Math.max(this.hitStop, 0.12);
+    if (p.blade === 'ember') this._ultEruption();
+    else if (p.blade === 'frost') this._ultAbsoluteZero();
+    else if (p.blade === 'storm') this._ultThunderstorm();
+    else this._ultNova();
+  }
+
+  _ultHit(e, dmg, kx = 0, ky = 0, slow = 0) {
+    const wasAlive = !e.dead;
+    e.takeHit(dmg, kx, ky);
+    if (slow) e.applySlow(slow);
+    this.spawnDamageNumber(e.x, e.y - e.r - 6, Math.round(dmg), 'ultimate');
+    if (wasAlive && e.dead) this.onEnemyKilled(e, 'ultimate');
+  }
+
+  _ultNova() {                                            // fallback (no blade)
+    const p = this.player, dmg = 120 * p.mods.abilityDmgMult;
+    for (const e of this.enemies) { const a = Math.atan2(e.y - p.y, e.x - p.x); this._ultHit(e, dmg, Math.cos(a) * 420, Math.sin(a) * 420, 1.5); }
     this.addEffect({ kind: 'ult', x: p.x, y: p.y, t: 0, dur: 0.55, maxR: Math.hypot(this.vw, this.vh) });
     this.addEffect({ kind: 'banner', text: 'FURY UNLEASHED!', t: 0, dur: 1.1 });
     this.flashScreen = 0.22;
-    this.shake = Math.max(this.shake, 11);
-    this.hitStop = Math.max(this.hitStop, 0.12);
+  }
+
+  // 🔥 ERUPTION — the earth splits, foes are hurled back and seared, and a lake
+  // of fire is left behind to burn anything that lingers.
+  _ultEruption() {
+    const p = this.player, lvl = 1 + CONFIG.scaling.dmgPerLevel * (this.level - 1);
+    const R = 170, dmg = 150 * p.mods.abilityDmgMult * lvl;
+    this.addEffect({ kind: 'banner', text: 'ERUPTION', t: 0, dur: 1.2 });
+    this.flashScreen = 0.3; this.flashCol = '#ffd9a0';
+    Sound.play('explode');
+    for (const e of this.enemies) {
+      if (Math.hypot(e.x - p.x, e.y - p.y) > R) continue;
+      const a = Math.atan2(e.y - p.y, e.x - p.x);
+      this._ultHit(e, dmg, Math.cos(a) * 460, Math.sin(a) * 460);
+      if (!e.dead) { e.burnDmg = Math.max(e.burnDmg, dmg * 0.12); e.burnT = Math.max(e.burnT, 4.5); e.burnTickT = Math.min(e.burnTickT || 9, 0.3); }
+    }
+    this.addEffect({ kind: 'erupt', x: p.x, y: p.y, t: 0, dur: 0.75, r: R });
+    this.addEffect({ kind: 'lavafield', x: p.x, y: p.y, r: R * 0.92, t: 0, dur: 5.0, dmgT: 0.1, dmg: dmg * 0.22 });
+    this._gib(p.x, p.y - 8, '#ff7a2a', 16, 240, { size: 3, g: 700 });
+    this._gib(p.x, p.y - 8, '#3a1408', 8, 180, { size: 3, g: 800 });
+  }
+
+  // ❄️ ABSOLUTE ZERO — a freezing detonation that locks every foe on the floor
+  // in solid ice (your strikes shatter them) and savages bosses.
+  _ultAbsoluteZero() {
+    const p = this.player, lvl = 1 + CONFIG.scaling.dmgPerLevel * (this.level - 1);
+    const dmg = 95 * p.mods.abilityDmgMult * lvl;
+    this.addEffect({ kind: 'banner', text: 'ABSOLUTE ZERO', t: 0, dur: 1.2 });
+    this.flashScreen = 0.34; this.flashCol = '#dff2ff';
+    Sound.play('crit', { vol: 0.7 });
+    for (const e of this.enemies) {
+      this._ultHit(e, dmg, 0, 0);
+      if (e.dead) continue;
+      if (e.boss) e.applySlow(3.5);
+      else { e.frozenT = Math.max(e.frozenT, 4.2); e.frost = 0; }
+      this.addEffect({ kind: 'ring', x: e.x, y: e.y, r: e.r + 8, color: '#bfe9ff', t: 0, dur: 0.45 });
+      this._gib(e.x, e.y - e.r * 0.4, '#cdeeff', 4, 80, { size: 2 });
+    }
+    this.addEffect({ kind: 'frostnova', x: p.x, y: p.y, t: 0, dur: 0.95 });
+  }
+
+  // ⚡ THUNDERSTORM — the heavens open and bolts rain across the arena, chaining
+  // between foes for a few seconds of relentless electrocution.
+  _ultThunderstorm() {
+    const p = this.player, lvl = 1 + CONFIG.scaling.dmgPerLevel * (this.level - 1);
+    this.addEffect({ kind: 'banner', text: 'THUNDERSTORM', t: 0, dur: 1.2 });
+    this.flashScreen = 0.28; this.flashCol = '#d9c8ff';
+    Sound.play('crit', { vol: 0.7 });
+    this.addEffect({ kind: 'thunderstorm', t: 0, dur: 2.7, strikeT: 0.05, dmg: 55 * p.mods.abilityDmgMult * lvl });
+  }
+
+  // lava-field damage ticks + thunderstorm strikes, run each combat frame
+  _updateUltFx(sdt) {
+    for (const fx of [...this.effects]) {
+      if (fx.kind === 'lavafield') {
+        fx.dmgT -= sdt;
+        if (fx.dmgT <= 0) { fx.dmgT = 0.35; for (const e of this.enemiesInRadius(fx.x, fx.y, fx.r)) { this._ultHit(e, fx.dmg, 0, 0); if (!e.dead) { e.burnDmg = Math.max(e.burnDmg, fx.dmg * 0.5); e.burnT = Math.max(e.burnT, 1.4); } } }
+      } else if (fx.kind === 'thunderstorm') {
+        fx.strikeT -= sdt;
+        if (fx.strikeT <= 0 && this.enemies.length) {
+          fx.strikeT = 0.1;
+          const e = this.enemies[(Math.random() * this.enemies.length) | 0];
+          if (e && !e.dead) {
+            this.addEffect({ kind: 'megabolt', x: e.x, y: e.y, t: 0, dur: 0.22, seed: Math.random() * 99 });
+            this._ultHit(e, fx.dmg, 0, 0); if (!e.boss) e.frozenT = Math.max(e.frozenT, 0.25);
+            for (const o of this.enemiesInRadius(e.x, e.y, 95)) { if (o !== e && Math.random() < 0.6) { this.addEffect({ kind: 'bolt', pts: [{ x: e.x, y: e.y }, { x: o.x, y: o.y }], t: 0, dur: 0.14 }); this._ultHit(o, fx.dmg * 0.6, 0, 0); } }
+            this.shake = Math.max(this.shake, 3.5);
+            if (Math.random() < 0.3) { this.flashScreen = Math.max(this.flashScreen, 0.12); this.flashCol = '#d9c8ff'; }
+          }
+        }
+      }
+    }
   }
 
   _buildQueue(level) {
@@ -2041,6 +2232,7 @@ export class Game {
 
     for (const e of this.enemies) e.update(sdt, this);
     this._updateStatuses(sdt);                  // blade burn DoT / permafrost
+    this._updateUltFx(sdt);                     // lava field / thunderstorm strikes
     this._emitAuras(sdt);
     this._updateProjAndFx(sdt);
     this._updatePickups(sdt);
@@ -2645,6 +2837,7 @@ export class Game {
     for (const fx of this.effects) if (fx.kind === 'ghost') this._drawGhost(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'dashstreak') this._drawDashStreak(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'swing') this._drawSwing(ctx, fx);
+    for (const fx of this.effects) if (fx.kind === 'lavafield') this._drawLavaField(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'firetrail') this._drawFireTrail(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'puff') this._drawPuff(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'death') this._drawDeathFx(ctx, fx);
@@ -2666,6 +2859,10 @@ export class Game {
     for (const pr of this.projectiles) this._drawProjectile(ctx, pr);
     for (const fb of this.allyProjectiles) this._drawFireball(ctx, fb);
     for (const fx of this.effects) this._drawAbilityFx(ctx, fx);
+    for (const fx of this.effects) if (fx.kind === 'erupt') this._drawErupt(ctx, fx);
+    for (const fx of this.effects) if (fx.kind === 'frostnova') this._drawFrostNova(ctx, fx);
+    for (const fx of this.effects) if (fx.kind === 'thunderstorm') this._drawStormOverlay(ctx, fx);
+    for (const fx of this.effects) if (fx.kind === 'megabolt') this._drawMegabolt(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'gib') this._drawGib(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'mote') this._drawMote(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'slash') this._drawSlashMark(ctx, fx);
@@ -2694,7 +2891,7 @@ export class Game {
     if (this.flashScreen > 0) {
       ctx.save();
       ctx.globalAlpha = Math.min(0.6, this.flashScreen * 2);
-      ctx.fillStyle = '#fff7d6';
+      ctx.fillStyle = this.flashCol || '#fff7d6';
       ctx.fillRect(0, 0, this.vw, this.vh);
       ctx.restore();
     }
@@ -3719,24 +3916,33 @@ export class Game {
     this._drawHeldBlade(ctx, p, breath);
   }
 
-  // The chosen Living Blade, rendered BIG in the knight's hand — resting when
-  // idle, sweeping through the arc when he swings.
+  // The chosen Living Blade, rendered BIG and gripped in the knight's gauntlet —
+  // resting when idle, sweeping through the arc on a swing.
   _drawHeldBlade(ctx, p, breath = 0) {
     const sword = Assets.bladeSwords && Assets.bladeSwords[p.blade];
     if (!sword || p.dead) return;
-    const cw = 30, ch = 104, gripY = 80;                 // grip pivot within the canvas
-    const sc = CONFIG.pixelScale * 0.29;                 // ~72px tall — epic, ~1.25x the knight
+    const cw = 30, ch = 104, gripY = 84;                 // hold near the grip so the blade extends out
+    const sc = CONFIG.pixelScale * 0.3;                  // ~75px tall — epic, taller than the knight
     const faceSign = p.faceLeft ? -1 : 1;
-    const hx = p.x + faceSign * 5, hy = p.y - 14 - breath;
+    // the gauntlet sits forward of, and above, his feet (matches knightUnarmed)
+    const hx = p.x + faceSign * 13, hy = p.y - 22 - breath;
     let aim;
     if (p.swingTimer > 0) {                              // sweep the blade through the cut
       const arc = p.arcDeg * Math.PI / 180, a0 = p.facingAngle - arc / 2;
       aim = a0 + Math.min(1, p.swingProgress) * arc;
     } else if (p.dashing) {
-      aim = p.facingAngle + Math.PI;                     // trailed back behind the dash
+      aim = p.facingAngle + Math.PI * 0.85;              // trailed back behind the dash
     } else {
-      aim = -Math.PI / 2 + faceSign * 0.55;              // held ready: up, tilted toward facing
+      aim = -Math.PI / 2 + faceSign * 0.42;              // held aloft, tilted toward facing
     }
+    // a faint elemental glow off the held blade so it never blends into him
+    const bd = bladeById(p.blade);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const gg = ctx.createRadialGradient(hx, hy - 18, 2, hx, hy - 18, 30);
+    gg.addColorStop(0, this._rgba(bd.color, 0.28 + 0.12 * Math.sin(this.time * 5))); gg.addColorStop(1, this._rgba(bd.color, 0));
+    ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(hx, hy - 18, 30, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
     ctx.save();
     ctx.translate(hx, hy);
     ctx.rotate(aim + Math.PI / 2);                       // canvas tip points up; align it to `aim`
@@ -3943,22 +4149,17 @@ export class Game {
       ctx.strokeRect(e.x - e.r * 0.8, e.y - e.r * 1.5, e.r * 1.6, e.r * 1.85);
       ctx.globalAlpha = 0.25; ctx.fillStyle = '#bfe9ff'; ctx.fillRect(e.x - e.r * 0.8, e.y - e.r * 1.5, e.r * 1.6, e.r * 1.85);
       ctx.restore(); ctx.globalAlpha = 1;
-    } else if (e.burnT > 0) {
-      ctx.save(); ctx.globalCompositeOperation = 'lighter';
-      for (let i = 0; i < 4; i++) { const ph = (this.time * 4 + i * 0.45 + e.x * 0.1) % 1;
-        ctx.globalAlpha = (1 - ph) * 0.7; ctx.fillStyle = i % 2 ? '#ffb02a' : '#ff5a1e';
-        ctx.fillRect(e.x - e.r * 0.6 + i * e.r * 0.4 + Math.sin(this.time * 9 + i) * 2, e.y - e.r - ph * 16, 2, 3); }
-      ctx.restore(); ctx.globalAlpha = 1;
     }
     const tint = e.state === 'enrage' ? { color: '#ffffff', a: 0.45 + 0.35 * Math.sin(this.time * 30) }
       : e.flash > 0 ? { color: '#ffffff', a: 0.7 }
       : e.frozenT > 0 ? { color: '#9fd8ff', a: 0.5 }
-      : e.burnT > 0 ? { color: '#ff7a2a', a: 0.3 + 0.12 * Math.sin(this.time * 18) }
+      : e.burnT > 0 ? { color: '#ff7a2a', a: 0.32 + 0.12 * Math.sin(this.time * 18) }
       : (e.state === 'windup' || e.state === 'special' ? { color: '#ff4040', a: 0.5 }
       : (e.elite ? { color: e.affix.color, a: 0.16 } : null));
     // a gentle breathing bob when idle so foes never look frozen
     const bob = (!e.boss && !e.moving) ? Math.sin(this.time * 2.6 + e.x * 0.07) : 0;
     drawSprite(ctx, e.sprite, frame, e.x, e.y - bob, e.faceLeft, 1, tint);
+    if (e.burnT > 0) this._drawBurning(ctx, e);   // real flames, drawn over the body
     // small floating HP bar for tanks & elites (bosses use the big top bar)
     if (!e.boss && (e.type === 'tank' || e.elite)) {
       const named = e.named, w = named ? 48 : 34, hpf = e.hp / e.maxHP, hy = e.y - (named ? 62 : 56);

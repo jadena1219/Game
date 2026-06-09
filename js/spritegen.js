@@ -140,8 +140,37 @@ function dreadcaller(ctx, ox, f) {
   if (atk) { p(6, 1 + oy, 1, 1, vio); p(10, 1 + oy, 1, 1, vio); }
 }
 
+// A weaponless knight — caped, crested, empty-handed (he carries the chosen
+// Living Blade, drawn separately and BIG). Overrides the built-in sprite so
+// there's never a second little sword.
+function knightUnarmed(ctx, ox, f) {
+  const p = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(ox + x, y, w, h); };
+  const walk = f === 1 ? -1 : f === 2 ? 1 : 0, bob = (f === 1 || f === 2) ? -1 : 0, lean = f === 3 ? 1 : 0;
+  const steel = '#8b95ab', lite = '#aab3c8', dk = '#3c4354', blue = '#3f6ea8', dkb = '#26405e';
+  const gold = '#caa54a', eye = '#9fe0ff', cape = '#7a1f2a', capeDk = '#511019';
+  // cape trailing behind (he faces right, cape streams left)
+  p(2, 7 + bob, 4, 12, capeDk); p(3, 7 + bob, 2, 12, cape); p(2, 18 + bob, 5, 2, capeDk);
+  // legs (alternating stride)
+  p(6, 19 + (walk < 0 ? -1 : 0), 2, 4, dk); p(9, 19 + (walk > 0 ? -1 : 0), 2, 4, dk);
+  p(6, 22, 2, 1, '#1c2230'); p(9, 22, 2, 1, '#1c2230');
+  // cuirass
+  p(5 + lean, 10 + bob, 7, 9, steel); p(5 + lean, 10 + bob, 7, 1, lite);
+  p(6 + lean, 11 + bob, 5, 4, blue); p(7 + lean, 12 + bob, 3, 3, dkb);
+  p(5 + lean, 16 + bob, 7, 1, gold);                                    // belt
+  // pauldrons + off-hand shield
+  p(4 + lean, 9 + bob, 2, 3, dk); p(11 + lean, 9 + bob, 2, 3, dk);
+  p(3 + lean, 12 + bob, 2, 5, '#6b7488'); p(3 + lean, 12 + bob, 1, 5, '#444c5e');
+  // sword-hand gauntlet reaching forward (the blade attaches here)
+  p(12 + lean, 11 + bob, 2, 5, steel); p(13 + lean, 13 + bob, 2, 3, dk);
+  // helm + glowing visor + crest
+  p(6 + lean, 4 + bob, 6, 6, steel); p(6 + lean, 4 + bob, 6, 1, lite); p(6 + lean, 3 + bob, 6, 1, dk);
+  p(7 + lean, 7 + bob, 4, 1, '#10131b'); p(8 + lean, 7 + bob, 2, 1, eye);
+  p(8 + lean, 1 + bob, 1, 3, gold); p(9 + lean, 1 + bob, 1, 3, '#e6c061');
+}
+
 // The named-elite roster (names match NAMED_FOES[].sprite in game.js).
 export const CREATURES = [
+  { name: 'knight', scale: 1, draw: knightUnarmed },
   { name: 'gravewarden', scale: 1.6,  draw: gravewarden },
   { name: 'quickfang',   scale: 0.95, draw: quickfang },
   { name: 'palewidow',   scale: 1.2,  draw: palewidow },

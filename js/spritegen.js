@@ -193,6 +193,10 @@ export function registerGeneratedSprites() {
   for (const c of CREATURES) sheet(c.name, c.scale, c.draw);
   Assets.bladeSwords = buildBladeSwords();   // ornate sword canvases for the shrine
   Assets.bladeHeld = buildBladeHeld();       // simpler, slimmer blades the knight holds in-level
+  Assets.prologueArt = buildPrologueArt();   // Demon Lord + King sprites for the opening legend
+  // optional: drop a panoramic castle at assets/prologue/kingdom.png and the
+  // prologue uses it for the horizon (otherwise a procedural skyline is drawn)
+  const k = new Image(); k.src = 'assets/prologue/kingdom.png'; Assets.kingdomImg = k;
 }
 
 // ---------------------------------------------------------------------------
@@ -235,6 +239,70 @@ export function buildKeystoneIcons() {
   for (const [id, draw] of Object.entries(ICON_DRAWERS)) out[id] = iconCanvas(draw);
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// Prologue sprites — a menacing Demon Lord and a crowned King, drawn as proper
+// detailed pixel sprites (blitted big in the opening legend).
+function drawDemonLord(ctx, ox, oy) {
+  const P = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(ox + x, oy + y, w, h); };
+  const K = '#0c0712', K2 = '#06030a', SK = '#170f1e', EYE = '#ff2a16', HOT = '#ffd6c0', MAW = '#ff4a18';
+  // --- wings (behind), jagged membranes with spikes ---
+  for (const dir of [-1, 1]) {
+    const bx = 24 + dir * 6;                       // wing root near shoulders
+    // membrane: stepped triangle sweeping out & up
+    for (let r = 0; r < 18; r++) { const span = 18 - r; const x = bx + dir * (r); P(dir < 0 ? x - span : x, 14 + r, span, 2, SK); }
+    // bone ribs + spike tips
+    for (let s = 0; s < 4; s++) { const tx = bx + dir * (4 + s * 5), ty = 14 + s * 3; P(dir < 0 ? tx - 4 : tx, ty, 4, 1, K); P(dir < 0 ? tx - 5 : tx + 4, ty - 1, 1, 2, K); }
+  }
+  // --- horns: thick, curving up and out ---
+  for (const dir of [-1, 1]) {
+    for (let r = 0; r < 12; r++) { const w = 4 - (r * 0.25 | 0); P(24 + dir * (4 + r) - (dir < 0 ? w : 0), 12 - r, w, 2, K); }
+    P(24 + dir * 16 - (dir < 0 ? 2 : 0), 0, 2, 2, K);        // horn tip
+  }
+  // --- hunched shoulders + body mass ---
+  P(8, 18, 32, 10, K); P(6, 20, 36, 8, K);                  // broad shoulders
+  P(10, 26, 28, 16, K);                                     // chest
+  P(13, 40, 22, 10, K2);                                    // lower, dissolving
+  for (let i = 0; i < 8; i++) P(13 + i * 3, 49 + (i % 2) * 2, 2, 3, K2);   // ragged hem
+  // --- long arms reaching down, clawed ---
+  for (const dir of [-1, 1]) {
+    const ax = 24 + dir * 16;
+    P(ax - (dir < 0 ? 3 : 0), 24, 3, 18, K);                // upper arm
+    P(ax - (dir < 0 ? 4 : -1), 40, 4, 6, K);                // forearm
+    for (let c = 0; c < 3; c++) P(ax - (dir < 0 ? 4 : -1) + c * 1.5, 46, 1, 4 - c, K);   // talons
+  }
+  // --- head, eyes, maw ---
+  P(17, 13, 14, 11, SK); P(19, 22, 10, 3, K);
+  P(20, 17, 4, 3, EYE); P(24, 17, 4, 3, EYE);
+  P(21, 18, 1, 1, HOT); P(25, 18, 1, 1, HOT);
+  P(20, 21, 9, 2, MAW); for (let i = 0; i < 4; i++) P(20 + i * 2, 21, 1, 2, '#1a0805');   // fanged maw
+}
+
+function drawKing(ctx, ox, oy) {
+  const P = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(ox + x, oy + y, w, h); };
+  const ROBE = '#1c1626', ROBE2 = '#2a2238', TRIM = '#7c6a3a', GOLD = '#caa54a', GOLDL = '#ffe28a', SKIN = '#3a2c26', BEARD = '#b9b4c4';
+  // flowing robe (widens to the floor)
+  for (let r = 0; r < 22; r++) { const w = 10 + r; P(14 - w / 2, 14 + r, w, 1, r % 6 === 0 ? ROBE2 : ROBE); }
+  P(9, 32, 1, 4, ROBE2); P(18, 32, 1, 4, ROBE2);            // hem fold shadows
+  // torso + shoulders + a gold mantle trim
+  P(8, 13, 12, 4, ROBE); P(8, 13, 12, 1, TRIM);
+  P(10, 16, 8, 8, ROBE); P(13, 16, 2, 8, GOLD);            // robe placket
+  // arms
+  P(6, 16, 3, 8, ROBE); P(19, 16, 3, 8, ROBE);
+  // head, beard, face
+  P(10, 5, 8, 8, SKIN); P(10, 10, 8, 4, BEARD); P(11, 13, 6, 2, BEARD);
+  P(11, 8, 1, 1, '#0a0608'); P(16, 8, 1, 1, '#0a0608');     // eyes
+  // crown
+  P(9, 3, 10, 2, GOLD); P(9, 3, 10, 1, GOLDL);
+  for (let i = 0; i < 5; i++) { P(9 + i * 2, 1, 1, 2, GOLD); P(9 + i * 2, 0, 1, 1, GOLDL); }
+  P(13, 2, 2, 2, '#e0413a');                                // crown jewel
+}
+
+export function buildPrologueArt() {
+  const make = (w, h, draw) => { const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d'); x.imageSmoothingEnabled = false; draw(x, 0, 0); return c; };
+  return { demon: make(48, 52, drawDemonLord), king: make(28, 36, drawKing) };
+}
+export const PROLOGUE_DRAWERS = { demon: drawDemonLord, king: drawKing };
 
 // ---------------------------------------------------------------------------
 // The three Living Blades — long, curved, ornate fairytale swords. Drawn at a

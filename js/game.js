@@ -923,11 +923,11 @@ export class Game {
     if (this.state !== 'title') return;
     this.heroId = 'knight';
     this.prologue = { i: 0, t: 0, beats: [
-      { lines: ['The kingdom stood in gold,', 'and the King ruled it well —', 'just, and beloved by all.'], dur: 6.0 },
-      { lines: ['Then the deep woke.', 'A hunger climbed from below.', 'Fire took the towers. The light failed.'], dur: 6.0 },
-      { lines: ['At the brink of ruin, the King knelt', 'to the dark, and struck a bargain:', 'the realm spared — for the price of his finest blade.'], dur: 7.0 },
-      { lines: ['He had raised that blade from an orphan boy.', 'He loved him as a son.', 'And he sent that son into the dark to save him —', 'knowing what waited below.'], dur: 7.5 },
-      { lines: ['You are that son.', 'You do not yet know the truth.', 'You know only your oath.', 'So you descend.'], dur: 7.0 },
+      { lines: ['The kingdom stood in gold,', 'and the King ruled it well —', 'just, and beloved by all.'], dur: 9.0 },
+      { lines: ['Then the deep woke.', 'A hunger climbed from below.', 'Fire took the towers. The light failed.'], dur: 9.0 },
+      { lines: ['At the brink of ruin, the King knelt', 'to the dark, and struck a bargain:', 'the realm spared — for the price of his finest blade.'], dur: 10.5 },
+      { lines: ['He had raised that blade from an orphan boy.', 'He loved him as a son.', 'And he sent that son into the dark to save him —', 'knowing what waited below.'], dur: 11.5 },
+      { lines: ['You are that son.', 'You do not yet know the truth.', 'You know only your oath.', 'So you descend.'], dur: 11.0 },
     ] };
     this.state = 'prologue';
     this._tapped = false;
@@ -957,7 +957,7 @@ export class Game {
     ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const baseY = H * 0.74, lh = 26;
     b.lines.forEach((line, k) => {
-      const la = Math.max(0, Math.min(1, (pr.t - (0.5 + k * 0.85)) / 0.6)) * a;
+      const la = Math.max(0, Math.min(1, (pr.t - (0.9 + k * 1.5)) / 0.8)) * a;
       if (la <= 0) return;
       ctx.globalAlpha = la; ctx.font = '600 16px "Silkscreen", monospace';
       ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,0.9)'; ctx.strokeText(line, W / 2, baseY + k * lh);
@@ -970,52 +970,105 @@ export class Game {
 
   _drawPrologueArt(ctx, i, a) {
     const W = this.vw, H = this.vh, t = this.time, pt = this.prologue.t;
+    const PA = Assets.prologueArt || {};
+    const blit = (img, cx, by, s) => { if (!img) return; ctx.imageSmoothingEnabled = false; ctx.drawImage(img, Math.round(cx - img.width * s / 2), Math.round(by - img.height * s), Math.round(img.width * s), Math.round(img.height * s)); };
     ctx.save(); ctx.globalAlpha = a;
     if (i === 0) {                                            // the realm, golden
-      const horizon = H * 0.62;
-      const g = ctx.createLinearGradient(0, 0, 0, horizon); g.addColorStop(0, '#d99a44'); g.addColorStop(1, '#f0d693'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, horizon);
-      ctx.fillStyle = '#b88f4e'; ctx.fillRect(0, horizon, W, H - horizon);
-      const s = ctx.createRadialGradient(W * 0.5, horizon - 6, 4, W * 0.5, horizon - 6, 180); s.addColorStop(0, 'rgba(255,244,210,0.85)'); s.addColorStop(1, 'rgba(255,225,160,0)'); ctx.fillStyle = s; ctx.fillRect(0, 0, W, horizon + 40);
-      this._drawCastle(ctx, W * 0.5, horizon, 0);
-      ctx.globalCompositeOperation = 'lighter';
-      for (let k = 0; k < 22; k++) { const ph = ((t * 0.18) + k * 0.045) % 1; ctx.globalAlpha = a * (1 - ph) * 0.5; ctx.fillStyle = '#ffe9a8'; ctx.fillRect((k * 53.7) % W, horizon - ph * horizon, 2, 2); }
+      this._drawKingdomScene(ctx, false);
     } else if (i === 1) {                                     // the rising dark
-      const horizon = H * 0.62, k = Math.min(1, pt / 2.5);
-      const g = ctx.createLinearGradient(0, 0, 0, horizon);
-      g.addColorStop(0, `rgb(${(40 + 130 * (1 - k)) | 0},${(20 + 70 * (1 - k)) | 0},${(20 + 30 * (1 - k)) | 0})`);
-      g.addColorStop(1, `rgb(${(120 + 110 * (1 - k)) | 0},${(40 + 100 * (1 - k)) | 0},${(20 + 50 * (1 - k)) | 0})`);
-      ctx.fillStyle = g; ctx.fillRect(0, 0, W, horizon);
-      ctx.fillStyle = '#1a0e0a'; ctx.fillRect(0, horizon, W, H - horizon);
-      this._drawCastle(ctx, W * 0.5, horizon, 1);
-      ctx.fillStyle = `rgba(0,0,0,${0.4 * k})`; ctx.fillRect(0, horizon - 20, W, H);
+      this._drawKingdomScene(ctx, true);
     } else if (i === 2) {                                     // the bargain
       ctx.fillStyle = '#0b0712'; ctx.fillRect(0, 0, W, H);
-      const cx = W * 0.5, baseY = H * 0.64, rise = Math.min(1, pt / 2.6);
-      const pg = ctx.createRadialGradient(cx, baseY + 50, 4, cx, baseY + 50, 200); pg.addColorStop(0, `rgba(210,30,16,${0.55})`); pg.addColorStop(1, 'rgba(40,0,0,0)'); ctx.fillStyle = pg; ctx.fillRect(0, 0, W, H);
-      this._drawDemonShadow(ctx, cx, baseY + 34, rise);
-      this._silKing(ctx, cx - 78, baseY, 56, true);           // kneeling at the brink
-      this._silKnight(ctx, cx + 84, baseY, 46, false);
-      ctx.save(); ctx.globalCompositeOperation = 'lighter'; const sg = 0.35 + 0.4 * Math.sin(t * 3) * rise;
-      ctx.strokeStyle = `rgba(225,30,20,${Math.max(0, sg) * rise})`; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx + 84, baseY - 26, 17, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+      const cx = W * 0.5, baseY = H * 0.7, rise = Math.min(1, pt / 3);
+      const pg = ctx.createRadialGradient(cx, baseY + 40, 4, cx, baseY + 40, 220); pg.addColorStop(0, 'rgba(210,30,16,0.55)'); pg.addColorStop(1, 'rgba(40,0,0,0)'); ctx.fillStyle = pg; ctx.fillRect(0, 0, W, H);
+      blit(PA.demon, cx, baseY + 24 - rise * 10, 4.4);        // the Demon Lord, looming
+      blit(PA.king, cx - W * 0.24, baseY, 1.9);               // the King, small before it
+      drawSprite(ctx, 'knight', 'idle', cx + W * 0.24, baseY, false, 1.3);   // the price
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; const sg = 0.4 + 0.4 * Math.sin(t * 3);
+      ctx.strokeStyle = `rgba(225,30,20,${sg * rise})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx + W * 0.24, baseY - 26, 22, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
     } else if (i === 3) {                                     // the oath at the gate
       ctx.fillStyle = '#0d0916'; ctx.fillRect(0, 0, W, H);
-      const cx = W * 0.5, baseY = H * 0.66;
-      ctx.fillStyle = '#191322'; ctx.fillRect(cx - 84, baseY - 140, 168, 140);
-      ctx.fillStyle = '#060410'; ctx.beginPath(); ctx.moveTo(cx - 36, baseY); ctx.lineTo(cx - 36, baseY - 78); ctx.arc(cx, baseY - 78, 36, Math.PI, 0); ctx.lineTo(cx + 36, baseY); ctx.closePath(); ctx.fill();
-      const tg = ctx.createRadialGradient(cx, baseY - 40, 4, cx, baseY - 40, 120); tg.addColorStop(0, 'rgba(120,40,30,0.4)'); tg.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = tg; ctx.fillRect(0, 0, W, H);
-      this._silKing(ctx, cx - 28, baseY, 58, false);
-      ctx.fillStyle = `rgba(180,220,255,${0.5 + 0.5 * Math.abs(Math.sin(t * 2))})`; ctx.fillRect(cx - 24, baseY - 50, 1, 3);   // a tear
-      this._silKnight(ctx, cx + 32, baseY, 50, true);
+      const cx = W * 0.5, baseY = H * 0.72;
+      ctx.fillStyle = '#191322'; ctx.fillRect(cx - 96, baseY - 150, 192, 150);
+      ctx.fillStyle = '#060410'; ctx.beginPath(); ctx.moveTo(cx - 40, baseY); ctx.lineTo(cx - 40, baseY - 84); ctx.arc(cx, baseY - 84, 40, Math.PI, 0); ctx.lineTo(cx + 40, baseY); ctx.closePath(); ctx.fill();
+      const tg = ctx.createRadialGradient(cx, baseY - 46, 4, cx, baseY - 46, 130); tg.addColorStop(0, 'rgba(120,40,30,0.35)'); tg.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = tg; ctx.fillRect(0, 0, W, H);
+      blit(PA.king, cx - W * 0.16, baseY, 2.1);
+      ctx.fillStyle = `rgba(180,220,255,${0.4 + 0.6 * Math.abs(Math.sin(t * 1.6))})`; ctx.fillRect(cx - W * 0.16 - 6, baseY - 48, 2, 3);   // a tear
+      drawSprite(ctx, 'knight', 'idle', cx + W * 0.14, baseY, true, 1.45);
     } else {                                                  // the descent
       ctx.fillStyle = '#0a0610'; ctx.fillRect(0, 0, W, H);
-      const cx = W * 0.5, baseY = H * 0.58, k = Math.min(1, pt / 3.8);
-      ctx.fillStyle = '#15101e'; ctx.fillRect(cx - 60, baseY - 96, 120, 96);
-      ctx.fillStyle = '#04020a'; ctx.beginPath(); ctx.moveTo(cx - 30, baseY); ctx.lineTo(cx - 30, baseY - 58); ctx.arc(cx, baseY - 58, 30, Math.PI, 0); ctx.lineTo(cx + 30, baseY); ctx.closePath(); ctx.fill();
-      const rg = ctx.createRadialGradient(cx, baseY + 30, 4, cx, baseY + 30, 150); rg.addColorStop(0, `rgba(200,30,16,${0.5})`); rg.addColorStop(1, 'rgba(40,0,0,0)'); ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = rg; ctx.fillRect(0, baseY - 30, W, H); ctx.restore();
-      this._silKnight(ctx, cx, baseY - 6 + k * 50, 48 * (1 - 0.45 * k), false);
+      const cx = W * 0.5, baseY = H * 0.5, k = Math.min(1, pt / 4.5);
+      ctx.fillStyle = '#15101e'; ctx.fillRect(cx - 64, baseY - 100, 128, 100);
+      ctx.fillStyle = '#04020a'; ctx.beginPath(); ctx.moveTo(cx - 34, baseY); ctx.lineTo(cx - 34, baseY - 64); ctx.arc(cx, baseY - 64, 34, Math.PI, 0); ctx.lineTo(cx + 34, baseY); ctx.closePath(); ctx.fill();
+      const rg = ctx.createRadialGradient(cx, baseY + 30, 4, cx, baseY + 30, 170); rg.addColorStop(0, 'rgba(200,30,16,0.5)'); rg.addColorStop(1, 'rgba(40,0,0,0)'); ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = rg; ctx.fillRect(0, baseY - 30, W, H); ctx.restore();
+      drawSprite(ctx, 'knight', 'idle', cx, baseY - 4 + k * 70, false, 1.4 * (1 - 0.4 * k));
       ctx.fillStyle = `rgba(0,0,0,${k * 0.85})`; ctx.fillRect(0, 0, W, H);
     }
     ctx.restore(); ctx.globalAlpha = 1;
+  }
+
+  // The kingdom horizon — uses assets/prologue/kingdom.png if you drop it in,
+  // otherwise a detailed procedural castle-city. `fire` burns/darkens it.
+  _drawKingdomScene(ctx, fire) {
+    const W = this.vw, H = this.vh, t = this.time, horizon = H * 0.66;
+    const k = fire ? Math.min(1, this.prologue.t / 2.6) : 0;
+    // sky
+    const sky = ctx.createLinearGradient(0, 0, 0, horizon);
+    if (!fire) { sky.addColorStop(0, '#e0a84e'); sky.addColorStop(1, '#f4e0a4'); }
+    else { sky.addColorStop(0, `rgb(${(28 + 80 * (1 - k)) | 0},${(12 + 44 * (1 - k)) | 0},${(14 + 18 * (1 - k)) | 0})`); sky.addColorStop(1, `rgb(${(150 + 70 * (1 - k)) | 0},${(60 + 80 * (1 - k)) | 0},${(34 + 36 * (1 - k)) | 0})`); }
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, W, horizon);
+    if (!fire) { const s = ctx.createRadialGradient(W * 0.5, horizon - 4, 4, W * 0.5, horizon - 4, 220); s.addColorStop(0, 'rgba(255,248,222,0.55)'); s.addColorStop(1, 'rgba(255,232,176,0)'); ctx.fillStyle = s; ctx.fillRect(0, 0, W, horizon + 50); }
+    // the kingdom
+    const img = Assets.kingdomImg;
+    if (img && img.complete && img.naturalWidth) {
+      const dw = W, dh = dw * img.naturalHeight / img.naturalWidth;
+      ctx.imageSmoothingEnabled = false; ctx.drawImage(img, 0, horizon - dh * 0.82, dw, dh);
+    } else {
+      this._drawKingdomProc(ctx, horizon, fire);
+    }
+    ctx.fillStyle = fire ? '#160c08' : '#1c1408'; ctx.fillRect(0, horizon, W, H - horizon);
+    if (!fire) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; for (let i = 0; i < 24; i++) { const ph = ((t * 0.16) + i * 0.04) % 1; ctx.globalAlpha = (1 - ph) * 0.4; ctx.fillStyle = '#ffe9a8'; ctx.fillRect((i * 53.7) % W, horizon - ph * horizon, 2, 2); } ctx.restore(); ctx.globalAlpha = 1; }
+    if (fire) {
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      const fg = ctx.createLinearGradient(0, horizon, 0, horizon - 140); fg.addColorStop(0, `rgba(255,90,20,${0.45 * k})`); fg.addColorStop(1, 'rgba(255,40,0,0)'); ctx.fillStyle = fg; ctx.fillRect(0, horizon - 140, W, 140);
+      ctx.restore();
+      ctx.fillStyle = 'rgba(18,12,12,0.5)';
+      for (let i = 0; i < 7; i++) { const ph = ((t * 0.22) + i * 0.14) % 1; ctx.globalAlpha = (1 - ph) * 0.5 * k; ctx.beginPath(); ctx.arc(W * (0.16 + i * 0.11), horizon - 24 - ph * horizon * 0.85, 11 + ph * 18, 0, Math.PI * 2); ctx.fill(); }
+      ctx.globalAlpha = 1; ctx.fillStyle = `rgba(0,0,0,${0.32 * k})`; ctx.fillRect(0, 0, W, H);
+    }
+  }
+
+  // A symmetric castle-city skyline (fallback when no kingdom.png is provided).
+  _drawKingdomProc(ctx, baseY, fire) {
+    const W = this.vw, cx = W * 0.5, t = this.time;
+    const body = fire ? '#1d110c' : '#3a2a1a', bodyD = fire ? '#100806' : '#281c11', back = fire ? '#2a1610' : '#4c3923', lit = fire ? null : '#ffcf6a', flag = fire ? '#7a1812' : '#9a3a30';
+    const R = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(Math.round(x), Math.round(y), Math.ceil(w), Math.ceil(h)); };
+    // distant mountains
+    ctx.fillStyle = fire ? '#241410' : '#5a4730';
+    for (const mx of [W * 0.12, W * 0.88]) { for (let s = 0; s < 30; s++) R(mx - 30 + s, baseY - 30 + Math.abs(s - 15), 2, 30, fire ? '#241410' : '#5a4730'); }
+    // far rooftop band
+    for (let x = -10; x < W + 10; x += 15) { const h = 16 + ((x * 53) % 22); R(x, baseY - h, 15, h, back); }
+    // curtain wall + crenellations + central gate
+    const wallH = 40, wy = baseY - wallH; R(0, wy, W, wallH, bodyD);
+    for (let x = 0; x < W; x += 13) R(x, wy - 5, 6, 5, bodyD);
+    R(cx - 13, baseY - 28, 26, 28, body); ctx.fillStyle = '#06030a'; ctx.beginPath(); ctx.moveTo(cx - 9, baseY); ctx.lineTo(cx - 9, baseY - 18); ctx.arc(cx, baseY - 18, 9, Math.PI, 0); ctx.lineTo(cx + 9, baseY); ctx.closePath(); ctx.fill();
+    // structures (symmetric), drawn outer→inner
+    const tower = (x, w, h, roof) => {
+      R(x - w / 2, baseY - h, w, h, body); R(x - w / 2, baseY - h, 1, h, bodyD);
+      for (let cxx = x - w / 2; cxx < x + w / 2; cxx += 5) R(cxx, baseY - h - 4, 3, 4, body);   // crenellations
+      if (roof) { for (let s = 0; s < w / 2 + 3; s++) R(x - (w / 2 + 3) + s, baseY - h - 4 - s, (w + 6) - 2 * s, 1, body); R(x, baseY - h - 4 - (w / 2 + 4), 1, 5, flag); R(x, baseY - h - 4 - (w / 2 + 4), 5 + Math.sin(t * 3 + x) * 1.5, 3, flag); }
+      if (lit) for (let wy2 = baseY - h + 8; wy2 < baseY - 6; wy2 += 9) for (let wx = x - w / 2 + 3; wx < x + w / 2 - 2; wx += 7) R(wx, wy2, 2, 3, lit);
+    };
+    tower(cx - W * 0.40, 26, 56, true); tower(cx + W * 0.40, 26, 56, true);
+    tower(cx - W * 0.28, 22, 78, false); tower(cx + W * 0.28, 22, 78, false);
+    tower(cx - W * 0.14, 30, 104, true); tower(cx + W * 0.14, 30, 104, true);
+    // central keep + great spire
+    R(cx - 34, baseY - 120, 68, 120, body); R(cx - 34, baseY - 120, 1, 120, bodyD);
+    for (let cxx = cx - 34; cxx < cx + 34; cxx += 6) R(cxx, baseY - 124, 4, 4, body);
+    if (lit) for (let wy2 = baseY - 112; wy2 < baseY - 10; wy2 += 10) for (let wx = cx - 28; wx < cx + 26; wx += 8) R(wx, wy2, 2, 3, lit);
+    R(cx - 9, baseY - 188, 18, 68, body);                                  // spire base
+    for (let s = 0; s < 16; s++) R(cx - 9 + s * 0.56, baseY - 188 - s * 1.4, 18 - s * 1.12, 2, body);   // pointed spire
+    R(cx, baseY - 214, 1, 8, flag); R(cx, baseY - 214, 7 + Math.sin(t * 3) * 1.5, 4, flag);
   }
 
   _drawCastle(ctx, cx, baseY, fire) {

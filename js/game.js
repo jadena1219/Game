@@ -54,6 +54,7 @@ export class Game {
     this.embers = [];          // ambient floating ember particles
     this.transition = null;    // slash-wipe between scenes
     this.plunge = null;        // "plunge into darkness" descent sequence
+    this.descentJump = null;   // the knight's leap into the pit before the plunge
     this.camDrop = 0;          // world y-offset while falling through the pit
     this.countdown = 0;        // 3..2..1..FIGHT pre-level timer
     this.intro = null;         // level/boss intro card
@@ -1607,6 +1608,7 @@ export class Game {
     this.enemies = []; this.projectiles = []; this.allyProjectiles = []; this.pickups = [];
     this.effects = [];                      // clear leftover swing arcs / damage numbers / death fx
     this.hitStop = 0; this.timeScale = 1;
+    this.descentJump = null; this.plunge = null; this.camDrop = 0;
     this._buildCampRoom();
     // a small, contained room centred in the world; the camera stays put
     const ox = Math.round(this.world.w / 2 - this.vw / 2);
@@ -1669,10 +1671,17 @@ export class Game {
   _updateCamp(dt) {
     if (this.transition && this.transition.t < this.transition.half) return;
     this.camp.t += dt;
+    if (this.descentJump) return this._updateDescentJump(dt);   // leaping into the pit
     if (this.shopOpen) return;                 // frozen while the shop panel is open
     this.input.poll();
     const p = this.player;
     p.update(dt, this.input, this);
+    // the descent pit is solid — you can stand at its rim, but not on the mouth
+    {
+      const d = this.camp.door, erx = 54, ery = 52, ecx = d.x, ecy = d.y - 6;
+      const nx = (p.x - ecx) / erx, ny = (p.y - ecy) / ery, dl = Math.hypot(nx, ny);
+      if (dl < 1 && dl > 1e-4) { p.x = ecx + (nx / dl) * erx; p.y = ecy + (ny / dl) * ery; }
+    }
     this._dashTrail(p, dt);                     // dash trail in the camp too
     this._updateProjAndFx(dt);                 // animate & clear any practice-swing arcs
     const c = this.camp;
@@ -1683,13 +1692,33 @@ export class Game {
     let prompt = null;
     if (sd < 70) prompt = 'sorcerer';
     else if (ss < 66) prompt = 'shrine';
-    else if (dd < 60) prompt = 'door';
+    else if (dd < 72) prompt = 'door';
     if (prompt !== c.prompt) { c.prompt = prompt; this.ui.setCampPrompt(prompt); }
+  }
+
+  // The knight physically leaps from wherever he stands into the pit; when he
+  // lands in the mouth the world plunges into darkness (the existing transition).
+  _updateDescentJump(dt) {
+    const j = this.descentJump; j.t += dt;
+    const p = this.player, prog = Math.min(1, j.t / j.dur);
+    p.x = j.x0 + (j.tx - j.x0) * prog;
+    const by = j.y0 + (j.ty - j.y0) * prog;
+    p.y = by - j.h * Math.sin(prog * Math.PI);  // parabolic hop
+    p.moving = false; p.attackAnim = 0; p.swingTimer = 0; p.dashTimer = 0;
+    if (j.tx < j.x0 - 1) p.faceLeft = true; else if (j.tx > j.x0 + 1) p.faceLeft = false;
+    this._updateProjAndFx(dt);
+    if (prog >= 1) { this.descentJump = null; this.descend(); }
   }
 
   // called by the floating prompt button / shop panel
   campTrade() { if (this.state === 'camp') { this.shopOpen = true; this.ui.setCampPrompt(null); this.ui.showShop(this); } }
-  campDescend() { if (this.state === 'camp') { this.ui.setCampPrompt(null); this.ui.hideShop(); this.descend(); } }
+  campDescend() {
+    if (this.state !== 'camp' || this.descentJump || this.plunge) return;
+    this.ui.setCampPrompt(null); this.ui.hideShop();
+    const d = this.camp.door, p = this.player;
+    this._puff(p.x, p.y, '#4a4350', 2, 4, { r0: 2, r1: 9, dur: 0.3 });   // takeoff dust
+    this.descentJump = { t: 0, dur: 0.5, x0: p.x, y0: p.y, tx: d.x, ty: d.y - 2, h: 50 };
+  }
   closeShop() { this.shopOpen = false; this.ui.hideShop(); }
 
   // ---- dungeon event (the third path) ----

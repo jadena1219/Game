@@ -10,9 +10,7 @@
   "sprites": {
     "knight": {
       "file": "knight.png",
-      "fw": 96,
-      "fh": 126,
-      "scale": 0.229
+      "scale": 1
     },
     "rogue": {
       "file": "rogue.png",
@@ -24,27 +22,19 @@
     },
     "bomber": {
       "file": "bomber.png",
-      "fw": 627,
-      "fh": 572,
-      "scale": 0.0382
+      "scale": 0.92
     },
     "skeleton": {
       "file": "skeleton.png",
-      "fw": 627,
-      "fh": 564,
-      "scale": 0.0434
+      "scale": 1
     },
     "imp": {
       "file": "imp.png",
-      "fw": 627,
-      "fh": 528,
-      "scale": 0.0421
+      "scale": 0.72
     },
     "mage": {
       "file": "mage.png",
-      "fw": 627,
-      "fh": 581,
-      "scale": 0.044
+      "scale": 1
     },
     "sorcerer": {
       "file": "sorcerer.png",
@@ -52,22 +42,11 @@
     },
     "ogre": {
       "file": "ogre.png",
-      "fw": 627,
-      "fh": 581,
-      "scale": 0.0655
+      "scale": 1.5
     },
     "miniboss": {
       "file": "miniboss.png",
-      "fw": 627,
-      "fh": 614,
-      "scale": 0.1197,
-      "anim": {
-        "walk": [
-          "walkA",
-          "idle"
-        ],
-        "walkFps": 3
-      }
+      "scale": 3.4
     },
     "boss": {
       "file": "boss.png",

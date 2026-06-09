@@ -302,6 +302,22 @@ class GameAudio {
         [0, 5, 7, 12].forEach((n, i) => this._tone({ t0: t + i * 0.07, type: 'triangle', f0: 330 * semis(n), dur: 1.0, gain: 0.09 * v }));
         break;
       }
+      case 'whisper': {                 // a breathy, reverberant voice you can't quite make out
+        const ctx = this.ctx, t = this._now();
+        const src = ctx.createBufferSource(); src.buffer = this._noiseBuf; src.loop = true;
+        const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = R(700, 1050); f.Q.value = 5;
+        const wob = ctx.createOscillator(); wob.frequency.value = R(5, 9);           // formant wobble → "speech"
+        const wobG = ctx.createGain(); wobG.gain.value = R(220, 420);
+        wob.connect(wobG).connect(f.frequency); wob.start(t); wob.stop(t + 1.6);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.05 * v, t + 0.55);                       // slow breath in
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 1.5);
+        src.connect(f).connect(g); g.connect(this.bus);
+        src.start(t); src.stop(t + 1.6);
+        this._tone({ type: 'sawtooth', f0: R(92, 124), f1: R(70, 88), dur: 1.3, gain: 0.035 * v, filter: 'lowpass', cutoff: 480, a: 0.4 });
+        break;
+      }
     }
   }
 

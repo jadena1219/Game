@@ -56,7 +56,12 @@ export class Game {
     this.transition = null;    // slash-wipe between scenes
     this.plunge = null;        // "plunge into darkness" descent sequence
     this.descentJump = null;   // the knight's leap into the pit before the plunge
+    this.descentSink = 0;      // 0..1 as the knight drops into the mouth and fades
     this.camDrop = 0;          // world y-offset while falling through the pit
+    this.watchers = [];        // eyes that fade in from the dark to watch you
+    this._watchT = 8;          // countdown to the next watcher
+    this.campWhisper = null;   // intrusive Demon Lord voice in the "safe" room
+    this._whisperT = 6;
     this.countdown = 0;        // 3..2..1..FIGHT pre-level timer
     this.intro = null;         // level/boss intro card
     this.sweep = null;         // "LEVEL CLEARED" banner sweep
@@ -553,6 +558,7 @@ export class Game {
     this.enemies = []; this.projectiles = []; this.allyProjectiles = []; this.effects = []; this.pickups = [];
     this.interlude = null; this.interludeFade = null; this.introCut = null; this.campToast = null;
     this.intro = null; this.sweep = null; this.transition = null; this.camp = null; this.bossKind = null;
+    this.watchers = []; this.campWhisper = null;
     this.ui.showScreen('title');
     Sound.setScene('title');
   }
@@ -634,6 +640,8 @@ export class Game {
 
   _startLevel(level, fullHeal) {
     this.level = level;
+    this.descentSink = 0;                      // restore visibility after a plunge
+    this.watchers = []; this.campWhisper = null; this._watchT = 5 + Math.random() * 4;
     if (!this.player) this.player = new Player(this.world.w / 2, this.world.h / 2);
     this.player.x = this.world.w / 2; this.player.y = this.world.h / 2;
     if (fullHeal) { this.player.hp = this.player.maxHP; }
@@ -936,6 +944,125 @@ export class Game {
     this.addEffect({ kind: 'ring', x: boss.x, y: boss.y, r: boss.r * 2, color: def.emberAura ? '#ff3a1e' : '#ff7a2a', t: 0, dur: 0.5 });
     if (this.player) this.player.invuln = Math.max(this.player.invuln, 0.7);
     this.bossPhase = { title: def.title, t: 0, dur: 2.0 };
+  }
+
+  // ---------- dread: the deeper you go, the more the dark watches back ----------
+  // 0 at the surface, ramping to 1 in the depths. Early floors stay clean.
+  _depth() { return Math.min(1, Math.max(0, (this.level - 1) / 17)); }
+
+  _updateDread(dt) {
+    // age & cull watchers; give them slow, occasional blinks
+    for (const w of this.watchers) {
+      w.t += dt;
+      if (w.blinkT > 0) w.blinkT -= dt;
+      else if (Math.random() < dt * 0.35) w.blinkT = 0.12;
+    }
+    if (this.watchers.length) this.watchers = this.watchers.filter((w) => w.t < w.dur);
+    if (this.campWhisper) { this.campWhisper.t += dt; if (this.campWhisper.t >= this.campWhisper.dur) this.campWhisper = null; }
+
+    const playing = this.state === 'playing' && this.countdown <= 0;
+    const inCamp = this.state === 'camp' && !this.descentJump;
+    if ((!playing && !inCamp) || this.plunge || this.transition) return;
+    const depth = this._depth();
+    if (depth <= 0.04) return;
+
+    // eyes in the dark: rare & pale up top, frequent & blood-red in the depths;
+    // the safe room watches you most of all (it shouldn't feel safe).
+    this._watchT -= dt;
+    if (this._watchT <= 0) {
+      this._watchT = ((inCamp ? 6.5 : 10) - depth * 4.5) * (0.7 + Math.random() * 0.7);
+      const n = (depth > 0.6 && Math.random() < 0.4) ? 2 : 1;
+      for (let i = 0; i < n; i++) this._spawnWatcher(depth);
+    }
+
+    // intrusive whispers — only in the camp, where you decide whether to go on
+    if (inCamp) {
+      this._whisperT -= dt;
+      if (this._whisperT <= 0 && !this.campWhisper) {
+        this._whisperT = (15 - depth * 8) * (0.7 + Math.random() * 0.7);
+        this._spawnCampWhisper(depth);
+      }
+    }
+  }
+
+  _spawnWatcher(depth) {
+    const W = this.vw, H = this.vh;
+    let x, y;
+    const m = 0.05 + Math.random() * 0.12;
+    if (Math.random() < 0.45) { x = W * (Math.random() < 0.5 ? m : 1 - m); y = H * (0.15 + Math.random() * 0.5); }
+    else { x = W * (0.12 + Math.random() * 0.76); y = H * (0.11 + Math.random() * 0.26); }   // upper dark band
+    const lerp = (a, b) => Math.round(a + (b - a) * depth);
+    const color = `rgb(${lerp(150, 216)},${lerp(168, 32)},${lerp(188, 26)})`;   // pale slate → blood red
+    this.watchers.push({ x, y, t: 0, dur: 2.8 + Math.random() * 2.4, blinkT: 0,
+      gap: 9 + Math.random() * 6, size: 2.2 + Math.random() * 1.2 + depth, color });
+  }
+
+  _spawnCampWhisper(depth) {
+    const POOLS = [
+      ['do you hear it?', 'deeper...', 'something stirs below.', 'you are not alone.', 'the dark remembers you.', 'come down.'],
+      ['i see you.', 'they fell here too.', 'why do you still fight?', 'closer now.', 'you feel it, don’t you?', 'turn back. (you won’t.)'],
+      ['i have been waiting.', 'you cannot turn back now.', 'give in.', 'your blade tires.', 'soon. so soon.', 'kneel.'],
+    ];
+    const tier = depth < 0.34 ? 0 : depth < 0.7 ? 1 : 2;
+    const pool = POOLS[tier];
+    const text = pool[(Math.random() * pool.length) | 0];
+    this.campWhisper = { text, t: 0, dur: 4.6, fx: 0.3 + Math.random() * 0.4, fy: 0.2 + Math.random() * 0.22 };
+    Sound.play('whisper');
+  }
+
+  _drawWatchers(ctx) {
+    if (!this.watchers.length) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const w of this.watchers) {
+      const k = w.t / w.dur;
+      let a = Math.min(1, k * 6) * Math.min(1, (1 - k) * 4) * 0.85;
+      if (w.blinkT > 0) a *= 0.04;
+      const eye = (ex) => {
+        const g = ctx.createRadialGradient(ex, w.y, 0, ex, w.y, w.size * 3.4);
+        g.addColorStop(0, w.color); g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.globalAlpha = a * 0.85; ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(ex, w.y, w.size * 3.4, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = a; ctx.fillStyle = w.color;
+        ctx.beginPath(); ctx.ellipse(ex, w.y, w.size * 0.62, w.size, 0, 0, Math.PI * 2); ctx.fill();
+      };
+      eye(w.x - w.gap / 2); eye(w.x + w.gap / 2);
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
+  _drawDread(ctx) {
+    if (this.state !== 'playing' && this.state !== 'camp') return;
+    const W = this.vw, H = this.vh, depth = this._depth();
+    const breathe = 0.5 + 0.5 * Math.sin(this.time * 0.7);
+    let strength = depth * (0.2 + 0.08 * breathe);
+    // low-HP dread: the edges throb red, faster, as death nears
+    const p = this.player; let low = 0;
+    if (p && this.state === 'playing' && p.hp > 0 && p.hp < p.maxHP * 0.3) {
+      low = (0.5 + 0.5 * Math.sin(this.time * 4.2)) * (1 - p.hp / (p.maxHP * 0.3));
+    }
+    const a = strength + low * 0.32;
+    if (a < 0.02) return;
+    const red = Math.round(18 + 80 * depth + 130 * low);
+    const g = ctx.createRadialGradient(W / 2, H * 0.5, Math.min(W, H) * 0.3, W / 2, H * 0.5, Math.max(W, H) * 0.72);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(1, `rgba(${red},6,8,${Math.min(0.82, a)})`);
+    ctx.save(); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); ctx.restore();
+  }
+
+  _drawCampWhisper(ctx) {
+    const w = this.campWhisper; if (!w) return;
+    const k = w.t / w.dur;
+    const a = Math.min(1, k * 4) * Math.min(1, (1 - k) * 3) * 0.55;
+    if (a <= 0) return;
+    const x = this.vw * w.fx, y = this.vh * w.fy;
+    ctx.save();
+    ctx.globalAlpha = a; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = '15px "Silkscreen", monospace';
+    ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillText(w.text, x + 1, y + 1);
+    ctx.fillStyle = '#a3140f'; ctx.fillText(w.text, x, y);
+    ctx.restore();
   }
 
   spawnDamageNumber(x, y, amount, source) {
@@ -1281,6 +1408,7 @@ export class Game {
 
     this._updateCamera(dt);
     this._updateAmbient(dt);     // embers, transition, intro, sweep, hp bar — run in every state
+    this._updateDread(dt);       // eyes in the dark + intrusive whispers, escalating with depth
 
     // hold the world while the slash-wipe / plunge-fall covers the screen
     if (this.transition && this.transition.t < this.transition.half) return;
@@ -1434,7 +1562,7 @@ export class Game {
       const pl = this.plunge; pl.t += dt;
       if (pl.t < pl.half) {                       // falling: accelerate the camera downward + rumble
         const f = pl.t / pl.half;
-        this.camDrop = 820 * f * f;
+        this.camDrop = 820 * (f * f * 0.72 + f * 0.28);   // initial velocity so frame 1 already moves
         this.shake = Math.max(this.shake, 3 + 7 * f);
       } else { this.camDrop = 0; }
       if (!pl.fired && pl.t >= pl.half) { pl.fired = true; if (pl.mid) pl.mid(); }
@@ -1644,7 +1772,9 @@ export class Game {
     this.enemies = []; this.projectiles = []; this.allyProjectiles = []; this.pickups = [];
     this.effects = [];                      // clear leftover swing arcs / damage numbers / death fx
     this.hitStop = 0; this.timeScale = 1;
-    this.descentJump = null; this.plunge = null; this.camDrop = 0;
+    this.descentJump = null; this.plunge = null; this.camDrop = 0; this.descentSink = 0;
+    this.watchers = []; this.campWhisper = null;
+    this._watchT = 3.5 + Math.random() * 3; this._whisperT = 4 + Math.random() * 4;
     this._buildCampRoom();
     // a small, contained room centred in the world; the camera stays put
     const ox = Math.round(this.world.w / 2 - this.vw / 2);
@@ -1736,14 +1866,25 @@ export class Game {
   // lands in the mouth the world plunges into darkness (the existing transition).
   _updateDescentJump(dt) {
     const j = this.descentJump; j.t += dt;
-    const p = this.player, prog = Math.min(1, j.t / j.dur);
-    p.x = j.x0 + (j.tx - j.x0) * prog;
-    const by = j.y0 + (j.ty - j.y0) * prog;
-    p.y = by - j.h * Math.sin(prog * Math.PI);  // parabolic hop
+    const p = this.player, raw = Math.min(1, j.t / j.dur);
+    const HOP = 0.62;                               // first part arcs to the mouth...
+    if (raw <= HOP) {
+      const prog = raw / HOP;
+      p.x = j.x0 + (j.tx - j.x0) * prog;
+      const by = j.y0 + (j.ty - j.y0) * prog;
+      p.y = by - j.h * Math.sin(prog * Math.PI);    // parabolic hop
+      this.descentSink = 0;
+    } else {
+      // ...the rest drops STRAIGHT down into the dark and fades, so the plunge
+      // takes over from an empty pit (no frozen frame of the knight on the rim).
+      const s = (raw - HOP) / (1 - HOP);
+      p.x = j.tx; p.y = j.ty + s * 24;
+      this.descentSink = s;
+    }
     p.moving = false; p.attackAnim = 0; p.swingTimer = 0; p.dashTimer = 0;
     if (j.tx < j.x0 - 1) p.faceLeft = true; else if (j.tx > j.x0 + 1) p.faceLeft = false;
     this._updateProjAndFx(dt);
-    if (prog >= 1) { this.descentJump = null; this.descend(); }
+    if (raw >= 1) { this.descentJump = null; this.descend(); }
   }
 
   // called by the floating prompt button / shop panel
@@ -1754,7 +1895,8 @@ export class Game {
     const d = this.camp.door, p = this.player;
     this._puff(p.x, p.y, '#4a4350', 2, 4, { r0: 2, r1: 9, dur: 0.3 });   // takeoff dust
     Sound.play('jump');
-    this.descentJump = { t: 0, dur: 0.5, x0: p.x, y0: p.y, tx: d.x, ty: d.y - 2, h: 50 };
+    this.descentSink = 0;
+    this.descentJump = { t: 0, dur: 0.72, x0: p.x, y0: p.y, tx: d.x, ty: d.y - 2, h: 50 };
   }
   closeShop() { this.shopOpen = false; this.ui.hideShop(); }
 
@@ -1822,7 +1964,9 @@ export class Game {
   // Demon Lord whispers, and you sink onto the next, deeper floor.
   descend() {
     const whispers = ['DEEPER.', 'DOWN YOU COME.', 'CLOSER NOW.', 'I FELT THAT.', 'YES. DESCEND.', 'NEARER TO ME.'];
-    this.plunge = { t: 0, dur: 1.65, half: 0.74, fired: false,
+    // seed t slightly so the very first rendered frame already shows the fall
+    // (darkness welling + camera dropping) rather than a static beat.
+    this.plunge = { t: 0.05, dur: 1.65, half: 0.74, fired: false,
       whisper: whispers[(Math.random() * whispers.length) | 0],
       mid: () => this._startLevel(this.level + 1, false) };
     this.shake = Math.max(this.shake, 4);
@@ -1913,6 +2057,8 @@ export class Game {
 
     this._drawAtmos(ctx);           // biome weather (screen overlay)
     this._drawGrade(ctx);           // biome colour grade (screen overlay)
+    this._drawDread(ctx);           // depth/low-HP dread vignette pressing in
+    this._drawWatchers(ctx);        // eyes glowing in the dark periphery
     this._drawIntroCut(ctx);        // iris opening back up inside Level 1
     this._drawInterludeFade(ctx);   // black fading out of a Demon Lord taunt into the camp
     this._drawDeathOverlay(ctx);    // desaturate + "YOU FELL" during dying/gameover lead-in
@@ -1951,6 +2097,7 @@ export class Game {
     if (this.state === 'playing' || (this.state === 'camp' && !this.shopOpen)) this.input.draw(ctx);
     this._drawFuryButton(ctx);     // floating "unleash fury" button above the hero
     if (this.state === 'camp') this._drawCampToast(ctx);   // event outcome flavour
+    if (this.state === 'camp') this._drawCampWhisper(ctx);  // intrusive voice in the safe room
     this._drawInterlude(ctx);      // Demon Lord taunt: blacks out the whole screen + red typewriter
     this._drawPlunge(ctx);         // plunge-into-darkness descent overlay
     this._drawTransition(ctx);     // slash-wipe on the very top
@@ -2894,6 +3041,7 @@ export class Game {
     if (p.invuln > 0 && Math.floor(this.time * 20) % 2 === 0 && p.flash <= 0) {
       ctx.globalAlpha = 0.6;   // blink during i-frames
     }
+    if (this.descentSink > 0) ctx.globalAlpha *= Math.max(0, 1 - this.descentSink * 1.15);  // sinking into the pit
     const tint = p.flash > 0 ? { color: '#ff5a5a', a: 0.6 }
       : (p.slowT > 0 ? { color: '#9fe0ff', a: 0.45 } : null);
     drawSprite(ctx, p.sprite, frame, p.x, p.y, p.faceLeft, 1, tint);

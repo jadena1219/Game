@@ -918,6 +918,160 @@ export class Game {
     this.ui.swipeTitleAway();           // CSS lift-and-blur on the title overlay
   }
 
+  // ---------- The Prologue: an animated legend told before the descent ----------
+  startPrologue() {
+    if (this.state !== 'title') return;
+    this.heroId = 'knight';
+    this.prologue = { i: 0, t: 0, beats: [
+      { lines: ['The kingdom stood in gold,', 'and the King ruled it well —', 'just, and beloved by all.'], dur: 6.0 },
+      { lines: ['Then the deep woke.', 'A hunger climbed from below.', 'Fire took the towers. The light failed.'], dur: 6.0 },
+      { lines: ['At the brink of ruin, the King knelt', 'to the dark, and struck a bargain:', 'the realm spared — for the price of his finest blade.'], dur: 7.0 },
+      { lines: ['He had raised that blade from an orphan boy.', 'He loved him as a son.', 'And he sent that son into the dark to save him —', 'knowing what waited below.'], dur: 7.5 },
+      { lines: ['You are that son.', 'You do not yet know the truth.', 'You know only your oath.', 'So you descend.'], dur: 7.0 },
+    ] };
+    this.state = 'prologue';
+    this._tapped = false;
+    Sound.setScene('camp');
+    this.ui.swipeTitleAway();
+  }
+
+  _endPrologue() { this.prologue = null; try { localStorage.setItem('kls_seen_intro', '1'); } catch (e) { /* */ } this.state = 'title'; this.startShrine(); }
+
+  _updatePrologue(dt) {
+    const pr = this.prologue; pr.t += dt;
+    if (this._tapped) { this._tapped = false; pr.i++; pr.t = 0; if (pr.i >= pr.beats.length) return this._endPrologue(); Sound.setScene(pr.i >= 2 ? 'boss' : 'camp'); return; }
+    if (pr.t >= pr.beats[pr.i].dur) { pr.i++; pr.t = 0; if (pr.i >= pr.beats.length) return this._endPrologue(); Sound.setScene(pr.i >= 2 ? 'boss' : 'camp'); }
+  }
+
+  _renderPrologue(ctx) {
+    const pr = this.prologue, W = this.vw, H = this.vh, b = pr.beats[pr.i];
+    ctx.clearRect(0, 0, W, H);
+    const fin = Math.min(1, pr.t / 0.7), fout = Math.min(1, (b.dur - pr.t) / 0.7);
+    const a = Math.max(0, Math.min(fin, fout));
+    this._drawPrologueArt(ctx, pr.i, a);
+    // a dark band so the narration always reads
+    const band = ctx.createLinearGradient(0, H * 0.6, 0, H);
+    band.addColorStop(0, 'rgba(0,0,0,0)'); band.addColorStop(1, 'rgba(0,0,0,0.85)');
+    ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = band; ctx.fillRect(0, H * 0.6, W, H * 0.4); ctx.restore();
+    // narration — lines fade in, staggered
+    ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const baseY = H * 0.74, lh = 26;
+    b.lines.forEach((line, k) => {
+      const la = Math.max(0, Math.min(1, (pr.t - (0.5 + k * 0.85)) / 0.6)) * a;
+      if (la <= 0) return;
+      ctx.globalAlpha = la; ctx.font = '600 16px "Silkscreen", monospace';
+      ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,0.9)'; ctx.strokeText(line, W / 2, baseY + k * lh);
+      ctx.fillStyle = pr.i >= 2 ? '#e7d2c4' : '#fff3df'; ctx.fillText(line, W / 2, baseY + k * lh);
+    });
+    if (pr.t > 1.2) { ctx.globalAlpha = 0.4 * a; ctx.font = '10px "Silkscreen", monospace'; ctx.fillStyle = '#fff'; ctx.fillText('tap to continue', W / 2, H * 0.955); }
+    ctx.restore(); ctx.globalAlpha = 1;
+    this._drawTransition(ctx);
+  }
+
+  _drawPrologueArt(ctx, i, a) {
+    const W = this.vw, H = this.vh, t = this.time, pt = this.prologue.t;
+    ctx.save(); ctx.globalAlpha = a;
+    if (i === 0) {                                            // the realm, golden
+      const horizon = H * 0.62;
+      const g = ctx.createLinearGradient(0, 0, 0, horizon); g.addColorStop(0, '#d99a44'); g.addColorStop(1, '#f0d693'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, horizon);
+      ctx.fillStyle = '#b88f4e'; ctx.fillRect(0, horizon, W, H - horizon);
+      const s = ctx.createRadialGradient(W * 0.5, horizon - 6, 4, W * 0.5, horizon - 6, 180); s.addColorStop(0, 'rgba(255,244,210,0.85)'); s.addColorStop(1, 'rgba(255,225,160,0)'); ctx.fillStyle = s; ctx.fillRect(0, 0, W, horizon + 40);
+      this._drawCastle(ctx, W * 0.5, horizon, 0);
+      ctx.globalCompositeOperation = 'lighter';
+      for (let k = 0; k < 22; k++) { const ph = ((t * 0.18) + k * 0.045) % 1; ctx.globalAlpha = a * (1 - ph) * 0.5; ctx.fillStyle = '#ffe9a8'; ctx.fillRect((k * 53.7) % W, horizon - ph * horizon, 2, 2); }
+    } else if (i === 1) {                                     // the rising dark
+      const horizon = H * 0.62, k = Math.min(1, pt / 2.5);
+      const g = ctx.createLinearGradient(0, 0, 0, horizon);
+      g.addColorStop(0, `rgb(${(40 + 130 * (1 - k)) | 0},${(20 + 70 * (1 - k)) | 0},${(20 + 30 * (1 - k)) | 0})`);
+      g.addColorStop(1, `rgb(${(120 + 110 * (1 - k)) | 0},${(40 + 100 * (1 - k)) | 0},${(20 + 50 * (1 - k)) | 0})`);
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, horizon);
+      ctx.fillStyle = '#1a0e0a'; ctx.fillRect(0, horizon, W, H - horizon);
+      this._drawCastle(ctx, W * 0.5, horizon, 1);
+      ctx.fillStyle = `rgba(0,0,0,${0.4 * k})`; ctx.fillRect(0, horizon - 20, W, H);
+    } else if (i === 2) {                                     // the bargain
+      ctx.fillStyle = '#0b0712'; ctx.fillRect(0, 0, W, H);
+      const cx = W * 0.5, baseY = H * 0.64, rise = Math.min(1, pt / 2.6);
+      const pg = ctx.createRadialGradient(cx, baseY + 50, 4, cx, baseY + 50, 200); pg.addColorStop(0, `rgba(210,30,16,${0.55})`); pg.addColorStop(1, 'rgba(40,0,0,0)'); ctx.fillStyle = pg; ctx.fillRect(0, 0, W, H);
+      this._drawDemonShadow(ctx, cx, baseY + 34, rise);
+      this._silKing(ctx, cx - 78, baseY, 56, true);           // kneeling at the brink
+      this._silKnight(ctx, cx + 84, baseY, 46, false);
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; const sg = 0.35 + 0.4 * Math.sin(t * 3) * rise;
+      ctx.strokeStyle = `rgba(225,30,20,${Math.max(0, sg) * rise})`; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx + 84, baseY - 26, 17, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+    } else if (i === 3) {                                     // the oath at the gate
+      ctx.fillStyle = '#0d0916'; ctx.fillRect(0, 0, W, H);
+      const cx = W * 0.5, baseY = H * 0.66;
+      ctx.fillStyle = '#191322'; ctx.fillRect(cx - 84, baseY - 140, 168, 140);
+      ctx.fillStyle = '#060410'; ctx.beginPath(); ctx.moveTo(cx - 36, baseY); ctx.lineTo(cx - 36, baseY - 78); ctx.arc(cx, baseY - 78, 36, Math.PI, 0); ctx.lineTo(cx + 36, baseY); ctx.closePath(); ctx.fill();
+      const tg = ctx.createRadialGradient(cx, baseY - 40, 4, cx, baseY - 40, 120); tg.addColorStop(0, 'rgba(120,40,30,0.4)'); tg.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = tg; ctx.fillRect(0, 0, W, H);
+      this._silKing(ctx, cx - 28, baseY, 58, false);
+      ctx.fillStyle = `rgba(180,220,255,${0.5 + 0.5 * Math.abs(Math.sin(t * 2))})`; ctx.fillRect(cx - 24, baseY - 50, 1, 3);   // a tear
+      this._silKnight(ctx, cx + 32, baseY, 50, true);
+    } else {                                                  // the descent
+      ctx.fillStyle = '#0a0610'; ctx.fillRect(0, 0, W, H);
+      const cx = W * 0.5, baseY = H * 0.58, k = Math.min(1, pt / 3.8);
+      ctx.fillStyle = '#15101e'; ctx.fillRect(cx - 60, baseY - 96, 120, 96);
+      ctx.fillStyle = '#04020a'; ctx.beginPath(); ctx.moveTo(cx - 30, baseY); ctx.lineTo(cx - 30, baseY - 58); ctx.arc(cx, baseY - 58, 30, Math.PI, 0); ctx.lineTo(cx + 30, baseY); ctx.closePath(); ctx.fill();
+      const rg = ctx.createRadialGradient(cx, baseY + 30, 4, cx, baseY + 30, 150); rg.addColorStop(0, `rgba(200,30,16,${0.5})`); rg.addColorStop(1, 'rgba(40,0,0,0)'); ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = rg; ctx.fillRect(0, baseY - 30, W, H); ctx.restore();
+      this._silKnight(ctx, cx, baseY - 6 + k * 50, 48 * (1 - 0.45 * k), false);
+      ctx.fillStyle = `rgba(0,0,0,${k * 0.85})`; ctx.fillRect(0, 0, W, H);
+    }
+    ctx.restore(); ctx.globalAlpha = 1;
+  }
+
+  _drawCastle(ctx, cx, baseY, fire) {
+    const col = fire ? '#1c1110' : '#241a12';
+    ctx.fillStyle = col;
+    ctx.fillRect(cx - 40, baseY - 70, 80, 70);
+    for (let x = cx - 40; x < cx + 40; x += 12) ctx.fillRect(x, baseY - 78, 6, 8);
+    for (const tx of [cx - 60, cx + 42]) {
+      ctx.fillStyle = col; ctx.fillRect(tx, baseY - 92, 18, 92);
+      for (let x = tx; x < tx + 18; x += 8) ctx.fillRect(x, baseY - 100, 5, 8);
+      ctx.beginPath(); ctx.moveTo(tx - 2, baseY - 92); ctx.lineTo(tx + 9, baseY - 108); ctx.lineTo(tx + 20, baseY - 92); ctx.closePath(); ctx.fill();
+    }
+    ctx.fillStyle = '#070507'; ctx.beginPath(); ctx.moveTo(cx - 9, baseY); ctx.lineTo(cx - 9, baseY - 16); ctx.arc(cx, baseY - 16, 9, Math.PI, 0); ctx.lineTo(cx + 9, baseY); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = fire ? '#7a1510' : '#b08a3a';
+    for (const bx of [cx - 60 + 9, cx + 42 + 9]) { const w = Math.sin(this.time * 3 + bx) * 2; ctx.fillRect(bx - 1, baseY - 118, 1, 16); ctx.beginPath(); ctx.moveTo(bx, baseY - 118); ctx.lineTo(bx + 8 + w, baseY - 114); ctx.lineTo(bx, baseY - 110); ctx.closePath(); ctx.fill(); }
+    if (fire) {
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      const fg = ctx.createRadialGradient(cx, baseY - 24, 4, cx, baseY - 24, 110); fg.addColorStop(0, 'rgba(255,120,30,0.7)'); fg.addColorStop(0.5, 'rgba(255,60,10,0.3)'); fg.addColorStop(1, 'rgba(255,40,0,0)'); ctx.fillStyle = fg; ctx.fillRect(cx - 120, baseY - 120, 240, 130);
+      ctx.restore();
+      ctx.fillStyle = 'rgba(28,20,20,0.55)';
+      for (let i = 0; i < 5; i++) { const ph = ((this.time * 0.3) + i * 0.2) % 1; ctx.globalAlpha = (1 - ph) * 0.5; ctx.beginPath(); ctx.arc(cx - 48 + i * 24 + Math.sin(this.time + i) * 6, baseY - 92 - ph * 100, 8 + ph * 12, 0, Math.PI * 2); ctx.fill(); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  _silKing(ctx, x, baseY, h, kneel) {
+    const yb = baseY - (kneel ? 0 : 0), bodyTop = yb - h * 0.66;
+    ctx.fillStyle = '#181320';
+    ctx.beginPath(); ctx.moveTo(x - 11, yb); ctx.lineTo(x - 6, bodyTop); ctx.lineTo(x + 6, bodyTop); ctx.lineTo(x + 11, yb); ctx.closePath(); ctx.fill();   // robe
+    ctx.fillRect(x - 4, yb - h, 8, h * 0.36);                                   // head/neck
+    ctx.fillStyle = '#caa54a';
+    for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.moveTo(x + i * 5 - 1, yb - h); ctx.lineTo(x + i * 5, yb - h - 5); ctx.lineTo(x + i * 5 + 1, yb - h); ctx.closePath(); ctx.fill(); }
+    ctx.fillRect(x - 6, yb - h, 12, 2);
+  }
+
+  _silKnight(ctx, x, baseY, h, blade) {
+    ctx.fillStyle = '#121019';
+    ctx.fillRect(x - 5, baseY - h * 0.62, 10, h * 0.62);
+    ctx.fillRect(x - 4, baseY - h, 8, h * 0.36);
+    ctx.fillStyle = '#5a5a72'; ctx.fillRect(x - 4, baseY - h - 3, 1, 4); ctx.fillRect(x + 3, baseY - h - 3, 1, 4);
+    ctx.fillStyle = '#74e0ff'; ctx.fillRect(x - 2, baseY - h * 0.82, 4, 1);
+    if (blade) { ctx.save(); ctx.translate(x + 5, baseY - h * 0.5); ctx.rotate(-0.5); ctx.fillStyle = '#cfd6e2'; ctx.fillRect(-1, -h * 0.8, 2, h * 0.8); ctx.fillStyle = '#caa54a'; ctx.fillRect(-3, 0, 6, 2); ctx.restore(); }
+  }
+
+  _drawDemonShadow(ctx, cx, baseY, rise) {
+    const top = baseY - 36 - rise * 78;
+    ctx.fillStyle = '#080510';
+    ctx.beginPath(); ctx.moveTo(cx - 74, baseY); ctx.quadraticCurveTo(cx - 52, top, cx - 22, top - 8); ctx.lineTo(cx + 22, top - 8); ctx.quadraticCurveTo(cx + 52, top, cx + 74, baseY); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(cx - 22, top - 4); ctx.lineTo(cx - 36, top - 28 - rise * 12); ctx.lineTo(cx - 14, top - 10); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(cx + 22, top - 4); ctx.lineTo(cx + 36, top - 28 - rise * 12); ctx.lineTo(cx + 14, top - 10); ctx.closePath(); ctx.fill();
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; const eg = 0.5 + 0.5 * Math.sin(this.time * 4);
+    ctx.fillStyle = `rgba(255,40,28,${0.75 * rise})`; ctx.fillRect(cx - 15, top + 2, 6, 4); ctx.fillRect(cx + 9, top + 2, 6, 4);
+    ctx.fillStyle = `rgba(255,170,130,${0.9 * rise * eg})`; ctx.fillRect(cx - 14, top + 3, 2, 1); ctx.fillRect(cx + 10, top + 3, 2, 1);
+    ctx.restore();
+  }
+
   // ---------- The Shrine of Blades: the run-opening sword choice ----------
   startShrine() {
     if (this.state !== 'title') return;
@@ -2154,7 +2308,7 @@ export class Game {
   // Camera follows the hero with a GENTLE ease (restores the smooth feel; the
   // actual move speed is constant because that bug was in the joystick, not here).
   _updateCamera(dt) {
-    if (this.state === 'camp' || this.state === 'shrine' || this.cutscene) return;   // these scenes own the camera
+    if (this.state === 'camp' || this.state === 'shrine' || this.state === 'prologue' || this.cutscene) return;   // these scenes own the camera
     const cw = this.world.w - this.vw, ch = this.world.h - this.vh;
     if (this.state === 'title' || !this.player) {
       this.cam.x = Math.max(0, Math.min(cw, this.world.w / 2 - this.vw / 2));
@@ -2186,6 +2340,7 @@ export class Game {
     if (this.state === 'dying') return this._updateDying(dt);
     if (this.state === 'won') return this._updateWon(dt);
     if (this.state === 'camp') return this._updateCamp(dt);
+    if (this.state === 'prologue') return this._updatePrologue(dt);
     if (this.state === 'shrine') return this._updateShrine(dt);
     if (this.state === 'intro') return this._updateIntro(dt);
     if (this.state === 'interlude') return this._updateInterlude(dt);
@@ -2813,6 +2968,7 @@ export class Game {
       return;
     }
 
+    if (this.state === 'prologue') { this._renderPrologue(ctx); return; }
     if (this.state === 'shrine') { this._renderShrine(ctx); return; }
 
     ctx.clearRect(0, 0, this.vw, this.vh);

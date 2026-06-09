@@ -398,7 +398,7 @@ async function boot() {
   if (godSkip) godSkip.addEventListener('click', (e) => { e.stopPropagation(); game.godSkip(); });
 
   // Hero select stays built for a future unlock; for now every run is the Knight.
-  document.getElementById('start-btn').addEventListener('click', () => { Sound.unlock(); game.startShrine(); });
+  document.getElementById('start-btn').addEventListener('click', () => { Sound.unlock(); game.startPrologue(); });
   document.getElementById('retry-btn').addEventListener('click', () => game.start('knight'));
   document.getElementById('win-btn').addEventListener('click', () => game.start('knight'));
   // return to the title after a run (resets game state so the corridor shows)

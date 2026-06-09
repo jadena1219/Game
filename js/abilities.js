@@ -22,8 +22,8 @@ export const BASE_MODS = () => ({
   maxHPMult: 1,            // multiplier on max HP
   damageTakenMult: 1,      // multiplier on incoming damage (after reduction)
   noHeal: false,           // all healing is blocked
-  noDash: false,           // dashing disabled
   reflect: false,          // projectiles are batted back, doubled
+  dashRangeMult: 1,        // multiplier on dash distance
   dashFireTrail: false,    // dashes leave a burning trail
   furyLocked: false,       // Fury builds endlessly toward a near-constant ultimate
 });
@@ -69,9 +69,9 @@ export const RELICS = [
   { id: 'cinderstep', icon: '🔥', name: 'Cinderstep', cost: 70, keystone: true,
     flavor: 'Your every step scorches the stone.', desc: 'KEYSTONE — Dashing leaves a trail of fire that burns all it touches.' },
   { id: 'aegis', icon: '🪞', name: 'Mirror Aegis', cost: 72, keystone: true,
-    flavor: 'It drinks the dark and spits it back.', desc: 'KEYSTONE — You can no longer dash, but incoming projectiles shatter and fly back, doubled.' },
+    flavor: 'It drinks the dark and spits it back.', desc: 'KEYSTONE — Projectiles that strike you are hurled back with DOUBLE damage, and your dash flies much farther.' },
   { id: 'bloodfury', icon: '💥', name: 'Heart of Fury', cost: 68, keystone: true,
-    flavor: 'A rage that never banks its fire.', desc: 'KEYSTONE — Fury builds endlessly (an ultimate every few seconds) — but you take DOUBLE damage.' },
+    flavor: 'A rage that never banks its fire.', desc: 'KEYSTONE — Fury builds on its own (an ultimate every ~11s) — but you take DOUBLE damage.' },
 
   // ---- CURSED: enormous power, a price paid in blood ----
   { id: 'glassdagger', icon: '🗡️', name: 'Glass Dagger', cost: 40, cursed: true,
@@ -104,7 +104,7 @@ export function recompute(player) {
   if (R.has('wind')) { m.dashCooldownMult *= 0.7; m.dashInvulnBonus += 0.15; }
   // keystones — rewrite a rule
   if (R.has('cinderstep')) m.dashFireTrail = true;
-  if (R.has('aegis')) { m.noDash = true; m.reflect = true; }
+  if (R.has('aegis')) { m.reflect = true; m.dashRangeMult *= 1.7; }
   if (R.has('bloodfury')) { m.furyLocked = true; m.damageTakenMult *= 2; }
   // cursed — power with a price
   if (R.has('glassdagger')) { m.swordDamageMult *= 1.55; m.maxHPMult *= 0.7; }

@@ -85,14 +85,15 @@ export class Player {
     // trigger a dash (double-tap move side / Shift). Consume the request.
     if (input.dashQueued) {
       input.dashQueued = false;
-      if (this.dashTimer <= 0 && this.dashCD <= 0 && !this.mods.noDash) this.startDash(mv, mlen, game);
+      if (this.dashTimer <= 0 && this.dashCD <= 0) this.startDash(mv, mlen, game);
     }
 
     if (this.dashTimer > 0) {
       // dashing: locked-direction burst, ignores steering
       this.dashTimer -= dt;
-      this.x += this.dashDirX * this.hero.dashSpeed * dt;
-      this.y += this.dashDirY * this.hero.dashSpeed * dt;
+      const ds = this.hero.dashSpeed * (this.mods.dashRangeMult || 1);
+      this.x += this.dashDirX * ds * dt;
+      this.y += this.dashDirY * ds * dt;
       this.moving = true;
     } else {
       this.moving = mlen > 0.08;

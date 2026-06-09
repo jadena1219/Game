@@ -15,12 +15,12 @@ const BOSS_NAMES = { miniboss: 'The Dark Knight', boss: 'The Demon Lord' };
 // Named elite foes — rare, titled minibosses-of-the-floor. Each is a base enemy
 // wearing one elite affix as its "twist", and each is guaranteed to drop a relic.
 const NAMED_FOES = [
-  { name: 'Gravewarden',    base: 'tank',    affix: 'armored',   color: '#cfd6e0' },
-  { name: 'Quickfang',      base: 'swarmer', affix: 'swift',     color: '#7fe0ff' },
-  { name: 'The Pale Widow', base: 'caster',  affix: 'icy',       color: '#bdf0ff' },
-  { name: 'Hollow Lord',    base: 'chaser',  affix: 'vampiric',  color: '#d8413a' },
-  { name: 'Emberfiend',     base: 'tank',    affix: 'explosive', color: '#ff7a2a' },
-  { name: 'Dreadcaller',    base: 'caster',  affix: 'vampiric',  color: '#c89aff' },
+  { name: 'Gravewarden',    base: 'tank',    affix: 'armored',   color: '#cfd6e0', sprite: 'gravewarden' },
+  { name: 'Quickfang',      base: 'swarmer', affix: 'swift',     color: '#7fe0ff', sprite: 'quickfang' },
+  { name: 'The Pale Widow', base: 'caster',  affix: 'icy',       color: '#bdf0ff', sprite: 'palewidow' },
+  { name: 'Hollow Lord',    base: 'chaser',  affix: 'vampiric',  color: '#d8413a', sprite: 'hollowlord' },
+  { name: 'Emberfiend',     base: 'tank',    affix: 'explosive', color: '#ff7a2a', sprite: 'emberfiend' },
+  { name: 'Dreadcaller',    base: 'caster',  affix: 'vampiric',  color: '#c89aff', sprite: 'dreadcaller' },
 ];
 
 // The Demon Lord's voice — cryptic, threatening, escalating. Keyed by the level
@@ -377,26 +377,36 @@ export class Game {
     g.fillStyle = 'rgba(0,0,0,0.2)'; g.fillRect(x + 4, y - 6, 4, 38);
   }
 
-  // a pool of fire left by Cinderstep — flickering embers that hurt to stand in
+  // Cinderstep's burning footprints — animated pixel flames over an ember bed.
   _drawFireTrail(ctx, fx) {
-    const k = fx.t / fx.dur, a = Math.min(1, (1 - k) * 1.6) * Math.min(1, fx.t * 6);
-    const r = fx.r * (0.7 + 0.3 * k);
+    const k = fx.t / fx.dur;
+    const a = Math.min(1, fx.t * 9) * Math.min(1, (1 - k) * 2);   // snap in, fade near the end
+    if (a <= 0) return;
+    const seed = fx.seed || 0;
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
+    // glowing ember bed on the floor
+    const r = fx.r * (0.85 - 0.35 * k);
     const g = ctx.createRadialGradient(fx.x, fx.y, 0, fx.x, fx.y, r);
-    g.addColorStop(0, `rgba(255,210,90,${0.5 * a})`);
-    g.addColorStop(0.5, `rgba(255,110,30,${0.35 * a})`);
-    g.addColorStop(1, 'rgba(120,20,0,0)');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(fx.x, fx.y, r, 0, Math.PI * 2); ctx.fill();
-    // a few licking flames
-    for (let i = 0; i < 3; i++) {
-      const ph = (this.time * 3 + i * 2.1 + fx.x * 0.1) % 1;
-      const fxp = fx.x + Math.sin(this.time * 6 + i) * r * 0.4;
-      const fyp = fx.y - ph * r * 0.9;
-      ctx.globalAlpha = a * (1 - ph) * 0.8; ctx.fillStyle = i % 2 ? '#ffd36b' : '#ff7a2a';
-      ctx.beginPath(); ctx.arc(fxp, fyp, (1 - ph) * 3 + 1, 0, Math.PI * 2); ctx.fill();
+    g.addColorStop(0, `rgba(255,140,40,${0.3 * a})`); g.addColorStop(0.6, `rgba(200,50,10,${0.18 * a})`); g.addColorStop(1, 'rgba(60,8,0,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(fx.x, fx.y, r, r * 0.55, 0, 0, Math.PI * 2); ctx.fill();
+    // flickering pixel flame tongues
+    const t = this.time * 15 + seed, cell = 2, tongues = 6, shrink = 1 - 0.55 * k;
+    for (let i = 0; i < tongues; i++) {
+      const flick = 0.45 + 0.55 * Math.sin(t + i * 1.7);
+      const baseX = fx.x + (i - (tongues - 1) / 2) * 3 + Math.sin(t * 0.4 + i) * 1.4;
+      const cols = Math.max(2, Math.round((5 - (i % 3)) * (0.6 + 0.9 * flick) * shrink));
+      for (let cY = 0; cY < cols; cY++) {
+        const f = cY / cols;                                       // 0 base .. 1 tip
+        const col = f < 0.28 ? '#e23a12' : f < 0.55 ? '#ff7a2a' : f < 0.82 ? '#ffce5a' : '#fff2c0';
+        const w = Math.max(1, Math.round((1 - f) * 4));
+        ctx.globalAlpha = a * (1 - f * 0.45);
+        ctx.fillStyle = col;
+        ctx.fillRect(Math.round(baseX - w / 2), Math.round(fx.y - cY * cell - 2), w, cell);
+      }
     }
     ctx.restore();
+    ctx.globalAlpha = 1;
   }
 
   _drawPickup(ctx, pk) {
@@ -1287,6 +1297,7 @@ export class Game {
     const pos = this._spawnPos();
     const e = new Enemy(def.base, pos[0], pos[1], this.level);
     e.applyElite(def.affix, ELITE_AFFIXES[def.affix]);
+    if (def.sprite) e.sprite = def.sprite;                   // its own brand-new creature sprite
     e.named = { name: def.name, color: def.color };
     e.maxHP = Math.round(e.maxHP * 1.7); e.hp = e.maxHP;     // a true mini-threat
     e.dropsRelic = true;
@@ -1322,14 +1333,21 @@ export class Game {
       this.effects.push({ kind: 'spark', x: player.x - Math.cos(a) * 8, y: player.y - 14 - Math.sin(a) * 8,
         vx: Math.cos(sa) * s, vy: Math.sin(sa) * s, t: 0, dur: 0.3, col: '#bfe9ff' });
     }
-    // Cinderstep (keystone): lay a burning trail along the dash path
-    if (player.mods.dashFireTrail) {
-      const h = player.hero, dist = h.dashSpeed * h.dashDur, steps = 6;
-      for (let i = 0; i <= steps; i++) {
-        const f = i / steps;
-        this.effects.push({ kind: 'firetrail', x: player.x + player.dashDirX * dist * f,
-          y: player.y + player.dashDirY * dist * f, r: 28, t: 0, dur: 1.25, dmgT: 0.05 });
-      }
+    // Cinderstep (keystone): drop the first ember where he launches; the rest is
+    // laid down frame-by-frame in _emitDashFire so it trails off his boots.
+    if (player.mods.dashFireTrail) { this._fireDist = 99; this._lastFireX = player.x; this._lastFireY = player.y; }
+  }
+
+  // Lay burning footprints along the dash as the knight travels (Cinderstep).
+  _emitDashFire(p) {
+    if (!p.dashing) { this._lastFireX = p.x; this._lastFireY = p.y; return; }
+    const lx = this._lastFireX ?? p.x, ly = this._lastFireY ?? p.y;
+    this._fireDist = (this._fireDist || 0) + Math.hypot(p.x - lx, p.y - ly);
+    this._lastFireX = p.x; this._lastFireY = p.y;
+    if (this._fireDist >= 8) {
+      this._fireDist = 0;
+      this.effects.push({ kind: 'firetrail', x: p.x, y: p.y + 2, r: 24, t: 0, dur: 1.15, dmgT: 0.05,
+        seed: Math.random() * 6.28 });
     }
   }
 
@@ -1637,9 +1655,10 @@ export class Game {
     }
 
     this._updateAbilities(sdt);
-    // Heart of Fury (keystone): Fury builds endlessly, refilling to a fresh
-    // ultimate every few seconds regardless of kills.
-    if (p.mods.furyLocked) p.fury = Math.min(p.furyMax, p.fury + p.furyMax * sdt / 5);
+    // Heart of Fury (keystone): Fury builds endlessly on its own — a fresh
+    // ultimate roughly every ~11s (slow enough that the double-damage bites
+    // between unleashes, not a spammable room-clear).
+    if (p.mods.furyLocked) p.fury = Math.min(p.furyMax, p.fury + p.furyMax * sdt / 11);
     // Fury no longer auto-fires — it arms a button the player taps to unleash.
     const wasFury = this.furyReady;
     this.furyReady = p.fury >= p.furyMax;
@@ -1651,7 +1670,7 @@ export class Game {
     this._dashTrail(p, sdt);
     this._spawn(sdt);
     this._maybeSpawnNamed(sdt);                 // the floor's named elite herald
-    if (p.mods.dashFireTrail) this._burnTrails(sdt);
+    if (p.mods.dashFireTrail) { this._emitDashFire(p); this._burnTrails(sdt); }
 
     for (const e of this.enemies) e.update(sdt, this);
     this._emitAuras(sdt);

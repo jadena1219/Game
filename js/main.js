@@ -6,6 +6,7 @@ import { drawSprite } from './sprite.js';
 import { META, metaCost, LOCKED_RELICS, RELIC_UNLOCK_COST } from './meta.js';
 import { RELICS } from './abilities.js';
 import { Sound } from './audio.js';
+import { registerGeneratedSprites, buildKeystoneIcons } from './spritegen.js';
 
 const screens = {
   title: document.getElementById('title-screen'),
@@ -21,6 +22,7 @@ const HERO_IDS = ['knight', 'rogue', 'paladin'];
 
 let game = null;
 let godMode = (() => { try { return localStorage.getItem('kls_god') === '1'; } catch (e) { return false; } })();
+let GEN_ICONS = {};   // generated keystone icon data-URLs (id -> dataURL)
 
 // A pixel-art speaker, generated pixel-by-pixel (no asset file) in the game's
 // parchment/gold palette. `muted` swaps the gold sound-waves for a red slash.
@@ -230,8 +232,9 @@ const ui = {
         el.className = 'ware ' + sub + (owned ? ' sold' : afford ? '' : ' broke');
         el.style.animationDelay = (i * 0.07) + 's';
         const tag = w.kind === 'relic' ? sub.toUpperCase() : (w.level > 0 ? 'Lv ' + w.next : 'NEW');
+        const iconSrc = GEN_ICONS[w.id] || `assets/icons/${w.id}.png`;
         el.innerHTML =
-          `<img class="ware-ico-img" src="assets/icons/${w.id}.png" alt="" draggable="false">` +
+          `<img class="ware-ico-img" src="${iconSrc}" alt="" draggable="false">` +
           `<div class="ware-body">` +
             `<div class="ware-name">${w.item.name}<span class="tagchip ${sub}">${tag}</span></div>` +
             `<div class="ware-desc">${numWrap(w.label)}</div>` +
@@ -295,6 +298,10 @@ async function boot() {
     document.getElementById('start-btn').onclick = () => location.reload();
     return;
   }
+
+  // register the procedurally-generated creatures + keystone icons
+  try { registerGeneratedSprites(); GEN_ICONS = buildKeystoneIcons(); }
+  catch (err) { console.error('generated sprites failed', err); }
 
   game = new Game(canvas, ui);
   ui.showScreen('title');

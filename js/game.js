@@ -1880,14 +1880,15 @@ export class Game {
     if (event) this._eventsRecent = [event.id, ...(this._eventsRecent || [])].slice(0, 3);
     this.camp = {
       sorcerer: { x: ox + this.vw * 0.74, y: oy + this.vh * 0.42 },
-      door: { x: ox + this.vw * 0.5, y: oy + this.vh - 70 },   // set into the bottom wall
+      door: { x: ox + this.vw * 0.5, y: oy + this.vh - 120 },  // a hole in the floor — room to walk all around it
       shrine: event ? { x: ox + this.vw * 0.26, y: oy + this.vh * 0.46 } : null,
       event, eventUsed: false,
       torches: this._campTorchScreen.map(([x, y]) => ({ x: ox + x, y: oy + y, lava: !!b.lava, torch: b.torch })),
       prompt: null, t: 0,
     };
-    // keep the player inside the little room
-    this.bounds = { minX: ox + 46, minY: oy + 50, maxX: ox + this.vw - 46, maxY: oy + this.vh - 86 };
+    // keep the player inside the little room — floor now extends below the pit so
+    // you can circle it completely (down to just above the bottom wall)
+    this.bounds = { minX: ox + 46, minY: oy + 50, maxX: ox + this.vw - 46, maxY: oy + this.vh - 40 };
     this.state = 'camp';
     this.ui.showScreen(null);
     this.ui.setCampPrompt(null);

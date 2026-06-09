@@ -11,8 +11,8 @@
     "knight": {
       "file": "knight.png",
       "fw": 627,
-      "fh": 554,
-      "scale": 0.0545
+      "fh": 579,
+      "scale": 0.0477
     },
     "rogue": {
       "file": "rogue.png",

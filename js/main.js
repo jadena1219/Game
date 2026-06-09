@@ -225,18 +225,22 @@ const ui = {
       g.shopStock.forEach((w, i) => {
         const owned = w.sold;
         const afford = g.gold >= w.cost;
+        const sub = w.kind === 'relic' ? (w.item.keystone ? 'keystone' : w.item.cursed ? 'cursed' : 'relic') : w.kind;
         const el = document.createElement('button');
-        el.className = 'ware ' + w.kind + (owned ? ' sold' : afford ? '' : ' broke');
+        el.className = 'ware ' + sub + (owned ? ' sold' : afford ? '' : ' broke');
         el.style.animationDelay = (i * 0.07) + 's';
-        const tag = w.kind === 'relic' ? 'RELIC' : (w.level > 0 ? 'Lv ' + w.next : 'NEW');
+        const tag = w.kind === 'relic' ? sub.toUpperCase() : (w.level > 0 ? 'Lv ' + w.next : 'NEW');
         el.innerHTML =
           `<img class="ware-ico-img" src="assets/icons/${w.id}.png" alt="" draggable="false">` +
           `<div class="ware-body">` +
-            `<div class="ware-name">${w.item.name}<span class="tagchip ${w.kind}">${tag}</span></div>` +
+            `<div class="ware-name">${w.item.name}<span class="tagchip ${sub}">${tag}</span></div>` +
             `<div class="ware-desc">${numWrap(w.label)}</div>` +
             (w.kind === 'relic' ? `<div class="ware-flavor">${w.item.flavor}</div>` : '') +
           `</div>` +
           `<div class="ware-cost">${owned ? '✓' : '◆ <span class="num">' + w.cost + '</span>'}</div>`;
+        // fall back to the relic's emoji if it has no icon PNG yet
+        const img = el.querySelector('.ware-ico-img');
+        if (img) img.onerror = () => { const s = document.createElement('span'); s.className = 'ware-ico-img ware-emoji'; s.textContent = w.item.icon || '◆'; img.replaceWith(s); };
         if (!owned) el.addEventListener('click', () => {
           if (g.buyWare(w)) { Sound.play(w.kind === 'relic' ? 'relic' : 'buy'); this._campMsg(`Bought ${w.item.name}.`); render(); }
           else this._campMsg('Not enough gold.');

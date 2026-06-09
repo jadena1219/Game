@@ -44,7 +44,7 @@ export class Player {
 
   get facingAngle() { return Math.atan2(this.fy, this.fx); }
   get dashing() { return this.dashTimer > 0; }
-  get maxHP() { return Math.max(1, this.hero.maxHP + (this.mods ? this.mods.bonusHP : 0) + this.metaB.hp + this.eventHP); }
+  get maxHP() { const base = this.hero.maxHP + (this.mods ? this.mods.bonusHP : 0) + this.metaB.hp + this.eventHP; return Math.max(1, Math.round(base * (this.mods ? this.mods.maxHPMult : 1))); }
   // effective stats after upgrades (per-hero base + meta-progression + events)
   get moveSpeed() { return this.hero.speed * this.mods.moveSpeedMult * (1 + this.metaB.spd) * (this.slowT > 0 ? 0.55 : 1); }
   get swordDamage() { return this.hero.swordDamage * this.mods.swordDamageMult * (1 + this.metaB.dmg) * this.eventDmg; }
@@ -85,7 +85,7 @@ export class Player {
     // trigger a dash (double-tap move side / Shift). Consume the request.
     if (input.dashQueued) {
       input.dashQueued = false;
-      if (this.dashTimer <= 0 && this.dashCD <= 0) this.startDash(mv, mlen, game);
+      if (this.dashTimer <= 0 && this.dashCD <= 0 && !this.mods.noDash) this.startDash(mv, mlen, game);
     }
 
     if (this.dashTimer > 0) {
@@ -133,7 +133,7 @@ export class Player {
     if (this.god) return false;                 // GOD MODE: shrug off all damage
     if (this.invuln > 0 || this.dead) return false;
     const dr = Math.min(0.85, this.mods.damageReduction + (this.hero.damageReduction || 0));
-    this.hp -= dmg * (1 - dr) * this.eventVuln;
+    this.hp -= dmg * (1 - dr) * this.eventVuln * (this.mods.damageTakenMult || 1);
     this.invuln = CONFIG.player.invuln;
     this.flash = 0.25;
     if (this.hp <= 0) { this.hp = 0; this.dead = true; }

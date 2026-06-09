@@ -6,30 +6,31 @@ pitched so nothing gets lost.
 
 ---
 
+## 🚢 Shipped
+
+### Build variety — runs with identity ✅
+- **Keystones**: Cinderstep (dash fire-trail), Mirror Aegis (no dash, reflect
+  projectiles doubled), Heart of Fury (endless Fury, double damage taken).
+- **Cursed**: Glass Dagger (+55% dmg / −30% HP), Famine Crown (+gold/+dmg, no
+  healing), Stoneblood (−35% dmg taken / slower). Tagged KEYSTONE/CURSED in shop.
+
+### Named elite foes ✅
+- Rare titled "herald" per floor (Gravewarden, Quickfang, The Pale Widow, etc.):
+  a base enemy + an affix twist, beefier, with a name plate, an arrival banner,
+  and a **guaranteed relic drop** (relic pickup → claim).
+
+---
+
 ## ✅ Greenlit — next moves (in no fixed order)
 
-### 1. Build variety — runs with identity
-Make relics *change how you play*, not just tweak numbers.
-- **Keystone relics** (3–4): rewrite a rule.
-  - Every dash leaves a fire trail.
-  - Fury never depletes, but you take double damage.
-  - No dashing — but you reflect projectiles.
-  - (room for more)
-- **Cursed relics**: huge power, nasty drawback. A real decision at the shop,
-  and it fits the Demon-Lord-tempting-you theme.
-
-### 2. Mid-bosses
+### 1. Mid-bosses
 - A tentpole boss around **L5 or L7** (an elite "herald"). Two bosses across
   20 floors is thin — a third keeps the descent escalating.
 
-### 3. Boss arena mechanics
+### 2. Boss arena mechanics
 - The Dark Knight's slam **cracks the floor into lava**.
 - The Demon Lord's nova leaves **safe-gaps** you must read.
 - Turn bullet-dodging into spatial puzzles, not just movement.
-
-### 4. Named elite foes
-- Rarely, a normal enemy spawns **named** with a single twist + a
-  **guaranteed relic** drop. Cheap to build, big flavour.
 
 ---
 

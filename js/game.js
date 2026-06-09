@@ -3,7 +3,7 @@ import { CONFIG, LEVELS, ELITE_AFFIXES } from './config.js';
 import { Player, Enemy, inSwingArc } from './entities.js';
 import { drawSprite, pickFrame } from './sprite.js';
 import { Input } from './input.js';
-import { recompute, rollStock, RELICS } from './abilities.js';
+import { recompute, rollStock, RELICS, relicById } from './abilities.js';
 import { Assets } from './assets.js';
 import { biomeForLevel } from './biomes.js';
 import { loadMeta, saveMeta, metaBonuses, runSouls, metaCost, LOCKED_RELICS, RELIC_UNLOCK_COST } from './meta.js';
@@ -11,6 +11,17 @@ import { pickEvent } from './events.js';
 import { Sound } from './audio.js';
 
 const BOSS_NAMES = { miniboss: 'The Dark Knight', boss: 'The Demon Lord' };
+
+// Named elite foes — rare, titled minibosses-of-the-floor. Each is a base enemy
+// wearing one elite affix as its "twist", and each is guaranteed to drop a relic.
+const NAMED_FOES = [
+  { name: 'Gravewarden',    base: 'tank',    affix: 'armored',   color: '#cfd6e0' },
+  { name: 'Quickfang',      base: 'swarmer', affix: 'swift',     color: '#7fe0ff' },
+  { name: 'The Pale Widow', base: 'caster',  affix: 'icy',       color: '#bdf0ff' },
+  { name: 'Hollow Lord',    base: 'chaser',  affix: 'vampiric',  color: '#d8413a' },
+  { name: 'Emberfiend',     base: 'tank',    affix: 'explosive', color: '#ff7a2a' },
+  { name: 'Dreadcaller',    base: 'caster',  affix: 'vampiric',  color: '#c89aff' },
+];
 
 // The Demon Lord's voice — cryptic, threatening, escalating. Keyed by the level
 // you just cleared; the screen blacks out and these type across it in blood red.
@@ -51,6 +62,9 @@ export class Game {
     this.cutscene = null;        // scripted boss-entrance sequence
     this.cutsceneBoss = null;
     this.godMode = false;        // debug: no damage taken, one-shot foes, floor-skip
+    this._namedDef = null;       // a named elite queued to appear this floor
+    this._namedTimer = 0;
+    this.namedToast = null;      // brief "<Name> appears" / "Claimed: <relic>" banner
     this.spawnTimer = 0;
     this.flashScreen = 0;
     this.kills = 0;
@@ -363,9 +377,44 @@ export class Game {
     g.fillStyle = 'rgba(0,0,0,0.2)'; g.fillRect(x + 4, y - 6, 4, 38);
   }
 
+  // a pool of fire left by Cinderstep — flickering embers that hurt to stand in
+  _drawFireTrail(ctx, fx) {
+    const k = fx.t / fx.dur, a = Math.min(1, (1 - k) * 1.6) * Math.min(1, fx.t * 6);
+    const r = fx.r * (0.7 + 0.3 * k);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(fx.x, fx.y, 0, fx.x, fx.y, r);
+    g.addColorStop(0, `rgba(255,210,90,${0.5 * a})`);
+    g.addColorStop(0.5, `rgba(255,110,30,${0.35 * a})`);
+    g.addColorStop(1, 'rgba(120,20,0,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(fx.x, fx.y, r, 0, Math.PI * 2); ctx.fill();
+    // a few licking flames
+    for (let i = 0; i < 3; i++) {
+      const ph = (this.time * 3 + i * 2.1 + fx.x * 0.1) % 1;
+      const fxp = fx.x + Math.sin(this.time * 6 + i) * r * 0.4;
+      const fyp = fx.y - ph * r * 0.9;
+      ctx.globalAlpha = a * (1 - ph) * 0.8; ctx.fillStyle = i % 2 ? '#ffd36b' : '#ff7a2a';
+      ctx.beginPath(); ctx.arc(fxp, fyp, (1 - ph) * 3 + 1, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
   _drawPickup(ctx, pk) {
     const x = pk.x, y = pk.y + Math.sin((this.titleT + pk.x * 0.05) * 4) * 2;
     ctx.save();
+    if (pk.type === 'relic') {
+      // a hovering relic gem with a halo + sparkle — unmistakably loot
+      const pulse = 0.6 + 0.4 * Math.sin(this.time * 4);
+      const g = ctx.createRadialGradient(x, y, 0, x, y, 20);
+      g.addColorStop(0, `rgba(255,210,120,${0.5 * pulse})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 20, 0, Math.PI * 2); ctx.fill();
+      ctx.translate(x, y); ctx.rotate(Math.PI / 4);
+      ctx.fillStyle = '#7a3ea0'; ctx.fillRect(-5, -5, 10, 10);
+      ctx.fillStyle = '#c89aff'; ctx.fillRect(-3.5, -3.5, 7, 7);
+      ctx.fillStyle = '#fff3c0'; ctx.fillRect(-3.5, -3.5, 2, 2);
+      ctx.restore();
+      return;
+    }
     if (pk.type === 'gold') {
       const g = ctx.createRadialGradient(x, y, 0, x, y, 11);
       g.addColorStop(0, 'rgba(255,220,90,0.5)'); g.addColorStop(1, 'rgba(0,0,0,0)');
@@ -672,6 +721,11 @@ export class Game {
     this.cam.x = this.player.x - this.vw / 2; this.cam.y = this.player.y - this.vh / 2;
     this.spawnTimer = 0;
     this._buildQueue(level);
+    // roll for a named elite "herald" on normal floors (never on boss floors)
+    const isBoss = !!(LEVELS[level - 1].boss || LEVELS[level - 1].miniboss);
+    this._namedDef = (!isBoss && level >= 3 && Math.random() < 0.55) ? NAMED_FOES[(Math.random() * NAMED_FOES.length) | 0] : null;
+    this._namedTimer = 5 + Math.random() * 7;
+    this.namedToast = null;
     // swap to this level's art. Rebuild when the biome changes — and ALWAYS for a
     // boss level (its room is special) or right after one (restore the normal room),
     // even when the biome itself didn't change (e.g. L5 shares the crypt with L4/L6).
@@ -769,7 +823,7 @@ export class Game {
     Sound.play(e.boss ? 'die_tank' : ('die_' + e.type) , { vol: e.elite ? 1.2 : 1 });
     // Fury charges slowly — the ultimate should be a rare payoff (~every few levels)
     p.fury = Math.min(p.furyMax, p.fury + (e.boss ? 16 : 1.4) * p.mods.furyMult);
-    if (source === 'sword' && p.mods.lifestealHeal > 0) {
+    if (source === 'sword' && p.mods.lifestealHeal > 0 && !p.mods.noHeal) {
       p.hp = Math.min(p.maxHP, p.hp + p.mods.lifestealHeal);
     }
     this.kills++;
@@ -808,6 +862,18 @@ export class Game {
     if (e.boss || (e.elite && Math.random() < 0.4) || (e.type === 'tank' && Math.random() < 0.22) || Math.random() < 0.012) {
       drop('health', e.boss ? 30 : 14);
     }
+    // named elites always yield a relic (or a pile of gold if you own them all)
+    if (e.dropsRelic) {
+      const id = this._pickDropRelic();
+      if (id) this.pickups.push({ type: 'relic', relicId: id, x: e.x, y: e.y, vx: 0, vy: -34, t: 0, dead: false });
+      else for (let i = 0; i < 12; i++) drop('gold', 4);
+    }
+  }
+
+  _pickDropRelic() {
+    const p = this.player, locked = p.lockedRelics || new Set();
+    const pool = RELICS.filter((r) => !p.relics.has(r.id) && !locked.has(r.id));
+    return pool.length ? pool[(Math.random() * pool.length) | 0].id : null;
   }
 
   // bomber / explosive-elite detonation
@@ -851,9 +917,20 @@ export class Game {
       Sound.play('gold');
     }
     else if (pk.type === 'health') {
+      if (this.player.mods.noHeal) return;                 // Famine Crown: no healing
       this.player.hp = Math.min(this.player.maxHP, this.player.hp + pk.value);
       this.effects.push({ kind: 'dmg', x: this.player.x, y: this.player.y - 30, text: '+' + pk.value,
         vy: -42, color: '#5ec860', t: 0, dur: 0.7 });
+    }
+    else if (pk.type === 'relic') {
+      const p = this.player;
+      p.relics.add(pk.relicId); recompute(p);
+      p.hp = Math.min(p.hp, p.maxHP);                      // a cursed relic may have shrunk max HP
+      const r = relicById(pk.relicId);
+      this.namedToast = { name: 'CLAIMED', sub: r ? r.name : 'a relic', color: '#ffd36b', t: 0, dur: 3.0 };
+      Sound.play('relic');
+      for (let i = 0; i < 14; i++) this._mote(pk.x, pk.y, Math.random() < 0.5 ? '#ffd36b' : '#fff3c0',
+        { vx: (Math.random() - 0.5) * 90, vy: -(40 + Math.random() * 90), g: 60, r: 1.6 + Math.random() * 1.6, twinkle: 1, dur: 0.7 });
     }
   }
 
@@ -1200,6 +1277,38 @@ export class Game {
     e.applyElite(key, ELITE_AFFIXES[key]);
   }
 
+  // The floor's named elite — a titled, relic-bearing herald that strides in
+  // partway through the fight (or right before the floor would clear).
+  _maybeSpawnNamed(sdt) {
+    if (!this._namedDef) return;
+    this._namedTimer -= sdt;
+    if (this._namedTimer > 0) return;
+    const def = this._namedDef; this._namedDef = null;
+    const pos = this._spawnPos();
+    const e = new Enemy(def.base, pos[0], pos[1], this.level);
+    e.applyElite(def.affix, ELITE_AFFIXES[def.affix]);
+    e.named = { name: def.name, color: def.color };
+    e.maxHP = Math.round(e.maxHP * 1.7); e.hp = e.maxHP;     // a true mini-threat
+    e.dropsRelic = true;
+    this.enemies.push(e);
+    this.shake = Math.max(this.shake, 7);
+    Sound.play('bossroar', { vol: 0.55 });
+    this.namedToast = { name: def.name.toUpperCase(), sub: 'bears a relic', color: def.color, t: 0, dur: 2.6 };
+  }
+
+  // Cinderstep: damage everything standing in the burning dash-trail.
+  _burnTrails(sdt) {
+    for (const fx of this.effects) {
+      if (fx.kind !== 'firetrail') continue;
+      fx.dmgT = (fx.dmgT || 0) - sdt;
+      if (fx.dmgT <= 0) {
+        fx.dmgT = 0.22;
+        const dmg = 9 * (1 + 0.5 * (this.level - 1) / 19) * this.player.mods.abilityDmgMult;
+        for (const o of this.enemiesInRadius(fx.x, fx.y, fx.r)) this.hitEnemy(o, dmg, 0, 0, 'ability');
+      }
+    }
+  }
+
   // ---------- dash ----------
   onDash(player) {
     this.shake = Math.max(this.shake, 2.5);
@@ -1212,6 +1321,15 @@ export class Game {
       const sa = a + Math.PI + (Math.random() - 0.5) * 1.1, s = 70 + Math.random() * 120;
       this.effects.push({ kind: 'spark', x: player.x - Math.cos(a) * 8, y: player.y - 14 - Math.sin(a) * 8,
         vx: Math.cos(sa) * s, vy: Math.sin(sa) * s, t: 0, dur: 0.3, col: '#bfe9ff' });
+    }
+    // Cinderstep (keystone): lay a burning trail along the dash path
+    if (player.mods.dashFireTrail) {
+      const h = player.hero, dist = h.dashSpeed * h.dashDur, steps = 6;
+      for (let i = 0; i <= steps; i++) {
+        const f = i / steps;
+        this.effects.push({ kind: 'firetrail', x: player.x + player.dashDirX * dist * f,
+          y: player.y + player.dashDirY * dist * f, r: 28, t: 0, dur: 1.25, dmgT: 0.05 });
+      }
     }
   }
 
@@ -1519,6 +1637,9 @@ export class Game {
     }
 
     this._updateAbilities(sdt);
+    // Heart of Fury (keystone): Fury builds endlessly, refilling to a fresh
+    // ultimate every few seconds regardless of kills.
+    if (p.mods.furyLocked) p.fury = Math.min(p.furyMax, p.fury + p.furyMax * sdt / 5);
     // Fury no longer auto-fires — it arms a button the player taps to unleash.
     const wasFury = this.furyReady;
     this.furyReady = p.fury >= p.furyMax;
@@ -1529,6 +1650,8 @@ export class Game {
     } else if (this.input.furyTapped) { this.input.furyTapped = false; }
     this._dashTrail(p, sdt);
     this._spawn(sdt);
+    this._maybeSpawnNamed(sdt);                 // the floor's named elite herald
+    if (p.mods.dashFireTrail) this._burnTrails(sdt);
 
     for (const e of this.enemies) e.update(sdt, this);
     this._emitAuras(sdt);
@@ -1547,11 +1670,27 @@ export class Game {
         }
       }
     }
-    // collisions: projectiles vs player
+    // collisions: projectiles vs player (Mirror Aegis bats them back, doubled)
     for (const pr of this.projectiles) {
-      if (pr.dead) continue;
+      if (pr.dead || pr.ally) continue;
       const dx = p.x - pr.x, dy = p.y - pr.y;
-      if (Math.hypot(dx, dy) < p.r + pr.r) { if (p.takeHit(pr.dmg)) this.shake = 5; pr.dead = true; }
+      if (Math.hypot(dx, dy) < p.r + pr.r) {
+        if (p.mods.reflect) {
+          pr.vx = -pr.vx; pr.vy = -pr.vy; pr.ally = true; pr.boss = false; pr.dmg *= 2; pr.life = 3;
+          this.addEffect({ kind: 'hitring', x: p.x, y: p.y, r: 26, t: 0, dur: 0.16 });
+          this.shake = Math.max(this.shake, 3); Sound.play('hit', { vol: 0.5 });
+        } else { if (p.takeHit(pr.dmg)) this.shake = 5; pr.dead = true; }
+      }
+    }
+    // reflected projectiles now hunt the enemies that fired them
+    for (const pr of this.projectiles) {
+      if (pr.dead || !pr.ally) continue;
+      for (const e of this.enemies) {
+        if (e.dead) continue;
+        if (Math.hypot(e.x - pr.x, e.y - pr.y) < e.r + pr.r) {
+          this.hitEnemy(e, pr.dmg, pr.vx * 0.2, pr.vy * 0.2, 'ability'); pr.dead = true; break;
+        }
+      }
     }
 
     this.enemies = this.enemies.filter((e) => !e.dead);
@@ -1559,7 +1698,10 @@ export class Game {
 
     // outcomes
     if (p.dead) return this._lose();
-    if (this.spawnQueue.length === 0 && this.enemies.length === 0) this._win();
+    if (this.spawnQueue.length === 0 && this.enemies.length === 0) {
+      if (this._namedDef) { this._namedTimer = 0; this._maybeSpawnNamed(0); }  // don't end before the herald arrives
+      else this._win();
+    }
   }
 
   _updateProjAndFx(sdt) {
@@ -1597,6 +1739,10 @@ export class Game {
     if (this.campToast) {
       this.campToast.t += dt;
       if (this.campToast.t >= this.campToast.dur) this.campToast = null;
+    }
+    if (this.namedToast) {
+      this.namedToast.t += dt;
+      if (this.namedToast.t >= this.namedToast.dur) this.namedToast = null;
     }
     // smoothed health bar (+ detect damage for the HP-bar punch)
     if (this.player) {
@@ -2009,6 +2155,7 @@ export class Game {
     } else {
       p.relics.add(ware.id);
       recompute(p);
+      p.hp = Math.min(p.hp, p.maxHP);          // a cursed relic may have lowered max HP
     }
     ware.sold = true;
     return true;
@@ -2044,11 +2191,13 @@ export class Game {
   // Demon Lord whispers, and you sink onto the next, deeper floor.
   descend() {
     const whispers = ['DEEPER.', 'DOWN YOU COME.', 'CLOSER NOW.', 'I FELT THAT.', 'YES. DESCEND.', 'NEARER TO ME.'];
+    // The voice is RARE now — silence is scarier than a guarantee. Only now and
+    // then does the Demon Lord stir as you fall.
+    const whisper = Math.random() < 0.22 ? whispers[(Math.random() * whispers.length) | 0] : null;
     // seed t slightly so the very first rendered frame already shows the fall
     // (darkness welling + camera dropping) rather than a static beat.
     // A long, deliberate fall — the red abyss should linger and unsettle.
-    this.plunge = { t: 0.05, dur: 2.85, half: 1.6, fired: false,
-      whisper: whispers[(Math.random() * whispers.length) | 0],
+    this.plunge = { t: 0.05, dur: 2.85, half: 1.6, fired: false, whisper,
       mid: () => this._startLevel(this.level + 1, false) };
     this.shake = Math.max(this.shake, 4);
     Sound.play('plunge');
@@ -2100,6 +2249,7 @@ export class Game {
     for (const fx of this.effects) if (fx.kind === 'ghost') this._drawGhost(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'dashstreak') this._drawDashStreak(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'swing') this._drawSwing(ctx, fx);
+    for (const fx of this.effects) if (fx.kind === 'firetrail') this._drawFireTrail(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'puff') this._drawPuff(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'death') this._drawDeathFx(ctx, fx);
 
@@ -2178,6 +2328,7 @@ export class Game {
     if (!this.cutscene) this._drawFuryButton(ctx);     // floating "unleash fury" button above the hero
     if (this.state === 'camp') this._drawCampToast(ctx);   // event outcome flavour
     if (this.state === 'camp') this._drawCampWhisper(ctx);  // intrusive voice in the safe room
+    if (!this.cutscene) this._drawNamedToast(ctx);  // "<Name> — bears a relic" / "Claimed: …"
     this._drawCutscene(ctx);       // boss-entrance letterbox + name reveal
     this._drawInterlude(ctx);      // Demon Lord taunt: blacks out the whole screen + red typewriter
     this._drawPlunge(ctx);         // plunge-into-darkness descent overlay
@@ -2246,7 +2397,7 @@ export class Game {
         ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + len); ctx.stroke();
       }
       ctx.globalAlpha = 1;
-      if (f > 0.24) {                              // the whisper from below — eases in slowly
+      if (pl.whisper && f > 0.24) {                // the whisper from below — eases in slowly (and rare)
         ctx.globalAlpha = Math.min(1, (f - 0.24) / 0.45) * 0.85;
         ctx.font = '600 19px "Silkscreen", monospace';
         ctx.fillStyle = 'rgba(0,0,0,0.9)'; ctx.fillText(pl.whisper, W / 2 + 1, H * 0.5 + 1);
@@ -2263,7 +2414,7 @@ export class Game {
         rg.addColorStop(0, `rgba(150,18,10,${(1 - r / 0.6) * 0.5})`); rg.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.globalAlpha = 1; ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H);
       }
-      if (r < 0.5) {
+      if (pl.whisper && r < 0.5) {
         ctx.globalAlpha = (1 - r / 0.5) * 0.8;
         ctx.font = '600 19px "Silkscreen", monospace';
         ctx.fillStyle = '#c8201a'; ctx.fillText(pl.whisper, W / 2, H * 0.5);
@@ -3372,11 +3523,41 @@ export class Game {
     drawSprite(ctx, e.sprite, frame, e.x, e.y - bob, e.faceLeft, 1, tint);
     // small floating HP bar for tanks & elites (bosses use the big top bar)
     if (!e.boss && (e.type === 'tank' || e.elite)) {
-      const w = 34, hpf = e.hp / e.maxHP, hy = e.y - 56;
+      const named = e.named, w = named ? 48 : 34, hpf = e.hp / e.maxHP, hy = e.y - (named ? 62 : 56);
       ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(e.x - w / 2 - 1, hy - 1, w + 2, 6);
-      ctx.fillStyle = e.elite ? e.affix.color : '#c9a23a';
+      ctx.fillStyle = named ? named.color : (e.elite ? e.affix.color : '#c9a23a');
       ctx.fillRect(e.x - w / 2, hy, w * hpf, 4);
+      if (named) {                                   // a title plate above the bar
+        ctx.save();
+        ctx.font = 'bold 10px "Silkscreen", monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.strokeText(named.name, e.x, hy - 5);
+        ctx.fillStyle = named.color; ctx.fillText(named.name, e.x, hy - 5);
+        ctx.restore();
+      }
     }
+  }
+
+  // A brief banner when a named elite arrives, or when its relic is claimed.
+  _drawNamedToast(ctx) {
+    const nt = this.namedToast; if (!nt) return;
+    const k = nt.t / nt.dur, W = this.vw, H = this.vh;
+    const a = Math.min(1, nt.t * 3) * Math.min(1, (1 - k) * 3);
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, a); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const y = H * 0.2;
+    let size = 22; ctx.font = `bold ${size}px "Silkscreen", sans-serif`;
+    const maxW = W * 0.86, tw = ctx.measureText(nt.name).width;
+    if (tw > maxW) { size = Math.floor(size * maxW / tw); ctx.font = `bold ${size}px "Silkscreen", sans-serif`; }
+    ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+    ctx.strokeText(nt.name, W / 2, y);
+    ctx.shadowColor = nt.color; ctx.shadowBlur = 14 * a;
+    ctx.fillStyle = nt.color; ctx.fillText(nt.name, W / 2, y);
+    ctx.shadowBlur = 0;
+    if (nt.sub) {
+      ctx.font = 'italic 12px "Silkscreen", sans-serif'; ctx.fillStyle = 'rgba(230,220,235,0.85)';
+      ctx.fillText(nt.sub, W / 2, y + size * 0.72 + 6);
+    }
+    ctx.restore();
   }
 
   // A big Souls-style boss bar near the bottom-centre while a boss lives.

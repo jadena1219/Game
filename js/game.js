@@ -430,44 +430,71 @@ export class Game {
     const amb = sh.amb; if (amb <= 0.01 || !sh.ambId) return;
     const W = this.vw, H = this.vh, t = this.time;
     ctx.save();
-    if (sh.ambId === 'ember') {                                  // VOLCANO — lava glow, cracks, rising embers
+    if (sh.ambId === 'ember') {                                  // VOLCANO
       const g = ctx.createLinearGradient(0, H, 0, 0);
-      g.addColorStop(0, `rgba(255,70,15,${0.34 * amb})`); g.addColorStop(0.5, `rgba(170,40,10,${0.12 * amb})`); g.addColorStop(1, 'rgba(50,8,0,0)');
+      g.addColorStop(0, `rgba(255,70,15,${0.42 * amb})`); g.addColorStop(0.45, `rgba(180,40,10,${0.16 * amb})`); g.addColorStop(1, `rgba(40,6,0,${0.1 * amb})`);
       ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
       ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
-      for (let i = 0; i < 5; i++) {
-        const x = (i * 137.3) % (W - 60) + 20, y = H * 0.6 + (i * 53) % (H * 0.32), pulse = 0.5 + 0.5 * Math.sin(t * 3 + i);
-        ctx.strokeStyle = `rgba(255,${(120 + 90 * pulse) | 0},30,${0.5 * amb})`; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 16, y + 7); ctx.lineTo(x + 30, y + 1); ctx.lineTo(x + 52, y + 11); ctx.stroke();
+      // molten cracks crawling across the floor
+      for (let i = 0; i < 7; i++) {
+        const x = (i * 137.3) % (W - 60) + 20, y = H * 0.55 + (i * 53) % (H * 0.38), pulse = 0.5 + 0.5 * Math.sin(t * 3 + i);
+        ctx.strokeStyle = `rgba(255,${(120 + 90 * pulse) | 0},30,${0.55 * amb})`; ctx.lineWidth = 2 + pulse;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 16, y + 7); ctx.lineTo(x + 30, y + 1); ctx.lineTo(x + 52, y + 11); ctx.lineTo(x + 70, y + 4); ctx.stroke();
       }
-      for (let i = 0; i < 36; i++) {
-        const ph = (t * 0.5 + i * 0.137) % 1, x = (i * 73.7) % W + Math.sin(t * 2 + i) * 8, y = H - ph * H * 1.05;
-        ctx.globalAlpha = amb * (1 - ph) * 0.85; ctx.fillStyle = i % 2 ? '#ffb02a' : '#ff6a1e'; ctx.fillRect(x | 0, y | 0, 2, 2 + (i % 2));
+      // flame columns roaring up the side walls
+      for (const sx of [16, W - 16]) for (let i = 0; i < 7; i++) {
+        const fl = 0.5 + 0.5 * Math.sin(t * 8 + i * 1.3 + sx); const fy = H - i * 26 - fl * 18;
+        ctx.globalAlpha = amb * (0.6 - i * 0.06); ctx.fillStyle = i % 2 ? '#ff7a2a' : '#ffce5a';
+        ctx.fillRect(sx - 5 + Math.sin(t * 6 + i) * 3, fy, 8, 14);
       }
-    } else if (sh.ambId === 'frost') {                           // BLIZZARD — cold grade, whiteout, driving snow
-      ctx.fillStyle = `rgba(170,215,255,${0.15 * amb})`; ctx.fillRect(0, 0, W, H);
-      const v = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.18, W / 2, H / 2, Math.max(W, H) * 0.7);
-      v.addColorStop(0, 'rgba(255,255,255,0)'); v.addColorStop(1, `rgba(225,242,255,${0.42 * amb})`);
+      // a storm of rising embers
+      for (let i = 0; i < 60; i++) {
+        const ph = (t * 0.5 + i * 0.0137) % 1, x = (i * 73.7) % W + Math.sin(t * 2 + i) * 9, y = H - ph * H * 1.05;
+        ctx.globalAlpha = amb * (1 - ph) * 0.9; ctx.fillStyle = i % 2 ? '#ffb02a' : '#ff5a1e'; ctx.fillRect(x | 0, y | 0, 2, 2 + (i % 2));
+      }
+      // drifting ash
+      ctx.globalCompositeOperation = 'source-over';
+      for (let i = 0; i < 26; i++) {
+        const ph = (t * 0.18 + i * 0.05) % 1, x = ((i * 91.3) + t * 14) % W, y = ph * H;
+        ctx.globalAlpha = amb * 0.4; ctx.fillStyle = '#3a2a24'; ctx.fillRect(x | 0, y | 0, 2, 2);
+      }
+    } else if (sh.ambId === 'frost') {                           // BLIZZARD
+      ctx.fillStyle = `rgba(170,215,255,${0.17 * amb})`; ctx.fillRect(0, 0, W, H);
+      const v = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.15, W / 2, H / 2, Math.max(W, H) * 0.7);
+      v.addColorStop(0, 'rgba(255,255,255,0)'); v.addColorStop(1, `rgba(228,243,255,${0.5 * amb})`);
       ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
-      ctx.fillStyle = `rgba(220,245,255,${0.12 * amb})`;
-      for (let i = 0; i < 6; i++) { const x = (i * 131) % W; ctx.beginPath(); ctx.ellipse(x, H - 20 - (i % 2) * 14, 30, 8, 0, 0, Math.PI * 2); ctx.fill(); }
-      for (let i = 0; i < 72; i++) {
-        const sp = (i % 3) + 1, x = ((i * 53.3) + t * 70 * sp) % (W + 40) - 20 + Math.sin(t + i) * 6, y = ((i * 71.1) + t * 130 * sp) % (H + 40) - 20;
-        ctx.globalAlpha = amb * 0.85; ctx.fillStyle = '#eaffff'; ctx.fillRect(x | 0, y | 0, sp, sp);
+      // drifting fog bands
+      for (let i = 0; i < 3; i++) {
+        const fy = (H * 0.3 + i * H * 0.25), fx = ((t * (18 + i * 8)) % (W + 200)) - 100;
+        ctx.fillStyle = `rgba(220,238,255,${0.06 * amb})`; ctx.beginPath(); ctx.ellipse(fx, fy, 160, 30, 0, 0, Math.PI * 2); ctx.fill();
       }
-    } else if (sh.ambId === 'storm') {                           // STORM — dark, driving rain, purple lightning
-      ctx.fillStyle = `rgba(18,12,42,${0.36 * amb})`; ctx.fillRect(0, 0, W, H);
-      ctx.strokeStyle = `rgba(180,168,235,${0.5 * amb})`; ctx.lineWidth = 1;
-      for (let i = 0; i < 64; i++) {
-        const x = ((i * 61.7) + t * 130) % (W + 60) - 30, y = ((i * 47.3) + t * 520) % (H + 60) - 30;
-        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 6, y + 16); ctx.stroke();
+      // frost crusting the floor
+      ctx.fillStyle = `rgba(220,245,255,${0.14 * amb})`;
+      for (let i = 0; i < 7; i++) { const x = (i * 131) % W; ctx.beginPath(); ctx.ellipse(x, H - 18 - (i % 2) * 16, 34, 9, 0, 0, Math.PI * 2); ctx.fill(); }
+      // driving snow — two layers, near flakes bigger & faster
+      for (let i = 0; i < 110; i++) {
+        const sp = (i % 4) + 1, x = ((i * 53.3) + t * 80 * sp) % (W + 40) - 20 + Math.sin(t * 1.4 + i) * 8, y = ((i * 71.1) + t * 150 * sp) % (H + 40) - 20;
+        ctx.globalAlpha = amb * (0.5 + sp * 0.12); ctx.fillStyle = '#f2ffff'; ctx.fillRect(x | 0, y | 0, sp, sp);
       }
+    } else if (sh.ambId === 'storm') {                           // TEMPEST
+      ctx.fillStyle = `rgba(16,10,40,${0.46 * amb})`; ctx.fillRect(0, 0, W, H);
+      // two rain layers
+      ctx.strokeStyle = `rgba(170,160,230,${0.45 * amb})`; ctx.lineWidth = 1;
+      for (let i = 0; i < 70; i++) { const x = ((i * 61.7) + t * 130) % (W + 60) - 30, y = ((i * 47.3) + t * 540) % (H + 60) - 30; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 6, y + 16); ctx.stroke(); }
+      ctx.strokeStyle = `rgba(200,190,255,${0.55 * amb})`; ctx.lineWidth = 2;
+      for (let i = 0; i < 36; i++) { const x = ((i * 97.1) + t * 200) % (W + 80) - 40, y = ((i * 59.7) + t * 760) % (H + 80) - 40; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 9, y + 22); ctx.stroke(); }
+      // rain spattering the floor
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < 16; i++) { const x = ((i * 113 + ((t * 3) | 0) * 37) % W), a2 = (Math.sin(t * 20 + i) > 0.6) ? 0.5 : 0; ctx.globalAlpha = amb * a2; ctx.fillStyle = '#b9aaff'; ctx.fillRect(x, H - 22, 3, 1); }
+      ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
       if (sh.flash > 0) {
-        ctx.fillStyle = `rgba(170,135,255,${0.5 * sh.flash * amb})`; ctx.fillRect(0, 0, W, H);
-        ctx.strokeStyle = `rgba(230,212,255,${sh.flash * amb})`; ctx.lineWidth = 2;
+        ctx.fillStyle = `rgba(175,140,255,${0.55 * sh.flash * amb})`; ctx.fillRect(0, 0, W, H);
+        ctx.strokeStyle = `rgba(235,218,255,${sh.flash * amb})`; ctx.lineWidth = 2 + 2 * sh.flash;
         let bx = sh.boltX || W * 0.5, by = 0; ctx.beginPath(); ctx.moveTo(bx, by);
-        for (let s = 0; s < 6; s++) { bx += ((s * 97 + (sh.boltX | 0)) % 80 - 40) * 0.8; by += H / 6; ctx.lineTo(bx, by); }
+        for (let s = 0; s < 7; s++) { bx += ((s * 97 + (sh.boltX | 0)) % 80 - 40) * 0.8; by += H / 7; ctx.lineTo(bx, by); }
         ctx.stroke();
+        // a couple of forks
+        ctx.lineWidth = 1.5; for (let f = 0; f < 2; f++) { let fx = sh.boltX + (f ? 30 : -30), fy = H * 0.4; ctx.beginPath(); ctx.moveTo(fx, fy); for (let s = 0; s < 3; s++) { fx += (f ? 14 : -14); fy += H * 0.12; ctx.lineTo(fx, fy); } ctx.stroke(); }
       }
     }
     ctx.restore(); ctx.globalAlpha = 1;
@@ -847,7 +874,7 @@ export class Game {
   _shrineWeather(sh, dt) {
     if (sh.ambId === 'storm' && sh.amb > 0.3) {
       sh.lightT -= dt;
-      if (sh.lightT <= 0) { sh.lightT = 0.8 + Math.random() * 2.4; sh.flash = 1; sh.boltX = Math.random() * this.vw; }
+      if (sh.lightT <= 0) { sh.lightT = 0.5 + Math.random() * 1.5; sh.flash = 1; sh.boltX = Math.random() * this.vw; }
     }
     if (sh.flash > 0) sh.flash = Math.max(0, sh.flash - dt * 5);
   }
@@ -3689,6 +3716,33 @@ export class Game {
       : (p.slowT > 0 ? { color: '#9fe0ff', a: 0.45 } : null);
     drawSprite(ctx, p.sprite, frame, p.x, p.y - breath, p.faceLeft, 1, tint);
     ctx.globalAlpha = 1;
+    this._drawHeldBlade(ctx, p, breath);
+  }
+
+  // The chosen Living Blade, rendered BIG in the knight's hand — resting when
+  // idle, sweeping through the arc when he swings.
+  _drawHeldBlade(ctx, p, breath = 0) {
+    const sword = Assets.bladeSwords && Assets.bladeSwords[p.blade];
+    if (!sword || p.dead) return;
+    const cw = 30, ch = 104, gripY = 80;                 // grip pivot within the canvas
+    const sc = CONFIG.pixelScale * 0.29;                 // ~72px tall — epic, ~1.25x the knight
+    const faceSign = p.faceLeft ? -1 : 1;
+    const hx = p.x + faceSign * 5, hy = p.y - 14 - breath;
+    let aim;
+    if (p.swingTimer > 0) {                              // sweep the blade through the cut
+      const arc = p.arcDeg * Math.PI / 180, a0 = p.facingAngle - arc / 2;
+      aim = a0 + Math.min(1, p.swingProgress) * arc;
+    } else if (p.dashing) {
+      aim = p.facingAngle + Math.PI;                     // trailed back behind the dash
+    } else {
+      aim = -Math.PI / 2 + faceSign * 0.55;              // held ready: up, tilted toward facing
+    }
+    ctx.save();
+    ctx.translate(hx, hy);
+    ctx.rotate(aim + Math.PI / 2);                       // canvas tip points up; align it to `aim`
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(sword, -cw * sc / 2, -gripY * sc, cw * sc, ch * sc);
+    ctx.restore();
   }
 
   // Render the hero sprite to a transparent offscreen, tint it solid gold (the

@@ -4503,9 +4503,9 @@ export class Game {
     if (!sword || p.dead) return;
     const cw = 18, ch = 64, gripY = 52, sc = CONFIG.pixelScale * 0.31;   // simpler/slimmer; sized to fit him
     const faceSign = p.faceLeft ? -1 : 1, bd = bladeById(p.blade);
-    // grip sits IN his gauntlet — measured from the new knight art (hand at
-    // +13.7,-23.9 from the feet anchor; grip a hair inside the fist edge)
-    let hx = p.x + faceSign * 12, hy = p.y - 22 - breath;
+    // grip sits IN his gauntlet — exact by construction: the drawn knight's
+    // sword hand is at art (60,79) in a 96x126 cell => (+7,-26) from the feet
+    let hx = p.x + faceSign * 7, hy = p.y - 26 - breath;
     const poses = [];
     if (p.swingTimer > 0) {
       const sp = Math.min(1, p.swingProgress);

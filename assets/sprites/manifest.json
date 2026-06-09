@@ -10,9 +10,9 @@
   "sprites": {
     "knight": {
       "file": "knight.png",
-      "fw": 627,
-      "fh": 579,
-      "scale": 0.0477
+      "fw": 96,
+      "fh": 126,
+      "scale": 0.229
     },
     "rogue": {
       "file": "rogue.png",

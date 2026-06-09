@@ -195,6 +195,10 @@ export class Enemy {
     this.flash = 0;
     this.kbx = 0; this.kby = 0;        // knockback velocity
     this.dead = false;
+    // Each foe approaches at its own slight angle (swarmers fan widest), so a
+    // pack curves out and ENVELOPS you instead of arriving as a single-file queue.
+    this.flank = this.boss ? 0 :
+      (Math.random() - 0.5) * (typeName === 'swarmer' || typeName === 'bomber' ? 1.5 : 0.9);
 
     // AI timers
     this.fireCD = base.ranged ? Math.random() * 1.2 + 0.6 : 0;
@@ -286,7 +290,7 @@ export class Enemy {
       }
       this.specialCD -= dt;
       if (this.specialCD <= 0 && this.state === 'walk' && dist < 560) {
-        this.pendingSpecial = Math.random() < 0.5 ? 'slam' : 'summon';
+        this.pendingSpecial = specials.slamOnly ? 'slam' : (Math.random() < 0.5 ? 'slam' : 'summon');
         this.slamR = specials.slam.r;
         this.state = 'special'; this.stateT = 0.95; this.specMax = 0.95;
         this.specialCD = specials.interval * this.cdMul;
@@ -348,10 +352,35 @@ export class Enemy {
         else this.moving = false;
         return this._finish(game);
       }
+      // Boss spacing: hold casting range. Too close → back away; if the retreat
+      // would back him into a wall, sidestep along the wall tangent instead —
+      // he can never be pinned in a corner and face-tanked.
+      if (ranged.keep > 0) {
+        if (dist < ranged.keep) {
+          let rx = -nx, ry = -ny;
+          const b = game.bounds, m = 70;
+          const px2 = this.x + rx * 60, py2 = this.y + ry * 60;
+          if (px2 < b.minX + m || px2 > b.maxX - m || py2 < b.minY + m || py2 > b.maxY - m) {
+            const c1x = this.x - ny * 60, c1y = this.y + nx * 60;   // tangent, two ways
+            const ok1 = c1x > b.minX + m && c1x < b.maxX - m && c1y > b.minY + m && c1y < b.maxY - m;
+            if (ok1) { rx = -ny; ry = nx; } else { rx = ny; ry = -nx; }
+          }
+          this._step(rx * 0.6, ry * 0.6, dt);
+          this.moving = true;
+        } else if (dist > ranged.keep * 1.7) { this._step(nx, ny, dt); this.moving = true; }
+        else this.moving = false;
+        return this._finish(game);
+      }
     }
 
-    // ---- default melee approach ----
-    this._step(nx, ny, dt);
+    // ---- default melee approach (curved by this foe's flank bias while distant) ----
+    let mx = nx, my = ny;
+    if (this.flank) {
+      const f = this.flank * Math.min(1, Math.max(0, (dist - 70) / 260));
+      const cs = Math.cos(f), sn = Math.sin(f);
+      mx = nx * cs - ny * sn; my = nx * sn + ny * cs;
+    }
+    this._step(mx, my, dt);
     this.moving = true;
     return this._finish(game);
   }
@@ -363,6 +392,8 @@ export class Enemy {
       game.addEffect({ kind: 'boom', x: this.x, y: this.y, r: R, t: 0, dur: 0.4 });
       game.shake = Math.max(game.shake, 11);
       if (Math.hypot(p.x - this.x, p.y - this.y) < R + p.r) { if (p.takeHit(this.damage * sp.slam.dmg, (FOE_NAMES[this.type] || 'the dark') + "'s slam")) game.shake = 13; }
+      // the Dark Knight's slam cracks the floor into molten fissures
+      if (sp.slam.fissures && game.spawnFissures) game.spawnFissures(this.x, this.y, sp.slam.fissures, this.damage);
     } else {
       const s = sp.summon, count = s.count + this.summonBonus;
       for (let i = 0; i < count; i++) {

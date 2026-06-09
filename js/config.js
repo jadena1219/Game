@@ -61,7 +61,8 @@ export const CONFIG = {
   scaling: {
     hpPerLevel: 0.155,      // +15.5% enemy HP per level above 1 (spread over 20 levels)
     speedPerLevel: 0.035,   // +3.5% enemy speed per level above 1
-    dmgPerLevel: 0.085,     // +8.5% enemy contact/projectile damage per level above 1
+    dmgPerLevel: 0.072,     // +7.2% enemy damage per level — late floors should kill in
+                            // 4-5 hits, not 3; the pressure comes from density instead
   },
 
   spawn: {
@@ -80,22 +81,27 @@ export const ENEMY_TYPES = {
   // Bomber: rushes you and detonates on death — keep your distance or kill from afar.
   bomber:  { sprite: 'bomber',   hp: 24,  speed: 116, damage: 6,  radius: 12, touch: true,
              explode: { r: 70, dmg: 26 } },
-  // Mini-boss (Dark Knight, L10): a GIGANTIC dread-knight — telegraphed CHARGE that rushes you down.
+  // Mini-boss (Dark Knight, L10): a GIGANTIC dread-knight — telegraphed CHARGE that rushes
+  // you down, and a SLAM that cracks the floor into molten fissures you must not stand in.
   // Phase 2 (WRATH, <=50% HP): enrages into a triple-charge that erupts a shockwave nova.
   miniboss:{ sprite: 'miniboss', hp: 950, speed: 82,  damage: 22, radius: 46, touch: true, boss: true,
              charge: { windup: 0.62, dur: 0.52, speed: 500, cooldown: 2.7 },
+             specials: { interval: 8.5, slamOnly: true, slam: { r: 150, dmg: 1.45, fissures: 5 } },
              phases: [
                { at: 0.5, title: 'WRATH', speed: 1.13, cd: 0.74, tripleCharge: true, shockwave: 8 },
              ] },
   // Final boss (Demon Lord, L20): nova volleys + telegraphed ground SLAM + SUMMONS.
   // Phase 2 (FURY, <=66%): gains a CHARGE rush and spiralling novas. Phase 3
   // (APOCALYPSE, <=33%): double-ring novas, more summons, an ember aura — the climax.
+  // keep:120 — he holds casting distance and sidesteps along walls instead of
+  // letting you pin him in a corner; the charge is live from phase 1 (long
+  // cooldown) so the evasion tax exists before FURY shortens it.
   boss:    { sprite: 'boss',     hp: 1350, speed: 60, damage: 17, radius: 42, touch: true, boss: true,
-             ranged: { range: 9999, keep: 0, cooldown: 2.4, projSpeed: 185, projDmg: 14, nova: 14 },
+             ranged: { range: 9999, keep: 120, cooldown: 2.4, projSpeed: 185, projDmg: 14, nova: 14 },
              specials: { interval: 4.6, slam: { r: 175, dmg: 1.8 }, summon: { type: 'swarmer', count: 5 } },
-             charge: { windup: 0.68, dur: 0.5, speed: 470, cooldown: 6.5 }, chargeGated: true,
+             charge: { windup: 0.68, dur: 0.5, speed: 470, cooldown: 6.5 },
              phases: [
-               { at: 0.66, title: 'FURY', speed: 1.12, cd: 0.74, enableCharge: true, spiral: true, novaBonus: 2 },
+               { at: 0.66, title: 'FURY', speed: 1.12, cd: 0.74, spiral: true, novaBonus: 2 },
                { at: 0.33, title: 'APOCALYPSE', speed: 1.24, cd: 0.5, novaBonus: 6, summonBonus: 3, doubleRing: true, emberAura: true },
              ] },
 };
@@ -124,13 +130,13 @@ export const LEVELS = [
   { chaser: 16, swarmer: 14, caster: 6, tank: 4, bomber: 6 }, // 9
   { miniboss: 1, chaser: 10, swarmer: 8 },                    // 10 — mini-boss + escort
   { chaser: 16, swarmer: 14, caster: 6, bomber: 6 },          // 11
-  { swarmer: 20, caster: 7, tank: 5, bomber: 7 },             // 12
+  { swarmer: 14, caster: 7, tank: 9, bomber: 7 },             // 12 — the Vault's wardens: a tank gauntlet
   { chaser: 18, caster: 7, tank: 5, bomber: 7 },              // 13
   { swarmer: 22, caster: 8, tank: 6, bomber: 8 },             // 14
   { chaser: 18, swarmer: 18, caster: 8, tank: 6, bomber: 8 }, // 15
-  { swarmer: 24, caster: 9, tank: 7, bomber: 9 },             // 16
+  { swarmer: 28, caster: 10, tank: 7, bomber: 9 },            // 16 — the flood: pure swarm pressure
   { chaser: 20, swarmer: 18, caster: 9, tank: 7, bomber: 9 }, // 17
-  { swarmer: 26, caster: 10, tank: 8, bomber: 10 },           // 18
-  { chaser: 22, swarmer: 22, caster: 10, tank: 8, bomber: 10 }, // 19
+  { swarmer: 30, caster: 10, tank: 8, bomber: 10 },           // 18
+  { chaser: 22, swarmer: 22, caster: 10, tank: 9, bomber: 11 }, // 19 — everything the dark has left
   { boss: 1, caster: 5, tank: 4, bomber: 5 },                 // 20 — final boss
 ];

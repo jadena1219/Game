@@ -15,7 +15,7 @@ export const BLADES = [
       [ { id: 'ember_hotter', name: 'Stoked Flame', desc: 'Burn deals +70% damage.' },
         { id: 'ember_spread', name: 'Wildfire', desc: 'Foes slain while burning ignite those near them.' } ],
       [ { id: 'ember_pyre', name: 'Funeral Pyre', desc: 'Burning foes erupt in flame when slain.' },
-        { id: 'ember_long', name: 'Slow Burn', desc: 'Burns last twice as long.' } ],
+        { id: 'ember_soul', name: 'Kindled Fury', desc: 'Every burn tick stokes your Fury.' } ],
       [ { id: 'ember_trail', name: 'Trail of Cinders', desc: 'Your swing leaves lingering flames on the ground.' },
         { id: 'ember_exec', name: 'Immolation', desc: 'Burning foes under 40% HP burn to ash instantly.' } ],
     ],
@@ -39,7 +39,7 @@ export const BLADES = [
     sig: 'Sword hits ARC LIGHTNING to a nearby foe.',
     tiers: [
       [ { id: 'storm_fork', name: 'Forked Bolt', desc: 'Lightning arcs to two foes instead of one.' },
-        { id: 'storm_amp', name: 'Overcharge', desc: 'Arc lightning deals +70% damage.' } ],
+        { id: 'storm_dash', name: 'Ride the Lightning', desc: 'Dashing looses an arc at the nearest foe.' } ],
       [ { id: 'storm_stun', name: 'Concussion', desc: 'Struck foes are briefly stunned.' },
         { id: 'storm_build', name: 'Static Charge', desc: 'Every 12 hits release a shocking nova around you.' } ],
       [ { id: 'storm_tempest', name: 'Tempest', desc: 'Lightning arcs to four foes.' },

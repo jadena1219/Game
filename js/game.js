@@ -648,6 +648,44 @@ export class Game {
     ctx.restore(); ctx.globalAlpha = 1;
   }
 
+  // A molten fissure cracked into the floor by the Dark Knight's slam: a dark
+  // gouge with lava glowing up through it, breathing heat. Warning phase first
+  // (a thin dark crack races out), then it ignites. Path baked at creation.
+  _drawFissure(ctx, fx) {
+    const t = this.time, pts = fx.pts;
+    const warm = Math.max(0, Math.min(1, (fx.t - fx.warn) / 0.35));          // 0 = warning crack, 1 = fully molten
+    const fade = fx.t > fx.dur - 1 ? Math.max(0, (fx.dur - fx.t)) : 1;       // die out over the last second
+    const grow = Math.min(1, fx.t / fx.warn);                                // crack racing outward
+    const nSeg = Math.max(2, Math.ceil((pts.length - 1) * grow) + 1);
+    const path = () => { ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); for (let i = 1; i < Math.min(pts.length, nSeg); i++) ctx.lineTo(pts[i].x, pts[i].y); };
+    ctx.save();
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    // the dark gouge in the stone
+    ctx.globalAlpha = (0.5 + 0.4 * warm) * fade;
+    ctx.strokeStyle = '#170703'; ctx.lineWidth = fx.w * (0.7 + 0.5 * warm); path(); ctx.stroke();
+    if (warm > 0) {
+      // lava glowing up through the crack, breathing
+      const breathe = 0.75 + 0.25 * Math.sin(t * 5 + fx.seed);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.55 * warm * fade * breathe;
+      ctx.strokeStyle = '#c8200a'; ctx.lineWidth = fx.w * 0.8; path(); ctx.stroke();
+      ctx.globalAlpha = 0.8 * warm * fade * breathe;
+      ctx.strokeStyle = '#ff7a2a'; ctx.lineWidth = fx.w * 0.42; path(); ctx.stroke();
+      ctx.globalAlpha = 0.9 * warm * fade * breathe;
+      ctx.strokeStyle = '#ffe49a'; ctx.lineWidth = fx.w * 0.16; path(); ctx.stroke();
+      // embers popping off the seam (deterministic per fissure via the baked seed)
+      for (let i = 0; i < pts.length - 1; i++) {
+        const ph = ((t * 0.7) + (fx.seed + i) * 0.37) % 1;
+        const sx = pts[i].x + (pts[i + 1].x - pts[i].x) * ((fx.seed * 7 + i * 3.1) % 1);
+        const sy = pts[i].y + (pts[i + 1].y - pts[i].y) * ((fx.seed * 7 + i * 3.1) % 1);
+        ctx.globalAlpha = (1 - ph) * 0.8 * warm * fade;
+        ctx.fillStyle = ph < 0.4 ? '#ffe49a' : '#ff7a2a';
+        ctx.fillRect((sx | 0) + ((i % 2) ? 2 : -3), (sy - ph * 26) | 0, 2, 2);
+      }
+    }
+    ctx.restore(); ctx.globalAlpha = 1;
+  }
+
   // 🔥 the eruption burst — shockwave ring + a pillar of fire
   _drawErupt(ctx, fx) {
     const k = fx.t / fx.dur, a = 1 - k, R = fx.r;
@@ -1532,7 +1570,7 @@ export class Game {
       if (e.dead) return;
       const mult = up.has('ember_hotter') ? 1.7 : 1;
       e.burnDmg = Math.max(e.burnDmg, dmg * 0.22 * mult);
-      e.burnT = Math.max(e.burnT, up.has('ember_long') ? 5 : 2.5);
+      e.burnT = Math.max(e.burnT, 2.6);
       if (e.burnTickT <= 0) e.burnTickT = 0.5;
     } else if (p.blade === 'frost') {                   // FROSTFANG — chill / freeze / shatter
       if (e.boss) { e.applySlow(1.0); return; }          // bosses chill, never freeze
@@ -1544,12 +1582,11 @@ export class Game {
         this.addEffect({ kind: 'ring', x: e.x, y: e.y, r: e.r + 6, color: '#bfe9ff', t: 0, dur: 0.3 }); }
     } else if (p.blade === 'storm') {                   // STORMEDGE — arc lightning
       const chains = up.has('storm_tempest') ? 4 : up.has('storm_fork') ? 2 : 1;
-      const amp = up.has('storm_amp') ? 1.7 : 1;
       let from = e; const hit = new Set([e]);
       for (let i = 0; i < chains; i++) {
         const t = this.nearestEnemy(from.x, from.y, 165, hit); if (!t) break; hit.add(t);
         this.addEffect({ kind: 'bolt', pts: [{ x: from.x, y: from.y }, { x: t.x, y: t.y }], t: 0, dur: 0.16 });
-        let cd = dmg * 0.5 * amp; if (up.has('storm_crit') && Math.random() < 0.22) cd *= 3;
+        let cd = dmg * 0.5; if (up.has('storm_crit') && Math.random() < 0.22) cd *= 3;
         if (up.has('storm_stun') && !t.boss) t.frozenT = Math.max(t.frozenT, 0.5);
         this.hitEnemy(t, cd, 0, 0, 'ability'); from = t;
       }
@@ -1590,6 +1627,7 @@ export class Game {
         e.burnTickT = 0.5;
         let tick = e.burnDmg;
         if (p.bladeUp.has('ember_exec') && !e.boss && e.hp < e.maxHP * 0.4) tick = e.hp + 1;   // Immolation
+        if (p.bladeUp.has('ember_soul')) p.fury = Math.min(p.furyMax, p.fury + 1.0);   // Kindled Fury
         this.hitEnemy(e, tick, 0, 0, 'ability');
       }
     }
@@ -1663,6 +1701,42 @@ export class Game {
     const p = this.player, locked = p.lockedRelics || new Set();
     const pool = RELICS.filter((r) => !p.relics.has(r.id) && !locked.has(r.id));
     return pool.length ? pool[(Math.random() * pool.length) | 0].id : null;
+  }
+
+  // The Dark Knight's slam cracks the floor: jagged molten fissures radiate out
+  // from the impact, glow hot for a few seconds, and burn anyone standing on
+  // them. Paths are baked once at creation (no per-frame randomness).
+  spawnFissures(x, y, n, baseDmg) {
+    const b = this.bounds;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + (Math.random() - 0.5) * 0.7;
+      const len = 95 + Math.random() * 70;
+      const joints = 4 + (Math.random() * 2 | 0);
+      const pts = [{ x: x + Math.cos(a) * 18, y: y + Math.sin(a) * 18 }];
+      for (let j = 1; j <= joints; j++) {
+        const d = 18 + (len - 18) * (j / joints);
+        const wob = (Math.random() - 0.5) * 26;
+        const px = x + Math.cos(a) * d - Math.sin(a) * wob;
+        const py = y + Math.sin(a) * d + Math.cos(a) * wob;
+        pts.push({ x: Math.max(b.minX, Math.min(b.maxX, px)), y: Math.max(b.minY, Math.min(b.maxY, py)) });
+      }
+      this.addEffect({ kind: 'fissure', pts, w: 12, t: 0, dur: 6.5, warn: 0.55, tick: 0,
+        dmg: baseDmg * 0.55, seed: Math.random() * 6.28 });
+    }
+    Sound.play('explode', { vol: 0.55 });
+  }
+
+  // distance from a point to a polyline, within `r`?
+  _nearPolyline(px, py, pts, r) {
+    for (let i = 0; i < pts.length - 1; i++) {
+      const ax = pts[i].x, ay = pts[i].y, bx = pts[i + 1].x, by = pts[i + 1].y;
+      const dx = bx - ax, dy = by - ay;
+      const L2 = dx * dx + dy * dy || 1;
+      const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / L2));
+      const cx = ax + dx * t, cy = ay + dy * t;
+      if ((px - cx) * (px - cx) + (py - cy) * (py - cy) < r * r) return true;
+    }
+    return false;
   }
 
   // bomber / explosive-elite detonation
@@ -2195,6 +2269,15 @@ export class Game {
     // Cinderstep (keystone): drop the first ember where he launches; the rest is
     // laid down frame-by-frame in _emitDashFire so it trails off his boots.
     if (player.mods.dashFireTrail) { this._fireDist = 99; this._lastFireX = player.x; this._lastFireY = player.y; }
+    // Ride the Lightning (Stormedge): the dash itself looses an arc
+    if (player.blade === 'storm' && player.bladeUp.has('storm_dash')) {
+      const t = this.nearestEnemy(player.x, player.y, 210);
+      if (t) {
+        this.addEffect({ kind: 'bolt', pts: [{ x: player.x, y: player.y - 14 }, { x: t.x, y: t.y }], t: 0, dur: 0.16 });
+        this.hitEnemy(t, player.swordDamage * 0.9, 0, 0, 'ability');
+        Sound.play('crit', { vol: 0.4 });
+      }
+    }
   }
 
   // Lay burning footprints along the dash as the knight travels (Cinderstep).
@@ -2594,6 +2677,17 @@ export class Game {
       else if (fx.kind === 'gib') { fx.vy += (fx.g || 540) * sdt; fx.x += fx.vx * sdt; fx.y += fx.vy * sdt; fx.vx *= 0.985; fx.rot += fx.vr * sdt; }
       else if (fx.kind === 'puff') { fx.x += fx.vx * sdt; fx.y += fx.vy * sdt; fx.vx *= 0.92; fx.vy *= 0.92; }
       else if (fx.kind === 'mote') { fx.vy += (fx.g || 0) * sdt; fx.x += fx.vx * sdt; fx.y += fx.vy * sdt; const d = fx.drag || 1; fx.vx *= d; fx.vy *= d; }
+      else if (fx.kind === 'fissure' && fx.t > fx.warn) {
+        // molten ground: standing on the crack burns (after the warning crack appears)
+        fx.tick -= sdt;
+        if (fx.tick <= 0) {
+          fx.tick = 0.4;
+          const p = this.player;
+          if (p && !p.dead && this._nearPolyline(p.x, p.y, fx.pts, fx.w + p.r * 0.7)) {
+            if (p.takeHit(fx.dmg, 'the molten earth')) this.shake = Math.max(this.shake, 4);
+          }
+        }
+      }
     }
     this.effects = this.effects.filter((f) => f.t < f.dur);
   }
@@ -3181,6 +3275,7 @@ export class Game {
     for (const fx of this.effects) if (fx.kind === 'dashstreak') this._drawDashStreak(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'swing') this._drawSwing(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'lavafield') this._drawLavaField(ctx, fx);
+    for (const fx of this.effects) if (fx.kind === 'fissure') this._drawFissure(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'firetrail') this._drawFireTrail(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'puff') this._drawPuff(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'death') this._drawDeathFx(ctx, fx);

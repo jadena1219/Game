@@ -42,7 +42,9 @@
     },
     "mage": {
       "file": "mage.png",
-      "scale": 1
+      "fw": 627,
+      "fh": 581,
+      "scale": 0.044
     },
     "sorcerer": {
       "file": "sorcerer.png",

@@ -3661,7 +3661,23 @@ export class Game {
       const fl = 0.74 + 0.16 * Math.sin(this.titleT * 11 + bz.x) + 0.1 * Math.sin(this.titleT * 27 + bz.x * 1.7);
       glow(bz.x, bz.y - 6, 130 + 10 * Math.sin(this.titleT * 17 + bz.x), bz.lava ? '#ff7a2a' : (bz.torch || '#ffb24a'), 0.6 * fl);
     }
-    if (this.player) { const L = this._bladeLight(); glow(this.player.x, this.player.y - 14, Math.round(L.r * 0.55), L.col, L.glowA); }
+    if (this.player) {
+      const L = this._bladeLight(), p = this.player;
+      glow(p.x, p.y - 14, Math.round(L.r * 0.55), L.col, L.glowA);
+      // motes drifting in the blade-light — deterministic (time+index), no allocs
+      if (this.state === 'playing') {
+        ctx.fillStyle = L.col;
+        for (let i = 0; i < 12; i++) {
+          const ph = ((this.time * (0.16 + (i % 4) * 0.05)) + i * 0.318) % 1;
+          const ang = i * 2.4 + this.time * (i % 2 ? 0.21 : -0.17);
+          const rr2 = L.r * (0.18 + 0.4 * ((i * 0.618) % 1));
+          const mx = p.x + Math.cos(ang) * rr2, my = p.y - 16 + Math.sin(ang) * rr2 * 0.6 - ph * 26;
+          ctx.globalAlpha = Math.sin(ph * Math.PI) * 0.5;
+          ctx.fillRect(mx | 0, my | 0, 2, 2);
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
     for (const pr of this.projectiles) glow(pr.x, pr.y, 38, pr.boss ? '#ff7a2a' : '#b06bff', 0.55);
     for (const fb of this.allyProjectiles) glow(fb.x, fb.y, 42, '#ff8a3a', 0.65);
     ctx.restore();
@@ -3947,6 +3963,20 @@ export class Game {
     ctx.globalAlpha = 0.45; ctx.fillStyle = '#000';
     ctx.beginPath(); ctx.ellipse(hx, hy + 13, 13, 4, 0, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
+    // he carries the last light down the corridor — a warm breathing aura + embers
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const lr = 92 + 7 * Math.sin(this.titleT * 2.1);
+    const lg = ctx.createRadialGradient(hx, hy - 26, 6, hx, hy - 26, lr);
+    lg.addColorStop(0, 'rgba(255,190,110,0.34)'); lg.addColorStop(0.55, 'rgba(220,120,50,0.13)'); lg.addColorStop(1, 'rgba(120,40,0,0)');
+    ctx.fillStyle = lg; ctx.beginPath(); ctx.arc(hx, hy - 26, lr, 0, Math.PI * 2); ctx.fill();
+    for (let i = 0; i < 9; i++) {                         // embers rising off the light
+      const ph = ((this.titleT * (0.32 + (i % 3) * 0.11)) + i * 0.37) % 1;
+      const ex = hx + Math.sin(i * 2.3 + this.titleT * 1.4) * (16 + i * 4);
+      ctx.globalAlpha = (1 - ph) * 0.55;
+      ctx.fillStyle = i % 3 ? '#ffb163' : '#ffe1a8';
+      ctx.fillRect(ex | 0, (hy - 10 - ph * 86) | 0, 2, 2);
+    }
+    ctx.restore(); ctx.globalAlpha = 1;
     drawSprite(ctx, 'knight', frame, hx, hy - bob, false, 1.5);
 
     ctx.restore();   // end push-in

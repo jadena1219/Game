@@ -61,12 +61,25 @@ h1 {
   line-height: 0.95;
   letter-spacing: 2px;
   color: var(--gold);
-  text-shadow: 0 3px 0 #3a2c0a, 0 0 24px rgba(233,200,74,0.35);
-  animation: logoPulse 2.6s ease-in-out infinite;
+  /* candlelit gold: a deep bevel, a warm bloom, and a faint cold outer halo
+     (the world's last light against the dark — the Bladelight identity) */
+  text-shadow:
+    0 3px 0 #2c2106, 0 5px 0 #161103,
+    0 0 22px rgba(233,200,74,0.4), 0 0 56px rgba(255,160,60,0.18),
+    0 0 90px rgba(140,180,255,0.10);
+  animation: logoPulse 3.2s ease-in-out infinite;
 }
 @keyframes logoPulse {
-  0%, 100% { transform: scale(1); text-shadow: 0 3px 0 #3a2c0a, 0 0 24px rgba(233,200,74,0.35); }
-  50% { transform: scale(1.04); text-shadow: 0 3px 0 #3a2c0a, 0 0 40px rgba(233,200,74,0.6); }
+  0%, 100% { transform: scale(1);
+    text-shadow: 0 3px 0 #2c2106, 0 5px 0 #161103,
+      0 0 22px rgba(233,200,74,0.4), 0 0 56px rgba(255,160,60,0.18), 0 0 90px rgba(140,180,255,0.10); }
+  50% { transform: scale(1.035);
+    text-shadow: 0 3px 0 #2c2106, 0 5px 0 #161103,
+      0 0 30px rgba(240,210,96,0.62), 0 0 80px rgba(255,170,70,0.30), 0 0 110px rgba(140,180,255,0.16); }
+}
+#title-screen .tag {
+  letter-spacing: 4px; text-transform: uppercase; font-size: clamp(11px, 2.6vw, 14px);
+  color: #b9aed1; text-shadow: 0 0 14px rgba(120,100,180,0.45);
 }
 
 /* lighter title overlay so the animated battlefield + embers show through */

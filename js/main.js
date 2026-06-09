@@ -6,11 +6,13 @@ import { drawSprite } from './sprite.js';
 import { META, metaCost, LOCKED_RELICS, RELIC_UNLOCK_COST } from './meta.js';
 import { RELICS } from './abilities.js';
 import { Sound } from './audio.js';
-import { registerGeneratedSprites, buildKeystoneIcons } from './spritegen.js';
+import { registerGeneratedSprites, buildKeystoneIcons, buildBladeIcons } from './spritegen.js';
+import { BLADES } from './blades.js';
 
 const screens = {
   title: document.getElementById('title-screen'),
   'hero-select': document.getElementById('hero-select'),
+  'blade-select': document.getElementById('blade-select'),
   sanctum: document.getElementById('sanctum'),
   event: document.getElementById('event-modal'),
   shop: document.getElementById('shop-modal'),
@@ -23,6 +25,7 @@ const HERO_IDS = ['knight', 'rogue', 'paladin'];
 let game = null;
 let godMode = (() => { try { return localStorage.getItem('kls_god') === '1'; } catch (e) { return false; } })();
 let GEN_ICONS = {};   // generated keystone icon data-URLs (id -> dataURL)
+let BLADE_ICONS = {}; // generated blade icon data-URLs (id -> dataURL)
 
 // A pixel-art speaker, generated pixel-by-pixel (no asset file) in the game's
 // parchment/gold palette. `muted` swaps the gold sound-waves for a red slash.
@@ -188,6 +191,53 @@ const ui = {
   },
 
   // A dungeon event — risk/reward decision at the shrine.
+  // The Living Blade picker shown at the start of a run.
+  buildBladeSelect() {
+    const wrap = document.getElementById('blade-cards');
+    wrap.innerHTML = '';
+    BLADES.forEach((b, i) => {
+      const el = document.createElement('button');
+      el.className = 'blade-card';
+      el.style.setProperty('--bc', b.color);
+      el.style.animationDelay = (i * 0.08) + 's';
+      const icon = BLADE_ICONS[b.id]
+        ? `<img class="blade-ico" src="${BLADE_ICONS[b.id]}" alt="">`
+        : `<span class="blade-ico">🗡️</span>`;
+      el.innerHTML = icon +
+        `<div class="blade-body">` +
+          `<div class="blade-name">${b.name}</div>` +
+          `<div class="blade-sig">${b.sig}</div>` +
+          `<div class="blade-flavor">${b.flavor}</div>` +
+        `</div>`;
+      el.onclick = () => { Sound.unlock(); Sound.play('relic'); game.setBlade(b.id); this.showScreen(null); game.beginIntro('knight'); };
+      wrap.appendChild(el);
+    });
+    this.showScreen('blade-select');
+  },
+
+  // Offer one of two evolutions for the chosen blade (floors 5/10/15).
+  showBladeEvolve(g, blade, tier) {
+    const m = document.getElementById('event-modal');
+    m.style.setProperty('--ev', blade.color);
+    const ico = document.getElementById('event-icon');
+    if (BLADE_ICONS[blade.id]) { ico.src = BLADE_ICONS[blade.id]; ico.classList.remove('hidden'); } else ico.classList.add('hidden');
+    document.getElementById('event-title').textContent = `${blade.name} Awakens`;
+    const flavor = document.getElementById('event-flavor');
+    flavor.textContent = 'Your blade hungers to grow. Choose its path.'; flavor.classList.remove('hidden');
+    const choices = document.getElementById('event-choices');
+    choices.innerHTML = ''; choices.classList.remove('hidden');
+    blade.tiers[tier].forEach((opt, i) => {
+      const el = document.createElement('button');
+      el.className = 'event-choice';
+      el.style.animationDelay = (i * 0.07) + 's';
+      el.innerHTML = `<div class="ec-label">${opt.name}</div><div class="ec-risk">${opt.desc}</div>`;
+      el.onclick = () => g.chooseBladeEvolve(i);
+      choices.appendChild(el);
+    });
+    document.getElementById('event-result').classList.add('hidden');
+    this.showScreen('event');
+  },
+
   showEvent(g, ev) {
     const m = document.getElementById('event-modal');
     m.style.setProperty('--ev', ev.color || '#b06bff');
@@ -300,7 +350,7 @@ async function boot() {
   }
 
   // register the procedurally-generated creatures + keystone icons
-  try { registerGeneratedSprites(); GEN_ICONS = buildKeystoneIcons(); }
+  try { registerGeneratedSprites(); GEN_ICONS = buildKeystoneIcons(); BLADE_ICONS = buildBladeIcons(); }
   catch (err) { console.error('generated sprites failed', err); }
 
   game = new Game(canvas, ui);
@@ -338,7 +388,7 @@ async function boot() {
   if (godSkip) godSkip.addEventListener('click', (e) => { e.stopPropagation(); game.godSkip(); });
 
   // Hero select stays built for a future unlock; for now every run is the Knight.
-  document.getElementById('start-btn').addEventListener('click', () => { Sound.unlock(); game.beginIntro('knight'); });
+  document.getElementById('start-btn').addEventListener('click', () => { Sound.unlock(); ui.buildBladeSelect(); });
   document.getElementById('retry-btn').addEventListener('click', () => game.start('knight'));
   document.getElementById('win-btn').addEventListener('click', () => game.start('knight'));
   // return to the title after a run (resets game state so the corridor shows)

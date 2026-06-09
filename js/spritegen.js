@@ -195,3 +195,27 @@ export function buildKeystoneIcons() {
   for (const [id, draw] of Object.entries(ICON_DRAWERS)) out[id] = iconCanvas(draw);
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// The three Living Blades — glowing elemental swords for the choosing.
+function bladeBase(p, blade, edge, glow) {
+  // upright sword: blade, crossguard, grip, pommel
+  p(11, 3, 2, 12, blade); p(10, 5, 1, 9, edge); p(13, 5, 1, 9, glow);   // blade + edges
+  p(11, 3, 2, 2, '#fff');                                                // bright tip
+  p(8, 15, 8, 2, '#9a8350'); p(8, 15, 8, 1, '#c8b072');                  // crossguard
+  p(11, 17, 2, 4, '#5a3a22');                                            // grip
+  p(10, 21, 4, 2, '#c8b072');                                           // pommel
+}
+export const BLADE_ICON_DRAWERS = {
+  ember: (p) => { bladeBase(p, '#ff8a3a', '#ffd36b', '#e2470f', '#3a1a08');
+    p(7, 6, 2, 3, '#ff7a2a'); p(15, 5, 2, 4, '#ffb02a'); p(8, 10, 1, 3, '#ffd86b'); p(15, 10, 1, 3, '#ff7a2a'); p(11, 1, 2, 2, '#ffd86b'); },
+  frost: (p) => { bladeBase(p, '#bfe9ff', '#eaffff', '#5aa6d8', '#0e2030');
+    p(8, 6, 1, 1, '#eaffff'); p(15, 8, 1, 1, '#eaffff'); p(7, 11, 2, 1, '#bfe9ff'); p(15, 4, 1, 2, '#bfe9ff'); p(9, 3, 1, 1, '#fff'); p(14, 13, 1, 1, '#bfe9ff'); },
+  storm: (p) => { bladeBase(p, '#cdbfff', '#f0eaff', '#7a5ad8', '#1a1030');
+    p(8, 5, 2, 1, '#e0d6ff'); p(9, 6, 1, 2, '#b9a6ff'); p(15, 7, 2, 1, '#e0d6ff'); p(14, 8, 1, 2, '#b9a6ff'); p(7, 12, 2, 1, '#f0eaff'); },
+};
+export function buildBladeIcons() {
+  const out = {};
+  for (const [id, draw] of Object.entries(BLADE_ICON_DRAWERS)) out[id] = iconCanvas(draw);
+  return out;
+}

@@ -8,6 +8,16 @@ pitched so nothing gets lost.
 
 ## 🚢 Shipped
 
+### The Living Blade ✅ (v1)
+- Choose one of three swords at the start of a run — **Emberbrand** (burn DoT),
+  **Frostfang** (chill → freeze → shatter), **Stormedge** (chain lightning).
+- The blade **evolves at floors 5 / 10 / 15** — pick 1 of 2 upgrades each time
+  (3-tier tree per blade). HUD chip shows blade + evolution pips.
+- Generated sword icons; status visuals (flames, frost casing).
+- **NEXT:** replace the picker screen with an in-world **discovery cutscene** —
+  the weaponless knight finds a shrine of three floating, glowing, animated
+  swords and chooses one. (Jade's idea — greenlit.)
+
 ### Build variety — runs with identity ✅
 - **Keystones**: Cinderstep (dash fire-trail), Mirror Aegis (no dash, reflect
   projectiles doubled), Heart of Fury (endless Fury, double damage taken).

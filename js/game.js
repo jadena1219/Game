@@ -9,6 +9,7 @@ import { biomeForLevel } from './biomes.js';
 import { loadMeta, saveMeta, metaBonuses, runSouls, metaCost, LOCKED_RELICS, RELIC_UNLOCK_COST } from './meta.js';
 import { pickEvent } from './events.js';
 import { Sound } from './audio.js';
+import { BLADES, bladeById, BLADE_MILESTONES } from './blades.js';
 
 const BOSS_NAMES = { miniboss: 'The Dark Knight', boss: 'The Demon Lord' };
 
@@ -666,6 +667,8 @@ export class Game {
       const mb = this.metaB = metaBonuses(this.meta);
       this.player = new Player(this.world.w / 2, this.world.h / 2, heroId, mb);
       this.player.god = this.godMode;         // GOD MODE: immune to enemy damage
+      this.player.blade = this.bladeId || 'ember';   // the Living Blade chosen at the title
+      this.player.bladeUp = new Set(); this.player.bladeTier = 0; this.player.bladeCharge = 0;
       this.player.lockedRelics = new Set();   // meta unlocks disabled — full relic pool
       this.shopSlots = 4 + (mb.slots || 0);
       this.kills = 0; this.level = 1; this.gold = mb.startGold || 0; this.totalGold = 0;
@@ -808,9 +811,10 @@ export class Game {
   hitEnemy(e, dmg, kx = 0, ky = 0, source = 'ability') {
     const wasAlive = !e.dead;
     if (this.godMode) dmg = 999999;          // GOD MODE: one-shot everything
+    else if (this.player && this.player.bladeUp.has('frost_vuln') && e.slowT > 0) dmg *= 1.25;   // Frostbite
     e.takeHit(dmg, kx, ky);
     this.spawnDamageNumber(e.x, e.y - e.r - 6, Math.round(dmg), source);
-    if (source === 'sword') this._relicOnHit(e, dmg);   // sparks/feedback handled in _applySwingDamage
+    if (source === 'sword') { this._relicOnHit(e, dmg); this._bladeOnHit(e, dmg); }   // sparks/feedback in _applySwingDamage
     if (e.boss && wasAlive) this.hitStop = Math.max(this.hitStop, 0.05); // weight on boss hits
     if (wasAlive && e.dead) this.onEnemyKilled(e, source);
   }
@@ -824,6 +828,77 @@ export class Game {
       if (t) {
         this.addEffect({ kind: 'bolt', pts: [{ x: e.x, y: e.y }, { x: t.x, y: t.y }], t: 0, dur: 0.16 });
         this.hitEnemy(t, dmg * 0.5, 0, 0, 'ability');   // 'ability' source won't re-proc
+      }
+    }
+  }
+
+  // ---------- The Living Blade ----------
+  _bladeOnHit(e, dmg) {
+    const p = this.player; if (!p || !p.blade) return;
+    const up = p.bladeUp;
+    if (p.blade === 'ember') {                          // EMBERBRAND — set ablaze
+      if (e.dead) return;
+      const mult = up.has('ember_hotter') ? 1.7 : 1;
+      e.burnDmg = Math.max(e.burnDmg, dmg * 0.22 * mult);
+      e.burnT = Math.max(e.burnT, up.has('ember_long') ? 5 : 2.5);
+      if (e.burnTickT <= 0) e.burnTickT = 0.5;
+    } else if (p.blade === 'frost') {                   // FROSTFANG — chill / freeze / shatter
+      if (e.boss) { e.applySlow(1.0); return; }          // bosses chill, never freeze
+      if (e.frozenT > 0) return this._shatter(e, dmg);
+      e.applySlow(1.4);
+      const need = up.has('frost_quick') ? 2 : 3;
+      e.frost = (e.frost || 0) + 1;
+      if (e.frost >= need) { e.frost = 0; e.frozenT = 1.3;
+        this.addEffect({ kind: 'ring', x: e.x, y: e.y, r: e.r + 6, color: '#bfe9ff', t: 0, dur: 0.3 }); }
+    } else if (p.blade === 'storm') {                   // STORMEDGE — arc lightning
+      const chains = up.has('storm_tempest') ? 4 : up.has('storm_fork') ? 2 : 1;
+      const amp = up.has('storm_amp') ? 1.7 : 1;
+      let from = e; const hit = new Set([e]);
+      for (let i = 0; i < chains; i++) {
+        const t = this.nearestEnemy(from.x, from.y, 165, hit); if (!t) break; hit.add(t);
+        this.addEffect({ kind: 'bolt', pts: [{ x: from.x, y: from.y }, { x: t.x, y: t.y }], t: 0, dur: 0.16 });
+        let cd = dmg * 0.5 * amp; if (up.has('storm_crit') && Math.random() < 0.22) cd *= 3;
+        if (up.has('storm_stun') && !t.boss) t.frozenT = Math.max(t.frozenT, 0.5);
+        this.hitEnemy(t, cd, 0, 0, 'ability'); from = t;
+      }
+      if (up.has('storm_build')) { p.bladeCharge++; if (p.bladeCharge >= 12) { p.bladeCharge = 0; this._stormNova(); } }
+    }
+  }
+
+  _shatter(e, dmg) {
+    const p = this.player; e.frozenT = 0;
+    const bonus = (p.bladeUp.has('frost_brittle') ? 2.4 : 1.3) * dmg + 24;
+    this.addEffect({ kind: 'boom', x: e.x, y: e.y, r: e.r + 18, color: '#bfe9ff', t: 0, dur: 0.3 });
+    this._gib(e.x, e.y - e.r * 0.5, '#cdeeff', 6, 120, { size: 2 });
+    Sound.play('crit', { vol: 0.5 });
+    this.hitEnemy(e, bonus, 0, 0, 'ability');
+    if (p.bladeUp.has('frost_spread')) for (const o of this.enemiesInRadius(e.x, e.y, 72)) { if (o !== e && !o.boss) o.applySlow(1.4); }
+    if (p.bladeUp.has('frost_chain')) for (const o of this.enemiesInRadius(e.x, e.y, 90)) {
+      if (o !== e && o.frozenT > 0) { o.frozenT = 0; this.addEffect({ kind: 'boom', x: o.x, y: o.y, r: o.r + 12, color: '#bfe9ff', t: 0, dur: 0.25 }); this.hitEnemy(o, bonus * 0.7, 0, 0, 'ability'); }
+    }
+  }
+
+  _stormNova() {
+    const p = this.player, R = 120, dmg = 40 * p.mods.abilityDmgMult;
+    this.addEffect({ kind: 'boom', x: p.x, y: p.y, r: R, color: '#b9a6ff', t: 0, dur: 0.34 });
+    Sound.play('crit', { vol: 0.6 }); this.shake = Math.max(this.shake, 5);
+    for (const o of this.enemiesInRadius(p.x, p.y, R)) { const a = Math.atan2(o.y - p.y, o.x - p.x); this.hitEnemy(o, dmg, Math.cos(a) * 120, Math.sin(a) * 120, 'ability'); }
+  }
+
+  // Burn damage-over-time + Permafrost aura, ticked each combat frame.
+  _updateStatuses(sdt) {
+    const p = this.player; if (!p) return;
+    if (p.bladeUp.has('frost_aura')) for (const e of this.enemies) { if (!e.boss && Math.hypot(e.x - p.x, e.y - p.y) < 120) e.applySlow(0.4); }
+    const list = this.enemies;
+    for (let i = 0; i < list.length; i++) {
+      const e = list[i];
+      if (e.dead || e.burnT <= 0) continue;
+      e.burnT -= sdt; e.burnTickT -= sdt;
+      if (e.burnTickT <= 0) {
+        e.burnTickT = 0.5;
+        let tick = e.burnDmg;
+        if (p.bladeUp.has('ember_exec') && !e.boss && e.hp < e.maxHP * 0.4) tick = e.hp + 1;   // Immolation
+        this.hitEnemy(e, tick, 0, 0, 'ability');
       }
     }
   }
@@ -856,6 +931,17 @@ export class Game {
       }
       this.addEffect({ kind: 'boom', x: e.x, y: e.y, r: R, t: 0, dur: 0.3 });
       this._inEmber = false;
+    }
+    // Emberbrand: foes slain while burning erupt / spread their fire
+    if (e.burnT > 0 && p.blade === 'ember') {
+      if (p.bladeUp.has('ember_pyre') && !this._inPyre) {
+        this._inPyre = true;
+        const R = 70, dmg = 22 * p.mods.abilityDmgMult;
+        for (const o of this.enemiesInRadius(e.x, e.y, R)) { if (o === e) continue; const a = Math.atan2(o.y - e.y, o.x - e.x); this.hitEnemy(o, dmg, Math.cos(a) * 90, Math.sin(a) * 90, 'ability'); }
+        this.addEffect({ kind: 'boom', x: e.x, y: e.y, r: R, t: 0, dur: 0.32 }); Sound.play('explode', { vol: 0.5 });
+        this._inPyre = false;
+      }
+      if (p.bladeUp.has('ember_spread')) for (const o of this.enemiesInRadius(e.x, e.y, 64)) { if (o !== e && o.burnT <= 0) { o.burnT = 2.5; o.burnDmg = e.burnDmg * 0.7; o.burnTickT = 0.4; } }
     }
   }
 
@@ -1373,6 +1459,15 @@ export class Game {
     // radiates from the knight's body evenly in every facing direction
     this.effects.push({ kind: 'swing', t: 0, dur, style,
       x: player.x, y: player.y - 16, angle: player.facingAngle });
+    // Trail of Cinders (Emberbrand evolution): the swing scorches the ground
+    if (player.bladeUp && player.bladeUp.has('ember_trail')) {
+      const a = player.facingAngle;
+      for (let i = 0; i < 3; i++) {
+        const d = 14 + i * 13;
+        this.effects.push({ kind: 'firetrail', x: player.x + Math.cos(a) * d, y: player.y + Math.sin(a) * d + 2,
+          r: 22, t: 0, dur: 1.0, dmgT: 0.05, seed: Math.random() * 6.28 });
+      }
+    }
   }
 
   // knockback resistance: bosses are immovable, tanks heavy, trash light
@@ -1670,9 +1765,11 @@ export class Game {
     this._dashTrail(p, sdt);
     this._spawn(sdt);
     this._maybeSpawnNamed(sdt);                 // the floor's named elite herald
-    if (p.mods.dashFireTrail) { this._emitDashFire(p); this._burnTrails(sdt); }
+    if (p.mods.dashFireTrail) this._emitDashFire(p);
+    this._burnTrails(sdt);                      // dash + Cinderstep + ember-swing flames
 
     for (const e of this.enemies) e.update(sdt, this);
+    this._updateStatuses(sdt);                  // blade burn DoT / permafrost
     this._emitAuras(sdt);
     this._updateProjAndFx(sdt);
     this._updatePickups(sdt);
@@ -2034,7 +2131,30 @@ export class Game {
     this.state = 'camp';
     this.ui.showScreen(null);
     this.ui.setCampPrompt(null);
+    // the Living Blade hungers — offer an evolution at floors 5 / 10 / 15
+    const tier = this.player.bladeTier || 0;
+    if (this.player.blade && tier < 3 && this.level >= BLADE_MILESTONES[tier]) {
+      this._bladeEvolveDue = tier;
+      this.ui.showBladeEvolve(this, bladeById(this.player.blade), tier);
+    } else { this._bladeEvolveDue = null; }
   }
+
+  // pick one of the two evolution options offered for the current tier
+  chooseBladeEvolve(idx) {
+    const tier = this._bladeEvolveDue;
+    if (tier == null) { this.ui.hideEvent(); return; }
+    const blade = bladeById(this.player.blade);
+    const opt = blade.tiers[tier][idx];
+    this.player.bladeUp.add(opt.id);
+    this.player.bladeTier = tier + 1;
+    this._bladeEvolveDue = null;
+    Sound.play('relic');
+    this.ui.hideEvent();
+    this.campToast = { text: `${blade.name} awakens: ${opt.name}.`, t: 0, dur: 4.2 };
+  }
+
+  // chosen at the title before a run
+  setBlade(id) { this.bladeId = id; if (this.player) this.player.blade = id; }
 
   // torches active right now (camp room vs arena)
   get _torches() { return (this.state === 'camp' && this.camp) ? this.camp.torches : (this.braziers || []); }
@@ -3517,8 +3637,23 @@ export class Game {
         ctx.restore();
       }
     }
+    // Living-Blade status flourishes: flames on burning foes, an icy casing on frozen
+    if (e.frozenT > 0) {
+      ctx.save(); ctx.globalAlpha = 0.5; ctx.strokeStyle = '#bfe9ff'; ctx.lineWidth = 1;
+      ctx.strokeRect(e.x - e.r * 0.8, e.y - e.r * 1.5, e.r * 1.6, e.r * 1.85);
+      ctx.globalAlpha = 0.25; ctx.fillStyle = '#bfe9ff'; ctx.fillRect(e.x - e.r * 0.8, e.y - e.r * 1.5, e.r * 1.6, e.r * 1.85);
+      ctx.restore(); ctx.globalAlpha = 1;
+    } else if (e.burnT > 0) {
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < 4; i++) { const ph = (this.time * 4 + i * 0.45 + e.x * 0.1) % 1;
+        ctx.globalAlpha = (1 - ph) * 0.7; ctx.fillStyle = i % 2 ? '#ffb02a' : '#ff5a1e';
+        ctx.fillRect(e.x - e.r * 0.6 + i * e.r * 0.4 + Math.sin(this.time * 9 + i) * 2, e.y - e.r - ph * 16, 2, 3); }
+      ctx.restore(); ctx.globalAlpha = 1;
+    }
     const tint = e.state === 'enrage' ? { color: '#ffffff', a: 0.45 + 0.35 * Math.sin(this.time * 30) }
       : e.flash > 0 ? { color: '#ffffff', a: 0.7 }
+      : e.frozenT > 0 ? { color: '#9fd8ff', a: 0.5 }
+      : e.burnT > 0 ? { color: '#ff7a2a', a: 0.3 + 0.12 * Math.sin(this.time * 18) }
       : (e.state === 'windup' || e.state === 'special' ? { color: '#ff4040', a: 0.5 }
       : (e.elite ? { color: e.affix.color, a: 0.16 } : null));
     // a gentle breathing bob when idle so foes never look frozen
@@ -3859,6 +3994,17 @@ export class Game {
     ctx.fillRect(fbx, fy, bw * ff, fh);
     ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = 'bold 9px "Silkscreen", sans-serif';
     ctx.textAlign = 'left'; ctx.fillText(ff >= 1 ? 'ULTIMATE!' : 'FURY', fbx + 4, fy + fh / 2 + 1);
+
+    // Living-Blade chip: name + three evolution pips, in the blade's colour
+    if (p.blade) {
+      const bd = bladeById(p.blade), cy2 = fy + fh + 11;
+      ctx.fillStyle = bd.color; ctx.fillRect(fbx, cy2 - 5, 5, 9);
+      ctx.font = '9px "Silkscreen", monospace'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+      ctx.fillStyle = bd.color; ctx.fillText(bd.name, fbx + 10, cy2);
+      const px0 = fbx + 12 + ctx.measureText(bd.name).width + 6;
+      for (let i = 0; i < 3; i++) { ctx.fillStyle = i < (p.bladeTier || 0) ? bd.color : 'rgba(255,255,255,0.2)';
+        ctx.fillRect(px0 + i * 7, cy2 - 2, 4, 4); }
+    }
 
     this._drawComboCounter(ctx);
 

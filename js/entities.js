@@ -36,6 +36,11 @@ export class Player {
     this.relics = new Set();           // owned relic ids
     this.abilities = [];               // (kept empty: the knight is the core)
     this.fury = 0; this.furyMax = 100;
+    // The Living Blade
+    this.blade = null;                 // chosen blade id ('ember' | 'frost' | 'storm')
+    this.bladeUp = new Set();          // chosen evolution ids
+    this.bladeTier = 0;                // evolutions taken (0..3)
+    this.bladeCharge = 0;              // Stormedge static-charge counter
     this.slowT = 0;                    // >0 while chilled by a Frostbound elite
     this.eventDmg = 1;                 // run-scoped multipliers from dungeon events
     this.eventHP = 0;
@@ -191,6 +196,8 @@ export class Enemy {
     this.stateT = 0;
     this.cdmg = this.damage;           // current contact damage (boosted while charging)
     this.slowT = 0;                    // >0 while chilled (frost)
+    this.burnT = 0; this.burnDmg = 0; this.burnTickT = 0;   // Emberbrand burn
+    this.frost = 0; this.frozenT = 0;                       // Frostfang chill stacks / frozen-or-stunned
     this.elite = null; this.affix = null; this.armor = 0;
 
     // ---- boss phase escalation ----
@@ -239,6 +246,9 @@ export class Enemy {
     // apply + decay knockback
     this.x += this.kbx * dt; this.y += this.kby * dt;
     this.kbx *= 0.86; this.kby *= 0.86;
+
+    // frozen solid / stunned — cannot act
+    if (this.frozenT > 0) { this.frozenT -= dt; this.moving = false; this.attackAnim = 0; return this._finish(game); }
 
     const ranged = this.spec.ranged;
     const charge = this.spec.charge;

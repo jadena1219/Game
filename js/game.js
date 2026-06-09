@@ -3602,10 +3602,63 @@ export class Game {
       const fl = 0.74 + 0.16 * Math.sin(this.titleT * 11 + bz.x) + 0.1 * Math.sin(this.titleT * 27 + bz.x * 1.7);
       glow(bz.x, bz.y - 6, 130 + 10 * Math.sin(this.titleT * 17 + bz.x), bz.lava ? '#ff7a2a' : (bz.torch || '#ffb24a'), 0.6 * fl);
     }
-    if (this.player) glow(this.player.x, this.player.y - 14, 64, '#cfe6ff', 0.16);
+    if (this.player) { const L = this._bladeLight(); glow(this.player.x, this.player.y - 14, Math.round(L.r * 0.55), L.col, L.glowA); }
     for (const pr of this.projectiles) glow(pr.x, pr.y, 38, pr.boss ? '#ff7a2a' : '#b06bff', 0.55);
     for (const fb of this.allyProjectiles) glow(fb.x, fb.y, 42, '#ff8a3a', 0.65);
     ctx.restore();
+  }
+
+  // BLADELIGHT — the sword is the last light in the world. Its colour, reach and
+  // character follow the chosen blade and the knight's state: it breathes like
+  // fire, holds hard like frost, or pulses like a caged storm; it swells with the
+  // kill-streak, flares mid-swing, and gutters when he's nearly done. Memoized
+  // per frame (this.time only advances once per update).
+  _bladeLight() {
+    if (this._lightT === this.time && this._lightMemo) return this._lightMemo;
+    this._lightT = this.time;
+    const p = this.player, t = this.time;
+    let L;
+    if (!p) L = { r: 175, col: '#cfe6ff', hard: false, glowA: 0.16 };
+    else {
+      let r = 195, col = '#ffd9a0', hard = false, glowA = 0.26;
+      if (p.blade === 'ember') {        // warm firelight that breathes
+        col = '#ff9a4a';
+        r *= 1 + 0.05 * Math.sin(t * 11) + 0.03 * Math.sin(t * 27 + 1.7);
+      } else if (p.blade === 'frost') { // pale, steady, hard-edged cold
+        col = '#bfe2ff'; hard = true; r *= 1.06; glowA = 0.2;
+      } else if (p.blade === 'storm') { // a caged tempest, slowly pulsing
+        col = '#c9b8ff';
+        r *= 1 + 0.07 * Math.sin(t * 4.4);
+      }
+      r += Math.min(70, (this.combo || 0) * 2.5);            // the streak feeds the light
+      if (p.swingTimer > 0) r *= 1.12;                       // the swing flares
+      if (p.hp < p.maxHP * 0.3 && !p.dead) {                 // near death, it gutters
+        r *= 0.72 + 0.06 * Math.sin(t * 9) + 0.03 * Math.sin(t * 23);
+        glowA *= 0.8;
+      }
+      L = { r, col, hard, glowA };
+    }
+    return this._lightMemo = L;
+  }
+
+  // How lit a world point is (0 = swallowed by the dark, 1 = fully seen):
+  // the blade-light first, then the braziers. Boss halls are always lit —
+  // the Lord keeps the light the realm lost.
+  _litAt(x, y) {
+    if (!this.biome || !this.biome.dark || this.bossKind || this.state !== 'playing') return 1;
+    let best = 0;
+    const p = this.player;
+    if (p) {
+      const L = this._bladeLight();
+      const d = Math.hypot(x - p.x, y - (p.y - 8));
+      best = 1 - Math.max(0, d - L.r * 0.5) / (L.r * 0.55);
+    }
+    for (const bz of this._torches) {
+      const d = Math.hypot(x - bz.x, y - (bz.y - 6));
+      const v = 1 - Math.max(0, d - 80) / 100;
+      if (v > best) best = v;
+    }
+    return Math.max(0, Math.min(1, best));
   }
 
   // Dungeon darkness: overlay shadow over everything, then cut light "pools" out
@@ -3614,7 +3667,9 @@ export class Game {
     const b = this.biome; if (!b || !b.dark) return;
     if (this.state === 'won') return;      // the victory is bathed in golden light
     if (this.flashScreen > 0.02) return;   // the ultimate floods the room with light
-    const darkLevel = this.state === 'camp' ? Math.min(b.dark, 0.34) : b.dark; // safe room is brighter
+    const darkLevel = this.state === 'camp' ? Math.min(b.dark, 0.34)
+      : this.bossKind ? Math.min(b.dark, 0.32)               // boss halls are LIT — the inversion
+      : b.dark;
     const S = 0.5;                          // half-res shadow buffer (soft, cheap)
     const sw = Math.max(1, Math.round(this.vw * S)), sh = Math.max(1, Math.round(this.vh * S));
     let sc = this.shadowCanvas, g = this.shadowCtx;
@@ -3630,23 +3685,27 @@ export class Game {
     g.fillStyle = `rgba(4,3,9,${darkLevel})`;
     g.fillRect(0, 0, sw, sh);
     g.globalCompositeOperation = 'destination-out';
-    // cached light "holes": one gradient per rounded radius, reused via translate
-    const hole = (wx, wy, r) => {
+    // cached light "holes": one gradient per rounded radius + edge profile,
+    // reused via translate. `hard` = frost's crisp cone vs. the soft fire feather.
+    const hole = (wx, wy, r, hard = false) => {
       const sx = (wx - this.cam.x) * S, sy = (wy - this.cam.y) * S, rr = Math.round(r * S);
       if (sx < -rr || sx > sw + rr || sy < -rr || sy > sh + rr) return;
-      let grd = cache.get(rr);
+      const key = hard ? -rr : rr;
+      let grd = cache.get(key);
       if (!grd) {
-        grd = g.createRadialGradient(0, 0, rr * 0.22, 0, 0, rr);
+        grd = g.createRadialGradient(0, 0, rr * (hard ? 0.55 : 0.22), 0, 0, rr);
         grd.addColorStop(0, 'rgba(0,0,0,1)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
-        cache.set(rr, grd);
+        cache.set(key, grd);
       }
       g.fillStyle = grd;
       g.translate(sx, sy); g.beginPath(); g.arc(0, 0, rr, 0, Math.PI * 2); g.fill(); g.translate(-sx, -sy);
     };
     for (const bz of this._torches) hole(bz.x, bz.y - 6, 168 + 9 * Math.sin(this.titleT * 17 + bz.x));
+    // the BLADE carries the light — reach/breath/edge follow blade + state
+    const L = this._bladeLight();
     const hx = this.player ? this.player.x : this.world.w / 2;
     const hy = this.player ? this.player.y - 8 : this.world.h / 2 + this.vh * 0.16;
-    hole(hx, hy, 175);           // the hero carries the light
+    hole(hx, hy, L.r, L.hard);
     for (const fb of this.allyProjectiles) hole(fb.x, fb.y, 90);
     for (const pr of this.projectiles) hole(pr.x, pr.y, 52);
     for (const pk of this.pickups) hole(pk.x, pk.y, 30);   // loot glints in the dark
@@ -3655,7 +3714,21 @@ export class Game {
       hole(this.camp.sorcerer.x, this.camp.sorcerer.y - 12, 110);
       if (this.camp.shrine && !this.camp.eventUsed) hole(this.camp.shrine.x, this.camp.shrine.y - 8, 110);
     }
-    for (const fx of this.effects) { if (fx.kind === 'boom' || fx.kind === 'ult') hole(fx.x, fx.y, Math.round((fx.r || 80) * 1.1)); }
+    for (const fx of this.effects) {
+      if (fx.kind === 'boom' || fx.kind === 'ult') hole(fx.x, fx.y, Math.round((fx.r || 80) * 1.1));
+      else if (fx.kind === 'lavafield') hole(fx.x, fx.y, fx.r * 1.15);
+      else if (fx.kind === 'firetrail') hole(fx.x, fx.y, 52);
+      else if (fx.kind === 'bolt' && fx.pts) hole(fx.pts[fx.pts.length - 1].x, fx.pts[fx.pts.length - 1].y, 70);
+      else if (fx.kind === 'fissure' && fx.t > fx.warn * 0.6) {
+        for (let i = 1; i < fx.pts.length; i += 2) hole(fx.pts[i].x, fx.pts[i].y, 54);
+      }
+    }
+    // foes that carry their own light: the burning, and bosses mid-telegraph
+    // (a windup you can't see is a cheap death, not a dark one)
+    for (const e of this.enemies) {
+      if (e.burnT > 0) hole(e.x, e.y - 10, 64);
+      else if (e.state === 'windup' || e.state === 'special' || e.state === 'charging' || e.state === 'enrage') hole(e.x, e.y - 10, e.r * 3.2);
+    }
     g.globalCompositeOperation = 'source-over';
     ctx.save(); ctx.imageSmoothingEnabled = true;
     ctx.drawImage(sc, 0, 0, this.vw, this.vh);
@@ -4607,12 +4680,16 @@ export class Game {
       ctx.globalAlpha = 0.25; ctx.fillStyle = '#bfe9ff'; ctx.fillRect(e.x - e.r * 0.8, e.y - e.r * 1.5, e.r * 1.6, e.r * 1.85);
       ctx.restore(); ctx.globalAlpha = 1;
     }
-    const tint = e.state === 'enrage' ? { color: '#ffffff', a: 0.45 + 0.35 * Math.sin(this.time * 30) }
+    let tint = e.state === 'enrage' ? { color: '#ffffff', a: 0.45 + 0.35 * Math.sin(this.time * 30) }
       : e.flash > 0 ? { color: '#ffffff', a: 0.7 }
       : e.frozenT > 0 ? { color: '#9fd8ff', a: 0.5 }
       : e.burnT > 0 ? { color: '#ff7a2a', a: 0.32 + 0.12 * Math.sin(this.time * 18) }
       : (e.state === 'windup' || e.state === 'special' ? { color: '#ff4040', a: 0.5 }
       : (e.elite ? { color: e.affix.color, a: 0.16 } : null));
+    // BLADELIGHT: outside the light, foes live as silhouettes with burning eyes.
+    // Hit-flash / telegraphs / burning override — those must read through the dark.
+    const lit = (e.boss || tint) ? 1 : this._litAt(e.x, e.y);
+    if (lit < 0.92) tint = { color: '#070310', a: Math.min(0.94, (1 - lit) * 1.05) };
     // cold rim/backlight so the all-black Demon Lord reads against the dark throne
     if (e.boss && this.biome && this.biome.moonlit) {
       const rl = this.biome.moonlit, sh = e.r * 3.4;
@@ -4626,8 +4703,23 @@ export class Game {
     const bob = (!e.boss && !e.moving) ? Math.sin(this.time * 2.6 + e.x * 0.07) : 0;
     drawSprite(ctx, e.sprite, frame, e.x, e.y - bob, e.faceLeft, 1, tint);
     if (e.burnT > 0) this._drawBurning(ctx, e);   // real flames, drawn over the body
+    // eyes in the dark: the only thing a swallowed silhouette gives away
+    if (lit < 0.55) {
+      const ec = (e.named && e.named.color) || (e.elite && e.affix.color) ||
+        ({ chaser: '#ff5040', swarmer: '#ffb24a', tank: '#ff4040', caster: '#b06bff', bomber: '#ffd23a' })[e.type] || '#ff5040';
+      const ea = (1 - lit) * (0.75 + 0.25 * Math.sin(this.time * 5 + e.x * 0.13));
+      const ey = e.y - bob - e.r * 1.5, off = e.faceLeft ? -1 : 1;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = ea;
+      ctx.fillStyle = ec;
+      ctx.fillRect((e.x - 4 + off) | 0, ey | 0, 2, 2);
+      ctx.fillRect((e.x + 2 + off) | 0, ey | 0, 2, 2);
+      ctx.globalAlpha = ea * 0.35;
+      ctx.fillRect((e.x - 5 + off) | 0, (ey - 1) | 0, 4, 4);
+      ctx.fillRect((e.x + 1 + off) | 0, (ey - 1) | 0, 4, 4);
+      ctx.restore(); ctx.globalAlpha = 1;
+    }
     // small floating HP bar for tanks & elites (bosses use the big top bar)
-    if (!e.boss && (e.type === 'tank' || e.elite)) {
+    if (!e.boss && (e.type === 'tank' || e.elite) && lit > 0.35) {
       const named = e.named, w = named ? 48 : 34, hpf = e.hp / e.maxHP, hy = e.y - (named ? 62 : 56);
       ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(e.x - w / 2 - 1, hy - 1, w + 2, 6);
       ctx.fillStyle = named ? named.color : (e.elite ? e.affix.color : '#c9a23a');

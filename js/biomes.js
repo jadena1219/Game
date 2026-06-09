@@ -1,6 +1,9 @@
-// Dark dungeon biomes — the descent. Cohesive stone-and-shadow vibe throughout,
-// lit by torches against the dark. Each act shifts the tint & hazards, but the
-// mood stays grim and torch-lit. Painters draw flagstone floors + grime.
+// Dark dungeon biomes — the descent. BLADELIGHT: the world renders genuinely
+// dark (`dark` is the shadow strength), and what you see is carved out by light
+// — your blade first, then the braziers. Each act shifts the tint & hazards,
+// but the identity is chiaroscuro: what the light reveals, and what it hides.
+// Boss halls invert the rule (clamped bright in game.js) — the Lord keeps the
+// light the realm lost. Painters draw flagstone floors + grime.
 
 function rngFrom(seed) {
   return () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
@@ -87,14 +90,14 @@ export const BIOMES = [
   {
     id: 'catacomb', name: 'The Catacombs', act: 'I', levels: [1, 2, 3],
     ground: ['#2a2433', '#15101d'], wall: '#211b2c', cap: '#332a44',
-    grade: 'rgba(40,40,90,0.10)', dark: 0.6, torch: '#9fc6ff', lava: false,
+    grade: 'rgba(40,40,90,0.10)', dark: 0.84, torch: '#9fc6ff', lava: false,
     particle: 'pollen', pcol: ['#7a7a96', '#56566e'],   // cold dust motes
     detail: detailCatacomb,
   },
   {
     id: 'crypt', name: 'The Flooded Crypt', act: 'II', levels: [4, 5, 6],
     ground: ['#1d2a28', '#0e1816'], wall: '#172422', cap: '#243a34',
-    grade: 'rgba(40,90,80,0.10)', dark: 0.66, torch: '#7fe8c0', lava: false,
+    grade: 'rgba(40,90,80,0.10)', dark: 0.86, torch: '#7fe8c0', lava: false,
     particle: 'pollen', pcol: ['#5f8a78', '#3c5a4e'],   // damp green dust
     detail: detailCrypt,
   },
@@ -102,7 +105,7 @@ export const BIOMES = [
     // The Iron Keep stretches to L10 — the Dark Knight holds its inner shrine.
     id: 'keep', name: 'The Iron Keep', act: 'III', levels: [7, 8, 9, 10],
     ground: ['#28202a', '#140d14'], wall: '#1f1820', cap: '#352b33',
-    grade: 'rgba(120,60,40,0.10)', dark: 0.62, torch: '#ffb24a', lava: false,
+    grade: 'rgba(120,60,40,0.10)', dark: 0.84, torch: '#ffb24a', lava: false,
     particle: 'embers', pcol: ['#ff8a3a', '#c0502a', '#ffce6a'],
     detail: detailKeep,
   },
@@ -110,21 +113,21 @@ export const BIOMES = [
   {
     id: 'catacomb', name: 'The Sunless Vault', act: 'IV', levels: [11, 12, 13],
     ground: ['#231d31', '#0d0916'], wall: '#1a1526', cap: '#2a2240',
-    grade: 'rgba(50,40,110,0.12)', dark: 0.66, torch: '#8ab0ff', lava: false,
+    grade: 'rgba(50,40,110,0.12)', dark: 0.88, torch: '#8ab0ff', lava: false,
     particle: 'pollen', pcol: ['#6a6a8e', '#44445c'],
     detail: detailCatacomb,
   },
   {
     id: 'crypt', name: 'The Drowned Halls', act: 'V', levels: [14, 15, 16],
     ground: ['#16231e', '#08120e'], wall: '#10201a', cap: '#1c332b',
-    grade: 'rgba(40,110,90,0.12)', dark: 0.72, torch: '#6fe0b0', lava: false,
+    grade: 'rgba(40,110,90,0.12)', dark: 0.88, torch: '#6fe0b0', lava: false,
     particle: 'pollen', pcol: ['#4e7a68', '#2e4a3e'],
     detail: detailCrypt,
   },
   {
     id: 'keep', name: 'The Bleeding Keep', act: 'VI', levels: [17, 18, 19],
     ground: ['#2a1b1d', '#140a0b'], wall: '#1f1315', cap: '#33222a',
-    grade: 'rgba(170,40,30,0.13)', dark: 0.6, torch: '#ff7a4a', lava: false,
+    grade: 'rgba(170,40,30,0.13)', dark: 0.86, torch: '#ff7a4a', lava: false,
     particle: 'embers', pcol: ['#ff7a3a', '#c0402a', '#ffb24a'],
     detail: detailKeep,
   },
@@ -133,7 +136,7 @@ export const BIOMES = [
     // rim-lights the all-black Demon Lord; his red eyes & blade are the only heat.
     id: 'throne', name: 'Throne of the Demon Lord', act: 'VII', levels: [20],
     ground: ['#17161f', '#070609'], wall: '#0e0d15', cap: '#221f2e',
-    grade: 'rgba(74,96,150,0.13)', dark: 0.66, torch: '#bcd2ff', lava: false,
+    grade: 'rgba(74,96,150,0.13)', dark: 0.4, torch: '#bcd2ff', lava: false,
     moonlit: '#aac4ff',
     particle: 'pollen', pcol: ['#c6d0e6', '#8893ad'],   // pale ash, drifting cold
     detail: detailThrone,

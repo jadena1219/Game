@@ -3916,39 +3916,50 @@ export class Game {
     this._drawHeldBlade(ctx, p, breath);
   }
 
-  // The chosen Living Blade, rendered BIG and gripped in the knight's gauntlet —
-  // resting when idle, sweeping through the arc on a swing.
+  // The chosen Living Blade, gripped in the knight's gauntlet. Held in a ready
+  // guard when idle; on a swing it WHIPS through a wide arc — eased (wind-up →
+  // fast cut → follow-through), the hand reaching into the cut, with a fading
+  // motion-blur trail of the blade so the slash reads as one flowing motion.
   _drawHeldBlade(ctx, p, breath = 0) {
     const sword = Assets.bladeSwords && Assets.bladeSwords[p.blade];
     if (!sword || p.dead) return;
-    const cw = 30, ch = 104, gripY = 84;                 // hold near the grip so the blade extends out
-    const sc = CONFIG.pixelScale * 0.3;                  // ~75px tall — epic, taller than the knight
-    const faceSign = p.faceLeft ? -1 : 1;
-    // the gauntlet sits forward of, and above, his feet (matches knightUnarmed)
-    const hx = p.x + faceSign * 13, hy = p.y - 22 - breath;
-    let aim;
-    if (p.swingTimer > 0) {                              // sweep the blade through the cut
-      const arc = p.arcDeg * Math.PI / 180, a0 = p.facingAngle - arc / 2;
-      aim = a0 + Math.min(1, p.swingProgress) * arc;
+    const cw = 30, ch = 104, gripY = 84, sc = CONFIG.pixelScale * 0.3;
+    const faceSign = p.faceLeft ? -1 : 1, bd = bladeById(p.blade);
+    let hx = p.x + faceSign * 13, hy = p.y - 22 - breath;
+    const poses = [];
+    if (p.swingTimer > 0) {
+      const sp = Math.min(1, p.swingProgress);
+      const arcV = (p.arcDeg * Math.PI / 180) * 1.5;     // sweep wider than the hit arc — dramatic
+      const a0v = p.facingAngle - arcV * 0.45;
+      // q: wind back slightly, then whip forward (smoothstepped) and follow through
+      const qOf = (s) => { if (s < 0.2) return -0.15 * (s / 0.2); const u = (s - 0.2) / 0.8; return -0.15 + 1.15 * (u * u * (3 - 2 * u)); };
+      const mainAim = a0v + qOf(sp) * arcV;
+      const reach = Math.sin(sp * Math.PI) * 7;          // the arm pushes out through the cut
+      hx += Math.cos(mainAim) * reach; hy += Math.sin(mainAim) * reach;
+      for (const [ds, a] of [[-0.18, 0.18], [-0.10, 0.38], [0, 1]]) {   // trail → main
+        poses.push({ aim: a0v + qOf(Math.max(0, sp + ds)) * arcV, a });
+      }
     } else if (p.dashing) {
-      aim = p.facingAngle + Math.PI * 0.85;              // trailed back behind the dash
+      poses.push({ aim: p.facingAngle + Math.PI * 0.85, a: 1 });
     } else {
-      aim = -Math.PI / 2 + faceSign * 0.42;              // held aloft, tilted toward facing
+      poses.push({ aim: -Math.PI / 2 + faceSign * 0.6 + Math.sin(this.time * 2.3) * 0.05, a: 1 });   // ready guard, breathing
     }
-    // a faint elemental glow off the held blade so it never blends into him
-    const bd = bladeById(p.blade);
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    const gg = ctx.createRadialGradient(hx, hy - 18, 2, hx, hy - 18, 30);
-    gg.addColorStop(0, this._rgba(bd.color, 0.28 + 0.12 * Math.sin(this.time * 5))); gg.addColorStop(1, this._rgba(bd.color, 0));
-    ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(hx, hy - 18, 30, 0, Math.PI * 2); ctx.fill();
+    // an elemental glow at the hilt so the blade never blends into him
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const gg = ctx.createRadialGradient(hx, hy, 2, hx, hy, 26);
+    gg.addColorStop(0, this._rgba(bd.color, 0.3 + 0.12 * Math.sin(this.time * 5))); gg.addColorStop(1, this._rgba(bd.color, 0));
+    ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(hx, hy, 26, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
-    ctx.save();
-    ctx.translate(hx, hy);
-    ctx.rotate(aim + Math.PI / 2);                       // canvas tip points up; align it to `aim`
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(sword, -cw * sc / 2, -gripY * sc, cw * sc, ch * sc);
-    ctx.restore();
+    for (const ps of poses) {
+      ctx.save();
+      ctx.globalAlpha = ps.a;
+      ctx.translate(hx, hy);
+      ctx.rotate(ps.aim + Math.PI / 2);                  // canvas tip is up; align it to `aim`
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(sword, -cw * sc / 2, -gripY * sc, cw * sc, ch * sc);
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
   }
 
   // Render the hero sprite to a transparent offscreen, tint it solid gold (the

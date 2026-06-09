@@ -1378,11 +1378,11 @@ export class Game {
       this.player.god = this.godMode;         // GOD MODE: immune to enemy damage
       this.player.blade = this.bladeId || 'ember';   // the Living Blade chosen at the title
       this.player.bladeUp = new Set(); this.player.bladeTier = 0; this.player.bladeCharge = 0;
-      this.player.lockedRelics = new Set();   // meta unlocks disabled — full relic pool
+      // Sanctum-sealed relics stay out of the sorcerer's pool until bought with souls.
+      this.player.lockedRelics = new Set(LOCKED_RELICS.filter((id) => !this.meta.relics.includes(id)));
       this.shopSlots = 4 + (mb.slots || 0);
       this.kills = 0; this.level = 1; this.gold = mb.startGold || 0; this.totalGold = 0;
-      this.bestCombo = 0; this.runT = 0; this.lastRunSouls = 0;   // run-summary stats
-      this.runSouls = 0;
+      this.bestCombo = 0; this.runT = 0; this.lastRunSouls = 0; this._soulsAwarded = false;   // run-summary stats
       this._campsSinceEvent = 0; this._eventsRecent = [];   // event pacing (see openCamp)
       this.hpDisplay = this.hpGhost = this.player.maxHP;
       this.timeScale = 1; this.dying = 0;
@@ -1410,8 +1410,16 @@ export class Game {
     return true;
   }
 
-  // Meta-progression (the Sanctum / banked Souls) is disabled for now.
-  _awardSouls() { this.runSouls = 0; }
+  // Bank the run's Souls — the essence of the fallen, spent in the Sanctum.
+  // God-mode runs bank nothing (testing shouldn't fund progression).
+  _awardSouls(won) {
+    if (this._soulsAwarded) return;            // once per run, however it ends
+    this._soulsAwarded = true;
+    if (this.godMode) { this.lastRunSouls = 0; return; }
+    const cleared = won ? LEVELS.length : Math.max(0, this.level - 1);
+    this.lastRunSouls = runSouls(cleared, this.kills, won);
+    if (this.lastRunSouls > 0) { this.meta.souls += this.lastRunSouls; saveMeta(this.meta); }
+  }
 
   nextLevel() { this._slashWipe(() => this._startLevel(this.level + 1, false)); }
 

@@ -161,6 +161,9 @@ p { max-width: 30ch; line-height: 1.5; }
   font-size: 13px; color: #c9b6ee; text-shadow: 0 0 12px rgba(154,108,224,0.5);
 }
 .souls-banked .num { color: #d8c2ff; }
+#sanctum-btn { display: inline-flex; align-items: center; gap: 8px; }
+.soul-badge { color: #d8c2ff; font-size: 0.85em; }
+.soul-badge:empty { display: none; }
 .vstat {
   display: flex; justify-content: space-between; align-items: center; gap: 16px;
   padding: 9px 16px; background: rgba(40,30,52,0.6); border: 1px solid #6b5a3a; border-radius: 8px;

@@ -143,11 +143,16 @@ const ui = {
           `<div class="ware-body">` +
             `<div class="ware-name">${item.name}<span class="soul-pips">${pips}</span></div>` +
             `<div class="ware-desc">${maxed ? 'Mastered.' : item.desc(lvl + 1)}</div>` +
+            // every soul spent surfaces a fragment of the truth
+            (lvl > 0 && item.lore ? `<div class="ware-flavor">${item.lore}</div>` : '') +
           `</div>` +
           `<div class="ware-cost soul">${maxed ? '✓' : '<span class="soul-dot small"></span><span class="num">' + cost + '</span>'}</div>`;
         if (!maxed) el.addEventListener('click', () => {
-          if (g.buyMeta(item)) { this._sanctumMsg('The souls answer. Empowered.'); render(); }
-          else this._sanctumMsg('Not enough souls.');
+          if (g.buyMeta(item)) {
+            const first = (g.meta.up[item.id] || 0) === 1;
+            this._sanctumMsg(first && item.lore ? item.lore : 'The souls answer. Empowered.');
+            render();
+          } else this._sanctumMsg('Not enough souls.');
         });
         wrap.appendChild(el);
       });
@@ -422,6 +427,19 @@ async function boot() {
     syncGod();
   });
   if (godSkip) godSkip.addEventListener('click', (e) => { e.stopPropagation(); game.godSkip(); });
+
+  // The Sanctum — souls badge on the title button stays current, and the death
+  // screen offers a straight path to spending what the run just banked.
+  const sanctumBtn = document.getElementById('sanctum-btn');
+  const sanctumBadge = document.getElementById('sanctum-badge');
+  const syncSouls = () => { if (sanctumBadge) sanctumBadge.textContent = game.meta.souls > 0 ? game.meta.souls : ''; };
+  if (sanctumBtn) sanctumBtn.addEventListener('click', () => { Sound.unlock(); Sound.play('ui'); ui.showSanctum(game); });
+  const goSanctumBtn = document.getElementById('go-sanctum-btn');
+  if (goSanctumBtn) goSanctumBtn.addEventListener('click', () => { game.toTitle(); ui.showSanctum(game); });
+  // keep the badge fresh whenever the title screen comes back
+  const _showScreen = ui.showScreen.bind(ui);
+  ui.showScreen = (name) => { if (name === 'title') syncSouls(); _showScreen(name); };
+  syncSouls();
 
   // Hero select stays built for a future unlock; for now every run is the Knight.
   document.getElementById('start-btn').addEventListener('click', () => { Sound.unlock(); game.startPrologue(); });

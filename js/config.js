@@ -85,7 +85,7 @@ export const ENEMY_TYPES = {
   miniboss:{ sprite: 'miniboss', hp: 950, speed: 82,  damage: 22, radius: 46, touch: true, boss: true,
              charge: { windup: 0.62, dur: 0.52, speed: 500, cooldown: 2.7 },
              phases: [
-               { at: 0.5, title: 'WRATH', speed: 1.2, cd: 0.62, tripleCharge: true, shockwave: 11 },
+               { at: 0.5, title: 'WRATH', speed: 1.13, cd: 0.74, tripleCharge: true, shockwave: 8 },
              ] },
   // Final boss (Demon Lord, L20): nova volleys + telegraphed ground SLAM + SUMMONS.
   // Phase 2 (FURY, <=66%): gains a CHARGE rush and spiralling novas. Phase 3

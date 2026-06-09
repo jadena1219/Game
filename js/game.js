@@ -47,6 +47,9 @@ export class Game {
     this.effects = [];
     this.level = 1;
     this.spawnQueue = [];
+    this.pendingEscort = null;   // L10 escort held back until the boss enters WRATH
+    this.cutscene = null;        // scripted boss-entrance sequence
+    this.cutsceneBoss = null;
     this.spawnTimer = 0;
     this.flashScreen = 0;
     this.kills = 0;
@@ -642,6 +645,7 @@ export class Game {
     this.level = level;
     this.descentSink = 0;                      // restore visibility after a plunge
     this.watchers = []; this.campWhisper = null; this._watchT = 5 + Math.random() * 4;
+    this.cutscene = null; this.cutsceneBoss = null; this.pendingEscort = null;
     if (!this.player) this.player = new Player(this.world.w / 2, this.world.h / 2);
     this.player.x = this.world.w / 2; this.player.y = this.world.h / 2;
     if (fullHeal) { this.player.hp = this.player.maxHP; }
@@ -668,10 +672,23 @@ export class Game {
     // pre-level countdown + intro card (boss reveal on 10 & 20)
     this.countdown = 3.6;
     if (bossType) {
-      this.intro = { kind: 'boss', text: BOSS_NAMES[bossType], sub: this.biome.name, t: 0, dur: 3.0 };
-      this.countdown = 4.8;
-      this.shake = Math.max(this.shake, 14);
-      Sound.play('bossroar');
+      // The boss does NOT march in — it RISES from the altar in a cutscene.
+      this.spawnQueue = this.spawnQueue.filter((t) => t !== bossType);
+      const cx = this.world.w / 2, cy = this.world.h / 2;
+      // the knight stands at the chamber's mouth, looking in
+      this.player.x = cx;
+      this.player.y = Math.min(this.worldBounds.maxY - 40, cy + 210);
+      this.player.faceLeft = false; this.player.invuln = 999;        // untouchable through the scene
+      this.cam.x = this.player.x - this.vw / 2; this.cam.y = this.player.y - this.vh / 2;
+      // place the boss dormant at the altar, ready to emerge
+      const boss = new Enemy(bossType, cx, cy, level);
+      boss.inert = true; boss.rising = 0; boss.state = 'rise';
+      this.enemies.push(boss);
+      this.cutsceneBoss = boss;
+      // L10: the escort lies in wait — it only pours in once WRATH breaks
+      if (level === 10) { this.pendingEscort = this.spawnQueue; this.spawnQueue = []; }
+      this.cutscene = { t: 0, look: 3.0, rise: 3.4, settle: 0.7, roared: false, name: BOSS_NAMES[bossType] };
+      this.countdown = 0; this.intro = null;
     } else if (this.forceElite > 0) {
       // something you woke in the camp followed you down — warn the player loudly
       this.intro = { kind: 'ambush', text: 'AMBUSH', sub: 'Something followed you down…', t: 0, dur: 2.6 };
@@ -944,6 +961,8 @@ export class Game {
     this.addEffect({ kind: 'ring', x: boss.x, y: boss.y, r: boss.r * 2, color: def.emberAura ? '#ff3a1e' : '#ff7a2a', t: 0, dur: 0.5 });
     if (this.player) this.player.invuln = Math.max(this.player.invuln, 0.7);
     this.bossPhase = { title: def.title, t: 0, dur: 2.0 };
+    // the escort that was lying in wait now floods the chamber
+    if (this.pendingEscort) { this.spawnQueue = this.pendingEscort; this.pendingEscort = null; this.spawnTimer = 0.5; }
   }
 
   // ---------- dread: the deeper you go, the more the dark watches back ----------
@@ -960,7 +979,7 @@ export class Game {
     if (this.watchers.length) this.watchers = this.watchers.filter((w) => w.t < w.dur);
     if (this.campWhisper) { this.campWhisper.t += dt; if (this.campWhisper.t >= this.campWhisper.dur) this.campWhisper = null; }
 
-    const playing = this.state === 'playing' && this.countdown <= 0;
+    const playing = this.state === 'playing' && this.countdown <= 0 && !this.cutscene;
     const inCamp = this.state === 'camp' && !this.descentJump;
     if ((!playing && !inCamp) || this.plunge || this.transition) return;
     const depth = this._depth();
@@ -987,14 +1006,16 @@ export class Game {
 
   _spawnWatcher(depth) {
     const W = this.vw, H = this.vh;
-    let x, y;
+    let sx, sy;
     const m = 0.05 + Math.random() * 0.12;
-    if (Math.random() < 0.45) { x = W * (Math.random() < 0.5 ? m : 1 - m); y = H * (0.15 + Math.random() * 0.5); }
-    else { x = W * (0.12 + Math.random() * 0.76); y = H * (0.11 + Math.random() * 0.26); }   // upper dark band
+    if (Math.random() < 0.45) { sx = W * (Math.random() < 0.5 ? m : 1 - m); sy = H * (0.15 + Math.random() * 0.5); }
+    else { sx = W * (0.12 + Math.random() * 0.76); sy = H * (0.11 + Math.random() * 0.26); }   // upper dark band
     const lerp = (a, b) => Math.round(a + (b - a) * depth);
     const color = `rgb(${lerp(150, 216)},${lerp(168, 32)},${lerp(188, 26)})`;   // pale slate → blood red
-    this.watchers.push({ x, y, t: 0, dur: 2.8 + Math.random() * 2.4, blinkT: 0,
-      gap: 9 + Math.random() * 6, size: 2.2 + Math.random() * 1.2 + depth, color });
+    // anchor to a WORLD position (cam + screen offset) so the eyes stay put in the
+    // dark as the camera pans, instead of gliding along with the viewport.
+    this.watchers.push({ x: this.cam.x + sx, y: this.cam.y + sy, t: 0, dur: 2.8 + Math.random() * 2.4,
+      blinkT: 0, gap: 9 + Math.random() * 6, size: 2.2 + Math.random() * 1.2 + depth, color });
   }
 
   _spawnCampWhisper(depth) {
@@ -1382,10 +1403,59 @@ export class Game {
     } else { ib.visible = false; }
   }
 
+  _smooth(x) { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); }
+
+  // The boss-entrance cutscene: the knight stands at the chamber mouth, scanning
+  // the dark and breathing, then the altar wakes and the boss drags itself up
+  // out of the ritual symbol. Then the fight begins.
+  _updateCutscene(dt) {
+    const cs = this.cutscene, p = this.player, boss = this.cutsceneBoss;
+    cs.t += dt;
+    const cx = this.world.w / 2, cy = this.world.h / 2;
+    const total = cs.look + cs.rise + cs.settle;
+
+    p.moving = false; p.attackAnim = 0; p.swingTimer = 0; p.dashTimer = 0;
+    if (cs.t < cs.look) p.faceLeft = Math.sin(cs.t * 1.5) < 0;   // curious — scanning left and right
+    else p.faceLeft = false;                                     // fixated on the rising shape
+
+    // camera drifts from the knight up to the altar as the menace reveals itself
+    const focusY = cy + (1 - this._smooth(cs.t / cs.look)) * 155;
+    const tx = Math.max(0, Math.min(this.world.w - this.vw, cx - this.vw / 2));
+    const ty = Math.max(0, Math.min(this.world.h - this.vh, focusY - this.vh / 2));
+    const k = Math.min(1, dt * 2.4);
+    this.cam.x += (tx - this.cam.x) * k; this.cam.y += (ty - this.cam.y) * k;
+
+    if (cs.t >= cs.look) {                                        // RISE
+      const rp = Math.min(1, (cs.t - cs.look) / cs.rise);
+      boss.rising = this._smooth(rp);
+      this.shake = Math.max(this.shake, 1 + 5 * rp);              // building rumble
+      if (Math.random() < dt * 34) {
+        this._mote(cx + (Math.random() - 0.5) * 74, cy + 8, Math.random() < 0.5 ? '#ff6a2a' : '#b81810',
+          { vy: -(22 + Math.random() * 46), g: -12, r: 1.5 + Math.random() * 1.7, twinkle: 1, dur: 0.8 + Math.random() * 0.4 });
+      }
+      if (!cs.roared && rp > 0.62) {
+        cs.roared = true; Sound.play('bossroar');
+        this.shake = Math.max(this.shake, 16); this.flashScreen = Math.max(this.flashScreen, 0.28);
+      }
+    } else if (Math.random() < dt * 9) {                         // faint awakening glimmer at the symbol
+      this._mote(cx + (Math.random() - 0.5) * 44, cy + 6, '#7a2ed0', { vy: -12, r: 1.2, twinkle: 1, dur: 0.7 });
+    }
+
+    this._updateProjAndFx(dt);
+
+    if (cs.t >= total) {                                          // → FIGHT
+      this.cutscene = null; this.cutsceneBoss = null;
+      boss.inert = false; boss.rising = 1; boss.state = 'walk';
+      p.invuln = 0.9;
+      this.countdown = 0;
+      Sound.play('fight');
+    }
+  }
+
   // Camera follows the hero with a GENTLE ease (restores the smooth feel; the
   // actual move speed is constant because that bug was in the joystick, not here).
   _updateCamera(dt) {
-    if (this.state === 'camp') return;            // the camp camera is fixed (set in openCamp)
+    if (this.state === 'camp' || this.cutscene) return;   // camp is fixed; the cutscene drives its own camera
     const cw = this.world.w - this.vw, ch = this.world.h - this.vh;
     if (this.state === 'title' || !this.player) {
       this.cam.x = Math.max(0, Math.min(cw, this.world.w / 2 - this.vw / 2));
@@ -1420,6 +1490,8 @@ export class Game {
     if (this.state === 'intro') return this._updateIntro(dt);
     if (this.state === 'interlude') return this._updateInterlude(dt);
     if (this.state !== 'playing') return;
+
+    if (this.cutscene) return this._updateCutscene(dt);   // scripted boss entrance
 
     // brief hit-pause freezes the simulation for weight
     if (this.hitStop > 0) { this.hitStop -= dt; return; }
@@ -2059,7 +2131,8 @@ export class Game {
     this._drawAtmos(ctx);           // biome weather (screen overlay)
     this._drawGrade(ctx);           // biome colour grade (screen overlay)
     this._drawDread(ctx);           // depth/low-HP dread vignette pressing in
-    this._drawWatchers(ctx);        // eyes glowing in the dark periphery
+    // eyes glow in WORLD space (anchored to the dark), painted over the shadow
+    ctx.save(); ctx.translate(-this.cam.x, -this.cam.y); this._drawWatchers(ctx); ctx.restore();
     this._drawIntroCut(ctx);        // iris opening back up inside Level 1
     this._drawInterludeFade(ctx);   // black fading out of a Demon Lord taunt into the camp
     this._drawDeathOverlay(ctx);    // desaturate + "YOU FELL" during dying/gameover lead-in
@@ -2093,15 +2166,42 @@ export class Game {
 
     this._drawSweep(ctx);          // "LEVEL CLEARED" banner sweep
     this._drawCountdownIntro(ctx); // level/boss intro + 3..2..1..FIGHT
-    this._drawHUD(ctx);
+    if (!this.cutscene) this._drawHUD(ctx);
     this._drawBossBar(ctx);        // big top-of-screen boss health bar
-    if (this.state === 'playing' || (this.state === 'camp' && !this.shopOpen)) this.input.draw(ctx);
-    this._drawFuryButton(ctx);     // floating "unleash fury" button above the hero
+    if (!this.cutscene && (this.state === 'playing' || (this.state === 'camp' && !this.shopOpen))) this.input.draw(ctx);
+    if (!this.cutscene) this._drawFuryButton(ctx);     // floating "unleash fury" button above the hero
     if (this.state === 'camp') this._drawCampToast(ctx);   // event outcome flavour
     if (this.state === 'camp') this._drawCampWhisper(ctx);  // intrusive voice in the safe room
+    this._drawCutscene(ctx);       // boss-entrance letterbox + name reveal
     this._drawInterlude(ctx);      // Demon Lord taunt: blacks out the whole screen + red typewriter
     this._drawPlunge(ctx);         // plunge-into-darkness descent overlay
     this._drawTransition(ctx);     // slash-wipe on the very top
+  }
+
+  // Cinematic dressing for the boss entrance: letterbox bars slide in, and the
+  // boss's name slams up once it tears free of the altar.
+  _drawCutscene(ctx) {
+    const cs = this.cutscene; if (!cs) return;
+    const W = this.vw, H = this.vh, total = cs.look + cs.rise + cs.settle;
+    const inOut = Math.min(1, cs.t / 0.6) * Math.min(1, (total - cs.t) / 0.5);
+    const bar = Math.max(0, inOut) * Math.min(46, H * 0.07);
+    ctx.save();
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, bar); ctx.fillRect(0, H - bar, W, bar);
+    ctx.restore();
+    if (cs.roared) {
+      const since = cs.t - (cs.look + cs.rise * 0.62);
+      const a = Math.min(1, since * 2.4);
+      ctx.save();
+      ctx.globalAlpha = a; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const fs = Math.min(34, W / Math.max(9, cs.name.length) * 1.5);
+      ctx.font = `${Math.round(fs)}px "Press Start 2P", monospace`;
+      ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+      ctx.strokeText(cs.name, W / 2, H * 0.2);
+      const grad = ctx.createLinearGradient(0, H * 0.17, 0, H * 0.24);
+      grad.addColorStop(0, '#ffd36b'); grad.addColorStop(1, '#d8231a');
+      ctx.fillStyle = grad; ctx.fillText(cs.name, W / 2, H * 0.2);
+      ctx.restore();
+    }
   }
 
   // The descent: darkness rushes up as you fall, red abyss-light swells from
@@ -3051,9 +3151,10 @@ export class Game {
       ctx.globalAlpha = 0.6;   // blink during i-frames
     }
     if (this.descentSink > 0) ctx.globalAlpha *= Math.max(0, 1 - this.descentSink * 1.15);  // sinking into the pit
+    const breath = this.cutscene ? Math.sin(this.time * 2.2) * 1.4 : 0;   // chest rises/falls during the scene
     const tint = p.flash > 0 ? { color: '#ff5a5a', a: 0.6 }
       : (p.slowT > 0 ? { color: '#9fe0ff', a: 0.45 } : null);
-    drawSprite(ctx, p.sprite, frame, p.x, p.y, p.faceLeft, 1, tint);
+    drawSprite(ctx, p.sprite, frame, p.x, p.y - breath, p.faceLeft, 1, tint);
     ctx.globalAlpha = 1;
   }
 
@@ -3086,7 +3187,39 @@ export class Game {
     ctx.restore();
   }
 
+  // The boss dragging itself up out of the ritual symbol: a waking altar-glow, the
+  // figure rising through a clip at the floor line (head first), and churning smoke.
+  _drawBossRise(ctx, e) {
+    const rise = Math.max(0, e.rising), t = this.time;
+    const col = e.sprite === 'boss' ? '#b81810' : '#7a2ed0';
+    // the symbol waking: a pulsing glow welling out of the floor
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const gr = 70 + 46 * rise + 8 * Math.sin(t * 6);
+    const g = ctx.createRadialGradient(e.x, e.y, 4, e.x, e.y, gr);
+    g.addColorStop(0, this._rgba(col, 0.5 * rise + 0.16)); g.addColorStop(1, this._rgba(col, 0));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(e.x, e.y, gr, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    // the figure rising — clipped at the feet line so it emerges from the floor
+    const sh = e.r * 3.6, yoff = (1 - rise) * sh;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(e.x - e.r * 2.6, e.y - sh - 60, e.r * 5.2, sh + 60); ctx.clip();
+    ctx.globalAlpha = Math.min(1, rise / 0.18);
+    drawSprite(ctx, e.sprite, 'idle', e.x, e.y + yoff, e.faceLeft, 1, { color: '#140208', a: Math.max(0, 0.72 - rise * 0.72) });
+    ctx.restore();
+    // dark smoke churning at the base to mask the seam
+    ctx.save();
+    for (let i = 0; i < 6; i++) {
+      const ox = e.x + Math.cos(t * 1.3 + i * 1.7) * e.r * (0.5 + 0.5 * Math.sin(t + i));
+      const oy = e.y - ((t * 22 + i * 20) % 42);
+      ctx.globalAlpha = 0.16; ctx.fillStyle = '#0a0208';
+      ctx.beginPath(); ctx.ellipse(ox, oy, e.r * 0.72, e.r * 0.32, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
   _drawEnemy(ctx, e) {
+    if (e.rising != null && e.rising < 1) { this._drawBossRise(ctx, e); return; }   // emerging from the altar
     const frame = pickFrame(e, this.time + e.x * 0.01);
     // CHARGE telegraph: a red lance showing where the bruiser is about to rush
     if (e.state === 'windup' && e.spec.charge && this.player) {
@@ -3212,7 +3345,7 @@ export class Game {
 
   // A big Souls-style boss bar near the bottom-centre while a boss lives.
   _drawBossBar(ctx) {
-    if (this.state !== 'playing') return;
+    if (this.state !== 'playing' || this.cutscene) return;
     const boss = this.enemies.find((e) => e.boss && !e.dead);
     if (!boss) return;
     const W = this.vw, H = this.vh;

@@ -5,6 +5,7 @@ import { CONFIG, LEVELS } from './config.js';
 import { drawSprite } from './sprite.js';
 import { META, metaCost, LOCKED_RELICS, RELIC_UNLOCK_COST } from './meta.js';
 import { RELICS } from './abilities.js';
+import { Sound } from './audio.js';
 
 const screens = {
   title: document.getElementById('title-screen'),
@@ -208,7 +209,7 @@ const ui = {
           `</div>` +
           `<div class="ware-cost">${owned ? '✓' : '◆ <span class="num">' + w.cost + '</span>'}</div>`;
         if (!owned) el.addEventListener('click', () => {
-          if (g.buyWare(w)) { this._campMsg(`Bought ${w.item.name}.`); render(); }
+          if (g.buyWare(w)) { Sound.play(w.kind === 'relic' ? 'relic' : 'buy'); this._campMsg(`Bought ${w.item.name}.`); render(); }
           else this._campMsg('Not enough gold.');
         });
         wrap.appendChild(el);
@@ -217,7 +218,7 @@ const ui = {
     render();
 
     document.getElementById('reroll-btn').onclick = () => {
-      if (g.rerollShop()) { this._campMsg('The sorcerer lays out new wares.'); render(); }
+      if (g.rerollShop()) { Sound.play('ui'); this._campMsg('The sorcerer lays out new wares.'); render(); }
       else this._campMsg('Not enough gold to reroll.');
     };
     document.getElementById('shop-back').onclick = () => g.closeShop();
@@ -265,8 +266,19 @@ async function boot() {
   game = new Game(canvas, ui);
   ui.showScreen('title');
 
+  // WebAudio can only start from a user gesture — unlock on the first interaction.
+  const unlock = () => { Sound.unlock(); window.removeEventListener('pointerdown', unlock); window.removeEventListener('keydown', unlock); };
+  window.addEventListener('pointerdown', unlock);
+  window.addEventListener('keydown', unlock);
+  // a small mute toggle in the corner (and the 'M' key)
+  const muteBtn = document.getElementById('mute-btn');
+  const syncMute = () => { if (muteBtn) muteBtn.textContent = Sound.muted ? '🔇' : '🔊'; };
+  syncMute();
+  if (muteBtn) muteBtn.addEventListener('click', (e) => { e.stopPropagation(); Sound.unlock(); Sound.toggleMute(); syncMute(); });
+  window.addEventListener('keydown', (e) => { if (e.key === 'm' || e.key === 'M') { Sound.toggleMute(); syncMute(); } });
+
   // Hero select stays built for a future unlock; for now every run is the Knight.
-  document.getElementById('start-btn').addEventListener('click', () => game.beginIntro('knight'));
+  document.getElementById('start-btn').addEventListener('click', () => { Sound.unlock(); game.beginIntro('knight'); });
   document.getElementById('retry-btn').addEventListener('click', () => game.start('knight'));
   document.getElementById('win-btn').addEventListener('click', () => game.start('knight'));
   // return to the title after a run (resets game state so the corridor shows)

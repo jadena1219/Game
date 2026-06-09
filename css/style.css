@@ -385,3 +385,14 @@ p { max-width: 30ch; line-height: 1.5; }
 /* shrine prompt button colour */
 #camp-prompt.shrine { background: #b06bff; border-color: #5a2fa0; color: #160a26;
   box-shadow: inset 0 2px 0 rgba(255,255,255,0.3), 0 5px 0 #5a2fa0; }
+
+/* corner mute toggle */
+#mute-btn {
+  position: fixed; top: 10px; right: 10px; z-index: 50;
+  width: 36px; height: 36px; border: 0; border-radius: 8px;
+  background: rgba(10, 8, 16, 0.55); color: #fff; font-size: 17px;
+  line-height: 36px; text-align: center; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; user-select: none;
+  backdrop-filter: blur(2px);
+}
+#mute-btn:active { transform: scale(0.92); }

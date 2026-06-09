@@ -8,6 +8,7 @@ import { Assets } from './assets.js';
 import { biomeForLevel } from './biomes.js';
 import { loadMeta, saveMeta, metaBonuses, runSouls, metaCost, LOCKED_RELICS, RELIC_UNLOCK_COST } from './meta.js';
 import { pickEvent } from './events.js';
+import { Sound } from './audio.js';
 
 const BOSS_NAMES = { miniboss: 'The Dark Knight', boss: 'The Demon Lord' };
 
@@ -553,6 +554,7 @@ export class Game {
     this.interlude = null; this.interludeFade = null; this.introCut = null; this.campToast = null;
     this.intro = null; this.sweep = null; this.transition = null; this.camp = null; this.bossKind = null;
     this.ui.showScreen('title');
+    Sound.setScene('title');
   }
 
   // The cold open: the title lifts away and the knight walks on down the
@@ -653,6 +655,7 @@ export class Game {
     if (!this.biome || !this.biome.levels.includes(level) || bossType || wasBoss) this._applyBiome(level);
     this.state = 'playing';
     this.ui.showScreen(null);
+    Sound.setScene(bossType ? 'boss' : 'combat');
 
     // pre-level countdown + intro card (boss reveal on 10 & 20)
     this.countdown = 3.6;
@@ -660,6 +663,7 @@ export class Game {
       this.intro = { kind: 'boss', text: BOSS_NAMES[bossType], sub: this.biome.name, t: 0, dur: 3.0 };
       this.countdown = 4.8;
       this.shake = Math.max(this.shake, 14);
+      Sound.play('bossroar');
     } else if (this.forceElite > 0) {
       // something you woke in the camp followed you down — warn the player loudly
       this.intro = { kind: 'ambush', text: 'AMBUSH', sub: 'Something followed you down…', t: 0, dur: 2.6 };
@@ -723,6 +727,7 @@ export class Game {
 
   onEnemyKilled(e, source) {
     const p = this.player;
+    Sound.play(e.boss ? 'die_tank' : ('die_' + e.type) , { vol: e.elite ? 1.2 : 1 });
     // Fury charges slowly — the ultimate should be a rare payoff (~every few levels)
     p.fury = Math.min(p.furyMax, p.fury + (e.boss ? 16 : 1.4) * p.mods.furyMult);
     if (source === 'sword' && p.mods.lifestealHeal > 0) {
@@ -771,6 +776,7 @@ export class Game {
     const cfg = (e.spec && e.spec.explode) || (e.affix && e.affix.explode) || { r: 74, dmg: 24 };
     const lvlDmg = cfg.dmg * (1 + CONFIG.scaling.dmgPerLevel * (this.level - 1));
     this.addEffect({ kind: 'boom', x: e.x, y: e.y, r: cfg.r, t: 0, dur: 0.34 });
+    Sound.play('explode');
     this.shake = Math.max(this.shake, 7);
     const p = this.player;
     if (Math.hypot(p.x - e.x, p.y - e.y) < cfg.r + p.r) { if (p.takeHit(lvlDmg)) this.shake = 9; }
@@ -803,6 +809,7 @@ export class Game {
       const g = Math.ceil(pk.value * this.player.mods.goldMult * (1 + this.metaB.gold)); this.gold += g; this.totalGold += g;
       this.goldPop = 1;                              // the HUD coin tally pops
       this._mote(pk.x, pk.y, '#ffe08a', { vy: -30, r: 1.6, twinkle: 1, dur: 0.35 });
+      Sound.play('gold');
     }
     else if (pk.type === 'health') {
       this.player.hp = Math.min(this.player.maxHP, this.player.hp + pk.value);
@@ -941,6 +948,7 @@ export class Game {
 
   _ultimate() {
     const p = this.player;
+    Sound.play('ultimate');
     const dmg = 120 * p.mods.abilityDmgMult;
     for (const e of this.enemies) {
       const a = Math.atan2(e.y - p.y, e.x - p.x);
@@ -1024,6 +1032,7 @@ export class Game {
   // ---------- dash ----------
   onDash(player) {
     this.shake = Math.max(this.shake, 2.5);
+    Sound.play('dash');
     this._dashGhostT = 0;
     const a = Math.atan2(player.fy, player.fx);
     // a bright launch streak + a spray of sparks kicked out behind the heel
@@ -1049,6 +1058,7 @@ export class Game {
   // ---------- swing ----------
   onSwing(player) {
     this.shake = Math.max(this.shake, 3.5);
+    Sound.play('swing');
     const style = (player.hero && player.hero.swingStyle) || 'sweep';
     // visual lives LONGER than the hit window so the slash actually reads on screen
     const dur = style === 'stab' ? 0.2 : 0.32;
@@ -1080,6 +1090,7 @@ export class Game {
         if (p.hero.crit && Math.random() < p.hero.crit) { dmg *= p.hero.critMult; crit = true; }
         this.hitEnemy(e, dmg, kx * kb, ky * kb, crit ? 'ultimate' : 'sword');
         p.hitThisSwing.add(e);
+        Sound.play(e.boss ? 'bosshit' : crit ? 'crit' : 'hit');
         // --- the "fuck yeah" impact: directional sparks, a flash ring, a slash
         // mark across the foe, crunchy hitstop + shake scaled to the blow ---
         const ix = e.x, iy = e.y - e.r * 0.35, power = crit ? 1.7 : 1;
@@ -1276,14 +1287,18 @@ export class Game {
 
     // pre-level countdown: you can move, but nothing spawns until "FIGHT!"
     if (this.countdown > 0) {
+      const was = this.countdown;
       this.countdown -= dt;
+      if (was > 0 && this.countdown <= 0) Sound.play('fight');   // the bell that starts the wave
       this._updateProjAndFx(sdt);
       return;
     }
 
     this._updateAbilities(sdt);
     // Fury no longer auto-fires — it arms a button the player taps to unleash.
+    const wasFury = this.furyReady;
     this.furyReady = p.fury >= p.furyMax;
+    if (this.furyReady && !wasFury) Sound.play('furyready');
     this._updateFuryButton();
     if (this.furyReady && this.input.furyTapped) {
       this.input.furyTapped = false; p.fury = 0; this.furyReady = false; this._ultimate();
@@ -1362,7 +1377,7 @@ export class Game {
     // smoothed health bar (+ detect damage for the HP-bar punch)
     if (this.player) {
       const hp = Math.max(0, this.player.hp);
-      if (this._hpWas != null && hp < this._hpWas - 0.01) this.hpHitT = 0.32;
+      if (this._hpWas != null && hp < this._hpWas - 0.01) { this.hpHitT = 0.32; Sound.play('hurt'); }
       this._hpWas = hp;
       this.hpDisplay += (hp - this.hpDisplay) * Math.min(1, dt * 14);
       if (this.hpGhost < this.hpDisplay) this.hpGhost = this.hpDisplay;
@@ -1579,6 +1594,7 @@ export class Game {
     this.state = 'dying';
     this.dying = 1.5;
     this.shake = Math.max(this.shake, 9);
+    Sound.setScene('gameover'); Sound.play('lose');
   }
 
   _win() {
@@ -1589,12 +1605,14 @@ export class Game {
       this.shake = Math.max(this.shake, 10);
       this.flashScreen = 0.3;
       this._spawnEmberBurst();
+      Sound.setScene('victory'); Sound.play('win');
     } else {
       // "LEVEL CLEARED" sweep, then the camp shop
       this.player.hp = Math.min(this.player.maxHP, this.player.hp + CONFIG.hpRestorePerLevel);
       { const b = 4 + Math.round(this.level * 1.5); this.gold += b; this.totalGold += b; }   // modest clear bonus
       this.state = 'clearing';
       this.sweep = { t: 0, dur: 1.5 };
+      Sound.play('clear');
       this.pendingReward = { heal: CONFIG.hpRestorePerLevel };
     }
   }
@@ -1602,6 +1620,7 @@ export class Game {
   // ---- the camp: an in-world safe room with a sorcerer to trade with and a
   // glowing door to descend through ----
   openCamp() {
+    Sound.setScene('camp');
     this.shopStock = rollStock(this.player, this.shopSlots || 4);
     this.rerollCost = 12;
     this.shopOpen = false;
@@ -1717,6 +1736,7 @@ export class Game {
     this.ui.setCampPrompt(null); this.ui.hideShop();
     const d = this.camp.door, p = this.player;
     this._puff(p.x, p.y, '#4a4350', 2, 4, { r0: 2, r1: 9, dur: 0.3 });   // takeoff dust
+    Sound.play('jump');
     this.descentJump = { t: 0, dur: 0.5, x0: p.x, y0: p.y, tx: d.x, ty: d.y - 2, h: 50 };
   }
   closeShop() { this.shopOpen = false; this.ui.hideShop(); }
@@ -1789,6 +1809,7 @@ export class Game {
       whisper: whispers[(Math.random() * whispers.length) | 0],
       mid: () => this._startLevel(this.level + 1, false) };
     this.shake = Math.max(this.shake, 4);
+    Sound.play('plunge');
   }
 
   // ---------- render ----------

@@ -982,7 +982,7 @@ export class Game {
       ctx.fillStyle = '#0b0712'; ctx.fillRect(0, 0, W, H);
       const cx = W * 0.5, baseY = H * 0.7, rise = Math.min(1, pt / 3);
       const pg = ctx.createRadialGradient(cx, baseY + 40, 4, cx, baseY + 40, 220); pg.addColorStop(0, 'rgba(210,30,16,0.55)'); pg.addColorStop(1, 'rgba(40,0,0,0)'); ctx.fillStyle = pg; ctx.fillRect(0, 0, W, H);
-      blit(PA.demon, cx, baseY + 8 - rise * 16, H * 0.5);     // the Demon Lord, looming huge
+      this._drawDemonBlended(ctx, cx, baseY + 8 - rise * 16, H * 0.5);   // looming — dissolving up out of the dark
       blit(PA.king, cx - W * 0.26, baseY, H * 0.13);          // the King, small before it
       drawSprite(ctx, 'knight', 'idle', cx + W * 0.24, baseY, false, 1.3);   // the price
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; const sg = 0.4 + 0.4 * Math.sin(t * 3);
@@ -1006,6 +1006,39 @@ export class Game {
       ctx.fillStyle = `rgba(0,0,0,${k * 0.85})`; ctx.fillRect(0, 0, W, H);
     }
     ctx.restore(); ctx.globalAlpha = 1;
+  }
+
+  // Draw the Demon Lord so he sits IN the scene instead of pasted on top: his
+  // lower body dissolves into transparency (rendered offscreen so we erase only
+  // his alpha, letting the infernal glow behind show through), and a soft ember
+  // glow blooms at the dissolve line — he reads as rising up out of the dark.
+  _drawDemonBlended(ctx, cx, by, targetH) {
+    const img = (Assets.prologueArt || {}).demon || Assets.demonBig;
+    if (!img) return;
+    const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+    if (!ih) return;
+    const s = targetH / ih, dw = Math.round(iw * s), dh = Math.round(targetH);
+    const dx = Math.round(cx - dw / 2), dy = Math.round(by - dh);
+    // offscreen: draw him, then erase his lower ~20% into a soft gradient
+    if (!this._demonBuf) { this._demonBuf = document.createElement('canvas'); this._demonBx = this._demonBuf.getContext('2d'); }
+    const buf = this._demonBuf, bx = this._demonBx;
+    if (buf.width !== dw || buf.height !== dh) { buf.width = dw; buf.height = dh; }
+    bx.clearRect(0, 0, dw, dh);
+    bx.imageSmoothingEnabled = true;
+    bx.drawImage(img, 0, 0, dw, dh);
+    bx.globalCompositeOperation = 'destination-out';
+    const er = bx.createLinearGradient(0, dh * 0.80, 0, dh);
+    er.addColorStop(0, 'rgba(0,0,0,0)'); er.addColorStop(1, 'rgba(0,0,0,1)');
+    bx.fillStyle = er; bx.fillRect(0, Math.round(dh * 0.80), dw, Math.ceil(dh * 0.20));
+    bx.globalCompositeOperation = 'source-over';
+    // ember bloom at his base so the fade reads as fire, not a cut edge
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const eg = ctx.createRadialGradient(cx, by - dh * 0.12, 4, cx, by - dh * 0.12, dw * 0.52);
+    eg.addColorStop(0, 'rgba(224,64,24,0.28)'); eg.addColorStop(0.6, 'rgba(150,16,8,0.12)'); eg.addColorStop(1, 'rgba(80,0,0,0)');
+    ctx.fillStyle = eg; ctx.fillRect(dx - 24, dy, dw + 48, dh); ctx.restore();
+    // the demon himself, base dissolved into the glow
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(buf, dx, dy);
   }
 
   // The kingdom horizon — uses assets/prologue/kingdom.png if you drop it in,

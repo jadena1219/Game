@@ -179,7 +179,8 @@ function knightUnarmed(ctx, ox, f) {
 
 // The named-elite roster (names match NAMED_FOES[].sprite in game.js).
 export const CREATURES = [
-  { name: 'knight', scale: 1, draw: knightUnarmed },
+  // the hero + base foes now use real art (assets/sprites/*.png, wired in the
+  // manifest); only the named-elite heralds remain procedural.
   { name: 'gravewarden', scale: 1.6,  draw: gravewarden },
   { name: 'quickfang',   scale: 0.95, draw: quickfang },
   { name: 'palewidow',   scale: 1.2,  draw: palewidow },

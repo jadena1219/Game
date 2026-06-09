@@ -980,9 +980,10 @@ export class Game {
       this._drawKingdomScene(ctx, true);
     } else if (i === 2) {                                     // the bargain
       ctx.fillStyle = '#0b0712'; ctx.fillRect(0, 0, W, H);
-      const cx = W * 0.5, baseY = H * 0.7, rise = Math.min(1, pt / 3);
-      const pg = ctx.createRadialGradient(cx, baseY + 40, 4, cx, baseY + 40, 220); pg.addColorStop(0, 'rgba(210,30,16,0.55)'); pg.addColorStop(1, 'rgba(40,0,0,0)'); ctx.fillStyle = pg; ctx.fillRect(0, 0, W, H);
-      this._drawDemonBlended(ctx, cx, baseY + 8 - rise * 16, H * 0.5);   // looming — dissolving up out of the dark
+      const cx = W * 0.5, baseY = H * 0.72;
+      const rise = (u => 1 - Math.pow(1 - u, 3))(Math.min(1, pt / 3.4));   // easeOutCubic emergence
+      const pg = ctx.createRadialGradient(cx, baseY + 24, 4, cx, baseY + 24, 200 + 130 * rise); pg.addColorStop(0, `rgba(210,30,16,${0.32 + 0.30 * rise})`); pg.addColorStop(1, 'rgba(40,0,0,0)'); ctx.fillStyle = pg; ctx.fillRect(0, 0, W, H);
+      this._drawDemonRise(ctx, cx, baseY, H * 0.54, rise, t, pt);          // climbs up out of the ground
       blit(PA.king, cx - W * 0.26, baseY, H * 0.13);          // the King, small before it
       drawSprite(ctx, 'knight', 'idle', cx + W * 0.24, baseY, false, 1.3);   // the price
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; const sg = 0.4 + 0.4 * Math.sin(t * 3);
@@ -1008,37 +1009,78 @@ export class Game {
     ctx.restore(); ctx.globalAlpha = 1;
   }
 
-  // Draw the Demon Lord so he sits IN the scene instead of pasted on top: his
-  // lower body dissolves into transparency (rendered offscreen so we erase only
-  // his alpha, letting the infernal glow behind show through), and a soft ember
-  // glow blooms at the dissolve line — he reads as rising up out of the dark.
-  _drawDemonBlended(ctx, cx, by, targetH) {
+  // The Demon Lord's entrance. He climbs UP through a fixed ground line — the part
+  // of him below it is erased on an offscreen buffer, so he genuinely emerges from
+  // the floor rather than fading in place — out of a swelling infernal portal, with
+  // embers/ash streaming off the seam and a flash + shock ring as his feet land.
+  // `rise` is the eased 0..1 emergence; `pt` drives the one-shot landing pulse.
+  _drawDemonRise(ctx, cx, groundY, targetH, rise, t, pt) {
     const img = (Assets.prologueArt || {}).demon || Assets.demonBig;
     if (!img) return;
     const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
     if (!ih) return;
     const s = targetH / ih, dw = Math.round(iw * s), dh = Math.round(targetH);
-    const dx = Math.round(cx - dw / 2), dy = Math.round(by - dh);
-    // offscreen: draw him, then erase his lower ~20% into a soft gradient
+    const reveal = Math.max(0.02, rise);
+    const bobAmt = Math.max(0, Math.min(1, (rise - 0.85) / 0.15));
+    const bob = Math.sin(t * 1.6) * 2 * bobAmt;                   // subtle breathing once grounded
+    const dx = Math.round(cx - dw / 2);
+    const dyTop = Math.round(groundY - reveal * dh + bob);
+    // 1) infernal portal pooled on the ground, swelling as he rises
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const gr = dw * (0.42 + 0.26 * rise);
+    const pg = ctx.createRadialGradient(cx, groundY, 2, cx, groundY, gr);
+    pg.addColorStop(0, `rgba(255,128,46,${0.34 + 0.30 * rise})`);
+    pg.addColorStop(0.45, `rgba(214,40,14,${0.22 + 0.20 * rise})`);
+    pg.addColorStop(1, 'rgba(60,0,0,0)');
+    ctx.fillStyle = pg; ctx.beginPath(); ctx.ellipse(cx, groundY, gr, gr * 0.30, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    // 2) offscreen: draw him, then erase everything below the ground seam (soft band)
     if (!this._demonBuf) { this._demonBuf = document.createElement('canvas'); this._demonBx = this._demonBuf.getContext('2d'); }
     const buf = this._demonBuf, bx = this._demonBx;
     if (buf.width !== dw || buf.height !== dh) { buf.width = dw; buf.height = dh; }
     bx.clearRect(0, 0, dw, dh);
     bx.imageSmoothingEnabled = true;
     bx.drawImage(img, 0, 0, dw, dh);
+    const seam = groundY - dyTop;                                 // ground line in buffer space
+    const band = Math.max(10, dh * 0.09);
     bx.globalCompositeOperation = 'destination-out';
-    const er = bx.createLinearGradient(0, dh * 0.80, 0, dh);
+    const er = bx.createLinearGradient(0, seam - band, 0, seam + 2);
     er.addColorStop(0, 'rgba(0,0,0,0)'); er.addColorStop(1, 'rgba(0,0,0,1)');
-    bx.fillStyle = er; bx.fillRect(0, Math.round(dh * 0.80), dw, Math.ceil(dh * 0.20));
+    bx.fillStyle = er; bx.fillRect(0, Math.round(seam - band), dw, dh - Math.round(seam - band) + 2);
     bx.globalCompositeOperation = 'source-over';
-    // ember bloom at his base so the fade reads as fire, not a cut edge
+    // 3) ember bloom hugging the seam so the fade reads as fire, not a cut
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    const eg = ctx.createRadialGradient(cx, by - dh * 0.12, 4, cx, by - dh * 0.12, dw * 0.52);
-    eg.addColorStop(0, 'rgba(224,64,24,0.28)'); eg.addColorStop(0.6, 'rgba(150,16,8,0.12)'); eg.addColorStop(1, 'rgba(80,0,0,0)');
-    ctx.fillStyle = eg; ctx.fillRect(dx - 24, dy, dw + 48, dh); ctx.restore();
-    // the demon himself, base dissolved into the glow
+    const eg = ctx.createRadialGradient(cx, groundY, 2, cx, groundY, dw * 0.5);
+    eg.addColorStop(0, `rgba(255,96,34,${0.26 + 0.18 * rise})`); eg.addColorStop(0.6, 'rgba(150,16,8,0.10)'); eg.addColorStop(1, 'rgba(70,0,0,0)');
+    ctx.fillStyle = eg; ctx.fillRect(dx - 30, dyTop, dw + 60, dh); ctx.restore();
+    // 4) the demon
     ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(buf, dx, dy);
+    ctx.drawImage(buf, dx, dyTop);
+    // 5) embers + ash streaming up off the seam
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (let k = 0; k < 30; k++) {
+      const sd = k * 12.9898, rnd = (o) => { const v = Math.sin(sd + o) * 43758.5453; return v - Math.floor(v); };
+      const life = ((t * (0.4 + 0.3 * rnd(5))) + rnd(1)) % 1;
+      const ex = cx + (rnd(2) - 0.5) * dw * 0.78 + Math.sin(t * 1.4 + k) * 5;
+      const ey = groundY - life * dh * (0.4 + 0.3 * rise);
+      const al = (1 - life) * (0.35 + 0.5 * rise);
+      const sz = 1 + rnd(3) * 2.4;
+      ctx.fillStyle = `rgba(255,${(110 + rnd(4) * 110) | 0},44,${al * 0.85})`;
+      ctx.fillRect(Math.round(ex), Math.round(ey), Math.ceil(sz), Math.ceil(sz));
+    }
+    ctx.restore();
+    // 6) one-shot landing flash + shock ring as his feet hit
+    const lp = Math.max(0, 1 - Math.abs(pt - 3.5) / 0.45);
+    if (lp > 0) {
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      const fr = dw * (0.3 + 0.9 * (1 - lp));
+      const fg = ctx.createRadialGradient(cx, groundY, 2, cx, groundY, fr);
+      fg.addColorStop(0, `rgba(255,180,90,${0.5 * lp})`); fg.addColorStop(1, 'rgba(255,60,0,0)');
+      ctx.fillStyle = fg; ctx.fillRect(cx - fr, groundY - fr, fr * 2, fr * 2);
+      ctx.strokeStyle = `rgba(255,150,70,${0.6 * lp})`; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.ellipse(cx, groundY, fr, fr * 0.32, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
   }
 
   // The kingdom horizon — uses assets/prologue/kingdom.png if you drop it in,

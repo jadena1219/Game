@@ -177,7 +177,7 @@ export class Game {
       this._bakeBrazierPost(g, bx, by); this.braziers.push({ x: bx, y: by, lava, torch });
     }
     if (bossKind) this._bakeBossRoom(g, biome, W, H, bossKind, lava, torch);
-    else this._bakeBiomeDecor(g, biome, W, H);
+    else { this._bakeBiomeDecor(g, biome, W, H); this._bakeScatter(g, biome, W, H, level); }
     this._bakeWalls(g, biome, W, H);
 
     // vignette (heavier — this is a dungeon; bloodier and tighter in a boss room)
@@ -333,6 +333,49 @@ export class Game {
     }
   }
 
+  // Floor debris seeded per floor — flat (no collision), each piece carrying a
+  // lit edge and a shadowed edge so it POPS when the blade-light sweeps across
+  // it. Under Bladelight, an empty lit pool feels like nothing happened; this
+  // gives the light something to discover.
+  _bakeScatter(g, biome, W, H, level) {
+    let s = (level * 2654435761) >>> 0;
+    const R = () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
+    const cx = W / 2, cy = H / 2;
+    const n = 11 + (R() * 4 | 0);
+    for (let i = 0; i < n; i++) {
+      const x = 100 + R() * (W - 200), y = 100 + R() * (H - 200);
+      if (Math.hypot(x - cx, y - cy) < 140) continue;            // keep the spawn clear
+      const kind = R();
+      g.save(); g.translate(x | 0, y | 0);
+      if (kind < 0.4) {
+        // rubble cluster: tumbled stones, lit from above-left
+        for (let k = 0, m = 2 + (R() * 3 | 0); k < m; k++) {
+          const ox = (R() - 0.5) * 22, oy = (R() - 0.5) * 14, r = 3 + R() * 4;
+          g.fillStyle = 'rgba(0,0,0,0.3)'; g.beginPath(); g.ellipse(ox + 1.5, oy + 2, r * 1.1, r * 0.5, 0, 0, Math.PI * 2); g.fill();
+          g.fillStyle = '#3c3546'; g.beginPath(); g.arc(ox, oy, r, 0, Math.PI * 2); g.fill();
+          g.fillStyle = 'rgba(230,238,255,0.16)'; g.beginPath(); g.arc(ox - r * 0.3, oy - r * 0.35, r * 0.55, 0, Math.PI * 2); g.fill();
+        }
+      } else if (kind < 0.7) {
+        // a fallen grave-slab, cracked — lit top edge, sunken shadow
+        const w = 18 + R() * 16, h = 10 + R() * 8, rot = (R() - 0.5) * 0.9;
+        g.rotate(rot);
+        g.fillStyle = 'rgba(0,0,0,0.32)'; g.fillRect(-w / 2 + 2, -h / 2 + 3, w, h);
+        g.fillStyle = '#332c40'; g.fillRect(-w / 2, -h / 2, w, h);
+        g.fillStyle = 'rgba(235,242,255,0.14)'; g.fillRect(-w / 2, -h / 2, w, 2);
+        g.strokeStyle = 'rgba(0,0,0,0.45)'; g.lineWidth = 1;
+        g.beginPath(); g.moveTo(-w * 0.2, -h / 2); g.lineTo(w * 0.1, h * 0.1); g.lineTo(-w * 0.05, h / 2); g.stroke();
+      } else {
+        // the fallen: a ribcage / scattered bones, pale enough to glint in the dark
+        g.rotate((R() - 0.5) * 1.4);
+        g.fillStyle = 'rgba(0,0,0,0.26)'; g.beginPath(); g.ellipse(1, 2, 13, 5, 0, 0, Math.PI * 2); g.fill();
+        g.strokeStyle = '#b9b2a0'; g.lineWidth = 2;
+        for (let k = -2; k <= 2; k++) { g.beginPath(); g.arc(k * 4, 0, 5, Math.PI * 0.15, Math.PI * 0.85, false); g.stroke(); }
+        g.fillStyle = '#c8c2b0'; g.fillRect(-12, -2, 4, 3); g.fillRect(9, -1, 5, 3);
+      }
+      g.restore();
+    }
+  }
+
   // A wall band hugging the arena rim, dark dungeon stone.
   _bakeWalls(g, biome, W, H) {
     const t = 28;
@@ -344,10 +387,14 @@ export class Game {
     for (let x = 0; x < W; x += 46) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, t); g.moveTo(x + 23, H - t); g.lineTo(x + 23, H); g.stroke(); }
     g.fillStyle = cap;
     g.fillRect(0, t - 5, W, 5); g.fillRect(0, H - t, W, 5); g.fillRect(t - 5, 0, 5, H); g.fillRect(W - t, 0, 5, H);
-    // inner shadow so the floor reads as sunken below the walls
+    // layered ambient occlusion so the floor reads as sunken below the walls —
+    // a tight dark seam, then a wide soft falloff (sells depth under Bladelight)
     g.fillStyle = 'rgba(0,0,0,0.35)';
     g.fillRect(t, t, W - 2 * t, 8); g.fillRect(t, t, 8, H - 2 * t);
     g.fillRect(t, H - t - 8, W - 2 * t, 8); g.fillRect(W - t - 8, t, 8, H - 2 * t);
+    g.fillStyle = 'rgba(0,0,0,0.16)';
+    g.fillRect(t, t, W - 2 * t, 22); g.fillRect(t, t, 22, H - 2 * t);
+    g.fillRect(t, H - t - 22, W - 2 * t, 22); g.fillRect(W - t - 22, t, 22, H - 2 * t);
     if (biome.lava) { // molten trim
       g.fillStyle = 'rgba(255,90,20,0.55)';
       g.fillRect(t, t, W - 2 * t, 2); g.fillRect(t, H - t - 2, W - 2 * t, 2);
@@ -3295,6 +3342,18 @@ export class Game {
     if (!title && this.player) drawList.push(this.player);
     if (this.state === 'camp') drawList.push({ sorcerer: true, x: this.camp.sorcerer.x, y: this.camp.sorcerer.y });
     drawList.sort((a, b) => a.y - b.y);
+    // contact shadows first — a soft pool under every figure grounds it in the
+    // floor (flat sprites read as cutouts under directional light without this)
+    ctx.save(); ctx.fillStyle = '#03020a';
+    for (const ent of drawList) {
+      if (ent.rising != null && ent.rising < 1) continue;   // still emerging from the floor
+      const r = ent.r || 12;
+      ctx.globalAlpha = 0.30;
+      ctx.beginPath(); ctx.ellipse(ent.x, ent.y + 2, r * 1.15, r * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 0.18;
+      ctx.beginPath(); ctx.ellipse(ent.x, ent.y + 2, r * 1.6, r * 0.55, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore(); ctx.globalAlpha = 1;
     for (const ent of drawList) {
       if (ent === this.player) this._drawPlayer(ctx);
       else if (ent.sorcerer) this._drawSorcerer(ctx, ent);

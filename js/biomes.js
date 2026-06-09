@@ -13,12 +13,18 @@ function rngFrom(seed) {
 function flagstones(g, W, H, seed, seam, extra) {
   const R = rngFrom(seed);
   const tile = 62;
-  // per-stone subtle shading so the floor isn't flat
+  // per-stone shading — contrast tuned for BLADELIGHT: under heavy darkness a
+  // subtle floor reads as flat nothing, so the stones vary harder…
   for (let y = 0; y < H; y += tile) {
     for (let x = 0; x < W; x += tile) {
-      const sh = (R() - 0.5) * 0.12;
+      const sh = (R() - 0.5) * 0.2;
       g.fillStyle = sh > 0 ? `rgba(255,255,255,${sh})` : `rgba(0,0,0,${-sh})`;
       g.fillRect(x, y, tile, tile);
+      // …and each stone catches light along its top edge (bevel the lit pool reveals)
+      g.fillStyle = `rgba(255,244,220,${0.04 + R() * 0.05})`;
+      g.fillRect(x + 2, y + 1, tile - 4, 2);
+      g.fillStyle = 'rgba(0,0,0,0.18)';
+      g.fillRect(x + 2, y + tile - 2, tile - 4, 2);
     }
   }
   // recessed seams
@@ -27,9 +33,9 @@ function flagstones(g, W, H, seed, seam, extra) {
   for (let y = tile; y < H; y += tile) { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); }
   g.strokeStyle = 'rgba(255,255,255,0.04)'; g.lineWidth = 1;
   for (let x = tile; x < W; x += tile) { g.beginPath(); g.moveTo(x + 1, 0); g.lineTo(x + 1, H); g.stroke(); }
-  // cracks + grime speckle
-  for (let i = 0; i < (W * H) / 5000; i++) { g.fillStyle = 'rgba(0,0,0,0.22)'; g.fillRect(R() * W, R() * H, 1 + R() * 3, 1); }
-  for (let i = 0; i < (W * H) / 7000; i++) { g.fillStyle = 'rgba(255,255,255,0.03)'; g.fillRect(R() * W, R() * H, 2, 2); }
+  // cracks + grime speckle (deeper, denser — texture the light can discover)
+  for (let i = 0; i < (W * H) / 4200; i++) { g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(R() * W, R() * H, 1 + R() * 3, 1); }
+  for (let i = 0; i < (W * H) / 7000; i++) { g.fillStyle = 'rgba(255,255,255,0.04)'; g.fillRect(R() * W, R() * H, 2, 2); }
   if (extra) extra(g, W, H, R);
 }
 

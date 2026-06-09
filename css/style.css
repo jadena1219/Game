@@ -412,3 +412,4 @@ p { max-width: 30ch; line-height: 1.5; }
   backdrop-filter: blur(2px);
 }
 #god-skip:active { transform: scale(0.94); }
+#god-skip.hidden { display: none; }

@@ -960,7 +960,7 @@ export class Game {
   // The way down: a black arched gateway smashed INTO the bottom wall, breathing
   // a hot red glow from the depths. Simple, embedded in the wall, and menacing.
   _drawDescentPit(ctx, d, t) {
-    const p = this.player;
+    const p = this.player || (this.state === 'title' ? this.titleKnight : null);
     const near = p ? Math.max(0, 1 - Math.hypot(p.x - d.x, p.y - d.y) / 150) : 0;
     const pulse = 0.5 + 0.5 * Math.sin(t * 2.6);
     const cx = d.x, baseY = d.y + 44, topY = d.y - 58, hw = 52;
@@ -1127,17 +1127,226 @@ export class Game {
 
   // ---------- flow ----------
   // Return to the title. Must reset the game state (not just the DOM) so the
-  // canvas renders the title corridor again — otherwise the last scene (e.g. the
+  // canvas renders the title camp again — otherwise the last scene (e.g. the
   // victory) shows through behind the menu.
   toTitle() {
     this.state = 'title';
-    this.player = null;          // the title branch renders the corridor when there's no player
+    this.player = null;
     this.enemies = []; this.projectiles = []; this.allyProjectiles = []; this.effects = []; this.pickups = [];
     this.interlude = null; this.interludeFade = null; this.introCut = null; this.campToast = null;
     this.intro = null; this.sweep = null; this.transition = null; this.camp = null; this.bossKind = null;
     this.watchers = []; this.campWhisper = null;
+    this.titleCamp = null;       // rebuild fresh — the knight wakes by his fire again
     this.ui.showScreen('title');
     Sound.setScene('title');
+  }
+
+  // ---------- THE TITLE CAMP ----------
+  // The menu IS a place: the knight's last camp at the pit mouth. He can walk.
+  // The PIT is Begin; a violet SOUL BRAZIER is the Sanctum; a torn BANNER is
+  // the Bargain (prologue). Walk close and the choice offers itself.
+  _buildTitleCamp() {
+    const W = this.vw, H = this.vh;
+    const ox = Math.round(this.world.w / 2 - W / 2);
+    const oy = Math.round(this.world.h / 2 - H / 2);
+    const wallH = Math.round(H * 0.24);                  // the logo hangs over this dark wall
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const g = c.getContext('2d');
+
+    // floor: cold stone, warmed near where the fire will sit
+    const grd = g.createLinearGradient(0, 0, 0, H);
+    grd.addColorStop(0, '#241e30'); grd.addColorStop(1, '#151019');
+    g.fillStyle = grd; g.fillRect(0, 0, W, H);
+    // flagstones (offset brick courses, per-stone shade, dark seams)
+    const TS = 56;
+    let s = 77;
+    const R = () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
+    for (let ty = wallH - TS; ty < H; ty += TS) {
+      const rowOff = (Math.floor(ty / TS) % 2) * (TS / 2);
+      for (let tx = -TS; tx < W + TS; tx += TS) {
+        const x = tx + rowOff, sh = (R() - 0.5) * 0.10;
+        g.fillStyle = `rgba(${sh > 0 ? '255,255,255' : '0,0,0'},${Math.abs(sh)})`;
+        g.fillRect(x, ty, TS, TS);
+        g.fillStyle = 'rgba(0,0,0,0.34)'; g.fillRect(x, ty, TS, 2); g.fillRect(x, ty, 2, TS);
+        g.fillStyle = 'rgba(255,255,255,0.045)'; g.fillRect(x + 2, ty + 2, TS - 2, 1);
+        if (R() < 0.1) { g.fillStyle = 'rgba(90,140,110,0.18)'; g.fillRect(x + 6 + R() * 30, ty + 8 + R() * 30, 5, 3); }   // moss
+        if (R() < 0.07) { g.strokeStyle = 'rgba(0,0,0,0.4)'; g.lineWidth = 1; g.beginPath();
+          const cx2 = x + 10 + R() * 30, cy2 = ty + 8 + R() * 34;
+          g.moveTo(cx2, cy2); g.lineTo(cx2 + 8, cy2 + 7); g.lineTo(cx2 + 5, cy2 + 15); g.stroke(); }   // crack
+      }
+    }
+    // the back wall (logo zone): coursed dark brick with a worn lit lip
+    g.fillStyle = '#120d1a'; g.fillRect(0, 0, W, wallH);
+    for (let by = 8; by < wallH - 8; by += 16) {
+      g.fillStyle = 'rgba(255,255,255,0.026)'; g.fillRect(0, by, W, 1);
+      const off2 = (Math.floor(by / 16) % 2) * 22;
+      g.fillStyle = 'rgba(0,0,0,0.35)';
+      for (let bx = off2; bx < W; bx += 44) g.fillRect(bx, by, 1, 16);
+    }
+    g.fillStyle = 'rgba(190,170,220,0.10)'; g.fillRect(0, wallH - 2, W, 2);   // the lip catches light
+    g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(0, wallH, W, 7);              // its cast shadow
+    // side + bottom walls (thin frame)
+    g.fillStyle = '#120d1a';
+    g.fillRect(0, wallH, 14, H - wallH); g.fillRect(W - 14, wallH, 14, H - wallH); g.fillRect(0, H - 16, W, 16);
+
+    // ---- staging ----
+    const fire = { x: ox + W * 0.5, y: oy + H * 0.56 };
+    const pit = { x: ox + W * 0.5, y: oy + H - 96 };
+    const brazier = { x: ox + Math.max(64, W * 0.17), y: oy + H * 0.46 };
+    const banner = { x: ox + Math.min(W - 64, W * 0.83), y: oy + H * 0.40 };
+    // fire ring: scorched earth + a circle of stones (the fire itself is live)
+    const fx = fire.x - ox, fy = fire.y - oy;
+    const ch = g.createRadialGradient(fx, fy, 2, fx, fy, 40);
+    ch.addColorStop(0, 'rgba(10,6,4,0.55)'); ch.addColorStop(1, 'rgba(10,6,4,0)');
+    g.fillStyle = ch; g.beginPath(); g.ellipse(fx, fy, 40, 18, 0, 0, Math.PI * 2); g.fill();
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2, rx = fx + Math.cos(a) * 26, ry = fy + Math.sin(a) * 12;
+      g.fillStyle = 'rgba(0,0,0,0.4)'; g.beginPath(); g.ellipse(rx + 1, ry + 2, 5, 2.5, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = i % 2 ? '#403a4e' : '#332d40'; g.beginPath(); g.arc(rx, ry, 4, 0, Math.PI * 2); g.fill();
+      g.fillStyle = 'rgba(255,255,255,0.12)'; g.beginPath(); g.arc(rx - 1, ry - 1.5, 1.6, 0, Math.PI * 2); g.fill();
+    }
+    // charred logs
+    g.fillStyle = '#241a14'; g.save(); g.translate(fx, fy);
+    g.rotate(0.5); g.fillRect(-14, -3, 28, 5); g.rotate(-1.1); g.fillRect(-14, -2, 28, 5); g.restore();
+    // his bedroll beside the fire — he has slept here a long time
+    const bx2 = fx - 74, by2 = fy + 26;
+    g.fillStyle = 'rgba(0,0,0,0.3)'; g.beginPath(); g.ellipse(bx2, by2 + 7, 30, 8, 0, 0, Math.PI * 2); g.fill();
+    g.save(); g.translate(bx2, by2); g.rotate(-0.12);
+    g.fillStyle = '#4e1d22'; g.fillRect(-28, -8, 56, 16);
+    g.fillStyle = '#6b2a30'; g.fillRect(-28, -8, 56, 4);
+    g.fillStyle = '#33141a'; g.fillRect(-28, 6, 56, 2);
+    g.fillStyle = '#8a8296'; g.fillRect(20, -7, 8, 14);    // rolled end
+    g.restore();
+    // the soul brazier (Sanctum) + the old banner (the Bargain)
+    this._bakeTorchColumn(g, brazier.x - ox, brazier.y - oy);
+    this._bakeBanner(g, banner.x - ox, banner.y - oy - 18, '#4e1d22');
+    // vignette
+    const v = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.62);
+    v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.5)');
+    g.fillStyle = v; g.fillRect(0, 0, W, H);
+    this.titleBg = c;
+
+    this.titleCamp = {
+      ox, oy, t: 0, sizeKey: W + 'x' + H,
+      fire, pit, brazier, banner,
+      parts: [],                           // live fire embers
+      prompt: null,
+      bounds: { minX: ox + 44, maxX: ox + W - 44, minY: oy + wallH + 30, maxY: oy + H - 42 },
+    };
+    this.titleKnight = { x: fire.x - 40, y: fire.y + 30, sprite: 'knight',
+      moving: false, faceLeft: true, attackAnim: 0 };
+  }
+
+  _updateTitleCamp(dt) {
+    const key = this.vw + 'x' + this.vh;
+    if (!this.titleCamp || this.titleCamp.sizeKey !== key) this._buildTitleCamp();
+    const tc = this.titleCamp; tc.t += dt;
+    // a DOM panel (the Sanctum) is open: hold the camp, hide the prompt
+    if (this.ui.screenOpen && this.ui.screenOpen !== 'title') {
+      if (tc.prompt) { tc.prompt = null; this.ui.setTitlePrompt(null); }
+      return;
+    }
+    this.input.poll();
+    const k = this.titleKnight, mv = this.input.move, ml = Math.hypot(mv.x, mv.y);
+    k.moving = ml > 0.08;
+    if (k.moving) {
+      const spd = 168;
+      k.x += (mv.x / (ml || 1)) * spd * Math.min(1, ml) * dt;
+      k.y += (mv.y / (ml || 1)) * spd * Math.min(1, ml) * dt;
+      if (Math.abs(mv.x) > 0.05) k.faceLeft = mv.x < 0;
+    }
+    const b = tc.bounds;
+    k.x = Math.max(b.minX, Math.min(b.maxX, k.x));
+    k.y = Math.max(b.minY, Math.min(b.maxY, k.y));
+    // the pit mouth is solid — stand at the rim, not on the void
+    {
+      const erx = 54, ery = 50, ecx = tc.pit.x, ecy = tc.pit.y - 6;
+      const nx = (k.x - ecx) / erx, ny = (k.y - ecy) / ery, dl = Math.hypot(nx, ny);
+      if (dl < 1 && dl > 1e-4) { k.x = ecx + (nx / dl) * erx; k.y = ecy + (ny / dl) * ery; }
+    }
+    // the campfire breathes embers
+    if (Math.random() < dt * 16) tc.parts.push({
+      x: tc.fire.x + (Math.random() - 0.5) * 16, y: tc.fire.y - 8,
+      vx: (Math.random() - 0.5) * 12, vy: -(26 + Math.random() * 34),
+      life: 0, dur: 0.8 + Math.random() * 0.7, hot: Math.random() < 0.5,
+    });
+    for (const p2 of tc.parts) { p2.life += dt; p2.x += p2.vx * dt; p2.y += p2.vy * dt; }
+    tc.parts = tc.parts.filter((p2) => p2.life < p2.dur);
+    // approach an object and the choice offers itself
+    const d2 = (o) => Math.hypot(k.x - o.x, k.y - o.y);
+    let prompt = null;
+    if (d2(tc.pit) < 88) prompt = 'begin';
+    else if (d2(tc.brazier) < 64) prompt = 'sanctum';
+    else if (d2(tc.banner) < 64) prompt = 'prologue';
+    if (prompt !== tc.prompt) { tc.prompt = prompt; this.ui.setTitlePrompt(prompt, this.meta.souls); }
+  }
+
+  _renderTitleCamp(ctx) {
+    const tc = this.titleCamp;
+    ctx.clearRect(0, 0, this.vw, this.vh);
+    if (!tc) return;
+    const t = tc.t, k = this.titleKnight;
+    ctx.save();
+    ctx.translate(-this.cam.x, -this.cam.y);
+    ctx.drawImage(this.titleBg, tc.ox, tc.oy);
+    // the pit — the way down, breathing its cold light
+    this._drawDescentPit(ctx, tc.pit, t);
+    // warm + violet + cold light pools (additive, flickering)
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const pool = (x, y, r, col, a) => {
+      const g2 = ctx.createRadialGradient(x, y, 2, x, y, r);
+      g2.addColorStop(0, this._rgba(col, a)); g2.addColorStop(1, this._rgba(col, 0));
+      ctx.fillStyle = g2; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    };
+    const flick = 0.85 + 0.15 * Math.sin(t * 11) + 0.06 * Math.sin(t * 27);
+    pool(tc.fire.x, tc.fire.y - 6, 150 * flick, '#ff9a4a', 0.20);
+    pool(tc.brazier.x, tc.brazier.y - 14, 90, '#b06bff', 0.16 + 0.05 * Math.sin(t * 3));
+    pool(tc.banner.x, tc.banner.y, 64, '#d8413a', 0.07 + 0.03 * Math.sin(t * 2.2));
+    ctx.restore();
+    // the campfire itself + its embers
+    this._flameColumn(ctx, tc.fire.x, tc.fire.y + 2, 26 + Math.sin(t * 9) * 3, 3.7, 0.95);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (const p2 of tc.parts) {
+      const a = 1 - p2.life / p2.dur;
+      ctx.globalAlpha = a;
+      ctx.fillStyle = p2.hot ? '#ffd36b' : '#ff7a2a';
+      ctx.fillRect(p2.x - 1, p2.y - 1, 2, 2);
+    }
+    ctx.restore(); ctx.globalAlpha = 1;
+    // violet soulfire on the brazier
+    {
+      const bx = tc.brazier.x, by = tc.brazier.y - 12, h = 11 + Math.sin(t * 10 + 2) * 2.5;
+      const g1 = ctx.createRadialGradient(bx, by - h * 0.3, 1, bx, by, h);
+      g1.addColorStop(0, '#efe0ff'); g1.addColorStop(0.55, '#b06bff'); g1.addColorStop(1, 'rgba(120,60,200,0)');
+      ctx.fillStyle = g1;
+      ctx.beginPath();
+      ctx.moveTo(bx - 5, by + 2);
+      ctx.quadraticCurveTo(bx - 4, by - h * 0.6, bx, by - h);
+      ctx.quadraticCurveTo(bx + 4, by - h * 0.6, bx + 5, by + 2);
+      ctx.closePath(); ctx.fill();
+    }
+    // the knight (shadow + sprite), depth-free in this little scene
+    ctx.save(); ctx.fillStyle = '#03020a';
+    ctx.globalAlpha = 0.3; ctx.beginPath(); ctx.ellipse(k.x, k.y + 2, 16, 6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore(); ctx.globalAlpha = 1;
+    drawSprite(ctx, 'knight', pickFrame(k, t), k.x, k.y - (k.moving ? 0 : Math.sin(t * 2.6) * 1), k.faceLeft, 1);
+    // floating labels — quiet names, bobbing, brighter as you draw near
+    const label = (text, x, y, col, near) => {
+      const bob = Math.sin(t * 2.2 + x * 0.05) * 2;
+      ctx.save();
+      ctx.globalAlpha = near ? 0.95 : 0.55;
+      ctx.font = `bold ${near ? 11 : 9}px "Silkscreen", monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+      ctx.strokeText(text, x, y + bob); ctx.fillStyle = col; ctx.fillText(text, x, y + bob);
+      ctx.restore();
+    };
+    label('BEGIN ▾', tc.pit.x, tc.pit.y - 64, '#ffd86a', tc.prompt === 'begin');
+    label(`SANCTUM ◆${this.meta.souls || 0}`, tc.brazier.x, tc.brazier.y - 58, '#c89aff', tc.prompt === 'sanctum');
+    label('THE BARGAIN', tc.banner.x, tc.banner.y - 50, '#e08a7a', tc.prompt === 'prologue');
+    ctx.restore();
+    if (!this.ui.screenOpen || this.ui.screenOpen === 'title') this.input.draw(ctx);
+    this._drawTransition(ctx);
   }
 
   // The cold open: the title lifts away and the knight walks on down the
@@ -3010,6 +3219,7 @@ export class Game {
     if (this.state === 'dying') return this._updateDying(dt);
     if (this.state === 'won') return this._updateWon(dt);
     if (this.state === 'camp') return this._updateCamp(dt);
+    if (this.state === 'title') return this._updateTitleCamp(dt);
     if (this.state === 'prologue') return this._updatePrologue(dt);
     if (this.state === 'shrine') return this._updateShrine(dt);
     if (this.state === 'intro') return this._updateIntro(dt);
@@ -3723,9 +3933,12 @@ export class Game {
     const title = this.state === 'title';
     const camx = this.cam.x, camy = this.cam.y + (this.camDrop || 0);
 
-    // Cold open: the title & intro are a screen-space torch-lit corridor, drawn
-    // outside the normal world pipeline so the cut into Level 1 is seamless.
-    if (title || this.state === 'intro') {
+    // The title is the knight's camp at the pit mouth — a walkable menu.
+    if (title) { this._renderTitleCamp(ctx); return; }
+
+    // Cold open: the intro is a screen-space torch-lit corridor, drawn outside
+    // the normal world pipeline so the cut into Level 1 is seamless.
+    if (this.state === 'intro') {
       ctx.clearRect(0, 0, this.vw, this.vh);
       this._drawTunnelScene(ctx);
       this._drawIntroCut(ctx);        // the dark blinking shut as he steps through

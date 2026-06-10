@@ -82,14 +82,22 @@ h1 {
   color: #b9aed1; text-shadow: 0 0 14px rgba(120,100,180,0.45);
 }
 
-/* lighter title overlay so the animated battlefield + embers show through */
+/* The title is a WALKABLE CAMP on the canvas: this overlay is only the logo,
+   the hint and the (dev-only) god toggle — it must never eat the touches that
+   steer the knight. */
 #title-screen {
-  background: linear-gradient(to bottom, rgba(8,6,14,0.55) 0%, rgba(8,6,14,0.2) 45%, rgba(8,6,14,0.72) 100%);
+  background: linear-gradient(to bottom, rgba(8,6,14,0.42) 0%, rgba(8,6,14,0.08) 30%, transparent 45%, transparent 86%, rgba(8,6,14,0.4) 100%);
   backdrop-filter: none;
   justify-content: flex-start;
-  padding-top: 12vh;
+  padding-top: 7vh;
+  pointer-events: none;
 }
-#title-screen .hint { margin-top: auto; margin-bottom: 4vh; }
+#title-screen .hint { margin-top: auto; margin-bottom: 3vh; letter-spacing: 1px; }
+#title-screen .btn { pointer-events: auto; }
+#god-btn {
+  position: absolute; right: 12px; bottom: 12px;
+  padding: 7px 10px; font-size: 9px; opacity: 0.45;
+}
 
 /* the cold open: the title lifts, blurs and fades, revealing the live corridor */
 #title-screen.swipe-out {
@@ -137,6 +145,11 @@ p { max-width: 30ch; line-height: 1.5; }
   cursor: pointer; animation: promptPop 0.25s ease both;
 }
 #camp-prompt.door { background: #8fd0ff; border-color: #1c4f80; color: #08233a; box-shadow: inset 0 2px 0 rgba(255,255,255,0.4), 0 5px 0 #1c4f80; }
+/* title-camp prompts: the Sanctum brazier offers violet; BEGIN arrives big and smouldering */
+#camp-prompt.sanctum { background: #b794ec; border-color: #4a2580; color: #1c0e30; box-shadow: inset 0 2px 0 rgba(255,255,255,0.4), 0 5px 0 #4a2580; }
+#camp-prompt.sanctum .soul-dot.small { vertical-align: middle; margin: 0 3px; }
+#camp-prompt.sanctum .num { color: #2a1648; }
+#camp-prompt.big { font-size: 15px; padding: 16px 28px; animation: promptPop 0.25s ease both, beginPulse 2.4s ease-in-out 0.3s infinite; }
 #camp-prompt:active { transform: translateX(-50%) translateY(4px); }
 @keyframes promptPop { from { opacity: 0; transform: translateX(-50%) translateY(10px) scale(0.9); } to { opacity: 1; } }
 
@@ -503,11 +516,10 @@ p { max-width: 30ch; line-height: 1.5; }
 /* end-screen stat rows deal in one by one */
 .vstat { animation: cardIn 0.34s cubic-bezier(0.2, 1.25, 0.35, 1) both; }
 
-/* the Begin button smoulders */
-#start-btn { animation: beginPulse 2.6s ease-in-out infinite; }
+/* the BEGIN prompt smoulders with cold pit-light */
 @keyframes beginPulse {
-  0%, 100% { box-shadow: inset 0 2px 0 rgba(255,255,255,0.35), inset 0 -3px 0 rgba(0,0,0,0.2), 0 5px 0 #6b5212; }
-  50% { box-shadow: inset 0 2px 0 rgba(255,255,255,0.35), inset 0 -3px 0 rgba(0,0,0,0.2), 0 5px 0 #6b5212, 0 0 26px rgba(255,170,60,0.5); }
+  0%, 100% { box-shadow: inset 0 2px 0 rgba(255,255,255,0.4), 0 5px 0 #1c4f80; }
+  50% { box-shadow: inset 0 2px 0 rgba(255,255,255,0.4), 0 5px 0 #1c4f80, 0 0 28px rgba(140,200,255,0.55); }
 }
 
 /* blade cards: element tag, playstyle line, feel-pips */

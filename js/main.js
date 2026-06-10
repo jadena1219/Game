@@ -56,7 +56,9 @@ function drawMuteIcon(cv, muted) {
 const numWrap = (s) => String(s).replace(/(\d+)/g, '<span class="num">$1</span>');
 
 const ui = {
+  screenOpen: null,                                       // which DOM screen is up (the game peeks)
   showScreen(name) {
+    this.screenOpen = name;
     if (name !== 'hero-select') this._heroAnim = false;   // stop preview loop on leave
     screens.title.classList.remove('swipe-out');          // reset the cold-open animation
     for (const [k, el] of Object.entries(screens)) {
@@ -65,6 +67,26 @@ const ui = {
     // the God-mode floor-skip button only shows during actual gameplay
     const gs = document.getElementById('god-skip');
     if (gs) gs.classList.toggle('hidden', !(godMode && name === null));
+  },
+
+  // The walkable title camp: approach an object and its choice offers itself.
+  setTitlePrompt(kind, souls) {
+    const b = document.getElementById('camp-prompt');
+    if (!kind) { b.classList.add('hidden'); b.onclick = null; return; }
+    b.classList.remove('hidden');
+    if (kind === 'begin') {
+      b.innerHTML = '⚔&nbsp; Begin the Stand';
+      b.className = 'door big';
+      b.onclick = () => { Sound.unlock(); b.classList.add('hidden'); game.startPrologue(); };
+    } else if (kind === 'sanctum') {
+      b.innerHTML = `The Sanctum &middot; <span class="soul-dot small"></span><span class="num">${souls || 0}</span>`;
+      b.className = 'sanctum';
+      b.onclick = () => { Sound.unlock(); Sound.play('ui'); b.classList.add('hidden'); ui.showSanctum(game); };
+    } else {
+      b.textContent = 'Remember the Bargain';
+      b.className = 'shrine';
+      b.onclick = () => { Sound.unlock(); b.classList.add('hidden'); game.startPrologue(true); };
+    }
   },
 
   // The cold open: lift the title overlay away, revealing the live corridor
@@ -466,28 +488,11 @@ async function boot() {
   });
   if (godSkip) godSkip.addEventListener('click', (e) => { e.stopPropagation(); game.godSkip(); });
 
-  // The Sanctum — souls badge on the title button stays current, and the death
-  // screen offers a straight path to spending what the run just banked.
-  const sanctumBtn = document.getElementById('sanctum-btn');
-  const sanctumBadge = document.getElementById('sanctum-badge');
-  const syncSouls = () => { if (sanctumBadge) sanctumBadge.textContent = game.meta.souls > 0 ? game.meta.souls : ''; };
-  if (sanctumBtn) sanctumBtn.addEventListener('click', () => { Sound.unlock(); Sound.play('ui'); ui.showSanctum(game); });
+  // The death screen offers a straight path to spending what the run just banked.
+  // (On the title itself, the Sanctum is the violet soul-brazier in the camp.)
   const goSanctumBtn = document.getElementById('go-sanctum-btn');
   if (goSanctumBtn) goSanctumBtn.addEventListener('click', () => { game.toTitle(); ui.showSanctum(game); });
-  // keep the badge fresh whenever the title screen comes back
-  const _showScreen = ui.showScreen.bind(ui);
-  ui.showScreen = (name) => { if (name === 'title') syncSouls(); _showScreen(name); };
-  syncSouls();
 
-  // Hero select stays built for a future unlock; for now every run is the Knight.
-  document.getElementById('start-btn').addEventListener('click', () => { Sound.unlock(); game.startPrologue(); });
-  // The prologue plays once; afterwards the title offers a replay.
-  const prologueBtn = document.getElementById('prologue-btn');
-  const seenIntro = (() => { try { return localStorage.getItem('kls_seen_intro') === '1'; } catch (e) { return false; } })();
-  if (prologueBtn && seenIntro) {
-    prologueBtn.classList.remove('hidden');
-    prologueBtn.addEventListener('click', () => { Sound.unlock(); game.startPrologue(true); });
-  }
   document.getElementById('retry-btn').addEventListener('click', () => game.start('knight'));
   document.getElementById('win-btn').addEventListener('click', () => game.start('knight'));
   // return to the title after a run (resets game state so the corridor shows)

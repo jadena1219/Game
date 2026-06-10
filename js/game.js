@@ -1566,7 +1566,10 @@ export class Game {
       glanceT: 4 + Math.random() * 4,      // the knight looks around while idle
       prompt: null, jump: null, sink: 0, sunk: false,
       bounds: { minX: ox + 44, maxX: ox + W - 44, minY: oy + wallH + 30, maxY: oy + H - 42 },
-      spawn: { x: fire.x + 10, y: fire.y + 62 },   // where he boots up (and crash-lands)
+      // where he boots up (and crash-lands): dead-centre on the fire, tight
+      // enough that the flint-kneel puts his hands in the stone ring, loose
+      // enough that the lit flame still crowns above his helmet when he stands
+      spawn: { x: fire.x, y: fire.y + 50 },
       // THE COLD OPEN (first boot only): the knight alone in the black FALLS in
       // from above, eats dirt, picks himself up frame by frame; flint is struck;
       // the fire catches, ROARS, and its light reveals the camp — then the
@@ -1576,8 +1579,8 @@ export class Game {
     };
     this._titleIntroPlayed = true;
     this._tapped = false;
-    // he rises from his seat on the log
-    this.titleKnight = { x: fire.x + 10, y: fire.y + 62, sprite: 'knight',
+    // he boots up at the fire's edge (the pratfall's landing spot)
+    this.titleKnight = { x: fire.x, y: fire.y + 50, sprite: 'knight',
       moving: false, faceLeft: false, attackAnim: 0 };
   }
 

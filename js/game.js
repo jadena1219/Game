@@ -199,9 +199,10 @@ export class Game {
     this.wipeEl = document.getElementById('wipe');
     canvas.addEventListener('pointerdown', (e) => {
       this._tapped = true;
-      // where, in canvas coords (the title pit is tappable directly)
-      const r = canvas.getBoundingClientRect();
-      this._tapXY = [e.clientX - r.left, e.clientY - r.top];
+      // where, in LOGICAL canvas coords (the title pit is tappable directly);
+      // the action scale means client px and game px differ on big screens
+      const r = canvas.getBoundingClientRect(), zs = this.viewScale || 1;
+      this._tapXY = [(e.clientX - r.left) / zs, (e.clientY - r.top) / zs];
     });
 
     // --- Phase 3b: open world ---
@@ -232,11 +233,17 @@ export class Game {
 
   _resize() {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    this.vw = window.innerWidth;
-    this.vh = window.innerHeight;
-    this.canvas.width = Math.floor(this.vw * dpr);
-    this.canvas.height = Math.floor(this.vh * dpr);
-    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const ww = window.innerWidth, wh = window.innerHeight;
+    // ACTION SCALE: big viewports render the whole stage zoomed, so the knight
+    // reads as a hero instead of a speck in a checkerboard void. The LOGICAL
+    // view shrinks and the transform scales it back up — phones stay at 1:1.
+    const zs = this.viewScale = Math.max(1, Math.min(1.6, Math.sqrt(ww * wh) / 720));
+    this.vw = Math.round(ww / zs);
+    this.vh = Math.round(wh / zs);
+    this.canvas.width = Math.floor(ww * dpr);
+    this.canvas.height = Math.floor(wh * dpr);
+    this.ctx.setTransform(dpr * zs, 0, 0, dpr * zs, 0, 0);
+    this.input.viewScale = zs;
     this.input.layout(this.vw, this.vh);
 
     // a contained arena ~1.5x the screen — room to roam, walls in view
@@ -257,6 +264,7 @@ export class Game {
   _applyBiome(level) {
     const biome = biomeForLevel(level);
     this.biome = biome;
+    this.puddles = []; this.ripples = [];   // only _bakeWater refills these
     const bossKind = (LEVELS[level - 1].boss && 'boss') || (LEVELS[level - 1].miniboss && 'miniboss');
     this.bossKind = bossKind;
     this.atmos = this.atmos || [];
@@ -295,6 +303,7 @@ export class Game {
         }
       }
       this._bakeBiomeDecor(g, biome, W, H); this._bakeScatter(g, biome, W, H, level);
+      this._bakeWater(g, biome, W, H, level);   // the Crypt floods for real
       // each floor wears its biome a little differently — a faint colour cast
       const casts = ['rgba(120,80,200,0.045)', 'rgba(60,120,200,0.05)', 'rgba(200,90,60,0.04)',
         'rgba(70,170,140,0.045)', 'rgba(200,60,110,0.04)'];
@@ -309,6 +318,115 @@ export class Game {
     g.fillStyle = v; g.fillRect(0, 0, W, H);
     this.bg = c;
     this.voidColor = bossKind === 'boss' ? '#0a0103' : (bossKind ? '#070210' : '#050308');
+  }
+
+  // THE FLOOD IS REAL: crypt acts get standing water — dark glassy pools baked
+  // into the floor here, then LIVED-IN at render time (_drawWater: moving sheen,
+  // drip rings, wakes kicked up by anything that wades through).
+  _bakeWater(g, biome, W, H, level) {
+    this.puddles = [];
+    if (biome.id !== 'crypt') return;
+    let seed = 7700 + level * 131;
+    const R = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+    const n = 11 + (level % 3) * 2;
+    for (let i = 0; i < n && this.puddles.length < 14; i++) {
+      const rx = 60 + R() * 110, ry = rx * (0.42 + R() * 0.16);
+      const x = rx + 80 + R() * (W - rx * 2 - 160);
+      const y = ry + 90 + R() * (H - ry * 2 - 180);
+      if (Math.hypot(x - W / 2, y - H / 2) < 250) continue;          // spawn stays dry
+      if (this.braziers.some((b) => Math.hypot(x - b.x, y - b.y) < rx + 70)) continue;
+      this.puddles.push({ x, y, rx, ry, ph: R() * Math.PI * 2 });
+      // the baked basin: sunken dark glass with a pale stone lip
+      g.save();
+      g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+      g.fillStyle = 'rgba(6,16,14,0.88)'; g.fill();
+      g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,0.5)'; g.stroke();
+      g.beginPath(); g.ellipse(x, y - 2, rx - 3, ry - 3, 0, 0, Math.PI * 2);
+      g.fillStyle = 'rgba(20,46,40,0.55)'; g.fill();
+      g.beginPath(); g.ellipse(x, y + 1.5, rx, ry, 0, Math.PI * 0.15, Math.PI * 0.85);
+      g.lineWidth = 2; g.strokeStyle = 'rgba(150,220,200,0.18)'; g.stroke();   // far lip catches light
+      g.restore();
+    }
+    this.ripples = [];
+  }
+
+  _updateWater(dt) {
+    if (!this.puddles || !this.puddles.length) return;
+    const rip = this.ripples || (this.ripples = []);
+    // drips from the unseen ceiling — the room never stops being wet
+    this._dripT = (this._dripT || 0) - dt;
+    if (this._dripT <= 0 && rip.length < 26) {
+      this._dripT = 0.35 + Math.random() * 0.5;
+      const pd = this.puddles[(Math.random() * this.puddles.length) | 0];
+      if (this._inView(pd.x, pd.y, 80)) {
+        rip.push({ x: pd.x + (Math.random() - 0.5) * pd.rx * 1.2, y: pd.y + (Math.random() - 0.5) * pd.ry * 1.2,
+          t: 0, dur: 1.1, max: 9 + Math.random() * 8, pd });
+      }
+    }
+    // wakes: anything wading through the pools disturbs them
+    const wade = (wx, wy, big) => {
+      const pd = this._puddleAt(wx, wy);
+      if (pd && rip.length < 26) rip.push({ x: wx, y: wy + 4, t: 0, dur: 0.7, max: big ? 16 : 11, pd });
+    };
+    this._wakeT = (this._wakeT || 0) - dt;
+    if (this._wakeT <= 0) {
+      this._wakeT = 0.17;
+      const p = this.player;
+      if (p && p.moving && this.state === 'playing') wade(p.x, p.y, true);
+      for (let i = 0; i < Math.min(8, this.enemies.length); i++) {
+        const e = this.enemies[i];
+        if (e.moving && !e.dead && Math.random() < 0.5) wade(e.x, e.y, e.boss);
+      }
+    }
+    for (const r2 of rip) r2.t += dt;
+    this.ripples = rip.filter((r2) => r2.t < r2.dur);
+  }
+
+  _puddleAt(x, y) {
+    if (!this.puddles) return null;
+    for (const pd of this.puddles) {
+      const nx = (x - pd.x) / pd.rx, ny = (y - pd.y) / pd.ry;
+      if (nx * nx + ny * ny < 0.92) return pd;
+    }
+    return null;
+  }
+
+  _drawWater(ctx) {
+    if (!this.puddles || !this.puddles.length || this.state === 'camp') return;
+    const t = this.time;
+    ctx.save();
+    // the living surface: two slow sheen bands slide across each pool
+    ctx.globalCompositeOperation = 'lighter';
+    for (const pd of this.puddles) {
+      if (!this._inView(pd.x, pd.y, pd.rx + 40)) continue;
+      ctx.save();
+      ctx.beginPath(); ctx.ellipse(pd.x, pd.y, pd.rx - 2, pd.ry - 2, 0, 0, Math.PI * 2); ctx.clip();
+      const s1 = Math.sin(t * 0.6 + pd.ph), s2 = Math.sin(t * 0.43 + pd.ph * 2.7 + 2);
+      ctx.globalAlpha = 0.05 + 0.025 * Math.sin(t * 1.7 + pd.ph);
+      ctx.fillStyle = '#9fe8d0';
+      ctx.fillRect(pd.x - pd.rx, pd.y - pd.ry * 0.55 + s1 * pd.ry * 0.5, pd.rx * 2, 3);
+      ctx.fillRect(pd.x - pd.rx, pd.y + pd.ry * 0.25 + s2 * pd.ry * 0.45, pd.rx * 2, 2);
+      // torch-light caught on the surface, breathing
+      ctx.globalAlpha = 0.045 + 0.02 * Math.sin(t * 2.3 + pd.ph * 3);
+      const gw = pd.rx * 0.9;
+      ctx.fillStyle = this.biome && this.biome.torch ? this.biome.torch : '#7fe8c0';
+      ctx.beginPath(); ctx.ellipse(pd.x + Math.sin(t * 0.3 + pd.ph) * pd.rx * 0.2, pd.y, gw, pd.ry * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+    // ripple rings expanding where the water was touched
+    if (this.ripples) {
+      for (const r2 of this.ripples) {
+        const k = r2.t / r2.dur, rr = 2 + r2.max * k;
+        ctx.globalAlpha = (1 - k) * 0.5;
+        ctx.strokeStyle = '#bdf0e0'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.ellipse(r2.x, r2.y, rr, rr * 0.42, 0, 0, Math.PI * 2); ctx.stroke();
+        if (k < 0.4) {       // the first instant carries a bright fleck
+          ctx.globalAlpha = (1 - k / 0.4) * 0.5;
+          ctx.fillStyle = '#e8fff6'; ctx.fillRect(r2.x - 1, r2.y - 1, 2, 2);
+        }
+      }
+    }
+    ctx.restore(); ctx.globalAlpha = 1;
   }
 
   // A dedicated boss chamber: a great scorched ritual circle, a ring of braziers,
@@ -4115,6 +4233,7 @@ export class Game {
       }
     }
     this._updateStatuses(sdt);                  // blade burn DoT / permafrost
+    this._updateWater(sdt);                     // crypt pools: drips + wakes
     this._updateUltFx(sdt);                     // lava field / thunderstorm strikes
     this._emitAuras(sdt);
     this._updateProjAndFx(sdt);
@@ -4821,6 +4940,7 @@ export class Game {
     // baked arena, or the small camp room — one blit
     if (this.state === 'camp' && this.campBg) ctx.drawImage(this.campBg, this.cam.x, this.cam.y);
     else if (this.bg) ctx.drawImage(this.bg, 0, 0);
+    this._drawWater(ctx);                 // the Crypt's standing water LIVES
     this._drawBrazierFlames(ctx);
     for (const pk of this.pickups) this._drawPickup(ctx, pk);
 
@@ -5229,7 +5349,7 @@ export class Game {
     let L;
     if (!p) L = { r: 205, col: '#cfe6ff', hard: false, glowA: 0.16 };
     else {
-      let r = 240, col = '#ffd9a0', hard = false, glowA = 0.26;
+      let r = 265, col = '#ffd9a0', hard = false, glowA = 0.26;
       if (p.blade === 'ember') {        // warm firelight that breathes
         col = '#ff9a4a';
         r *= 1 + 0.05 * Math.sin(t * 11) + 0.03 * Math.sin(t * 27 + 1.7);
@@ -5312,7 +5432,9 @@ export class Game {
       g.fillStyle = grd;
       g.translate(sx, sy); g.beginPath(); g.arc(0, 0, rr, 0, Math.PI * 2); g.fill(); g.translate(-sx, -sy);
     };
-    for (const bz of this._torches) hole(bz.x, bz.y - 6, 200 + 7 * Math.sin(this.titleT * 17 + bz.x), false, true);
+    // torches are set dressing, not the protagonist: their pools stay smaller
+    // than the blade's, so the eye follows the HERO's light through the dark
+    for (const bz of this._torches) hole(bz.x, bz.y - 6, 168 + 7 * Math.sin(this.titleT * 17 + bz.x), false, true);
     // the BLADE carries the light — reach/breath/edge follow blade + state
     const L = this._bladeLight();
     const hx = this.player ? this.player.x : this.world.w / 2;

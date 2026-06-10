@@ -39,6 +39,8 @@ export class Input {
   _bind() {
     const c = this.canvas;
     const rect = () => c.getBoundingClientRect();
+    // client px -> LOGICAL game px (the action scale zooms big viewports)
+    const lx = (v) => v / (this.viewScale || 1);
 
     const onDown = (id, x, y) => {
       // Fury button takes priority when it's showing
@@ -79,12 +81,12 @@ export class Input {
     c.addEventListener('touchstart', (e) => {
       e.preventDefault();
       const r = rect();
-      for (const t of e.changedTouches) onDown(t.identifier, t.clientX - r.left, t.clientY - r.top);
+      for (const t of e.changedTouches) onDown(t.identifier, lx(t.clientX - r.left), lx(t.clientY - r.top));
     }, { passive: false });
     c.addEventListener('touchmove', (e) => {
       e.preventDefault();
       const r = rect();
-      for (const t of e.changedTouches) onMove(t.identifier, t.clientX - r.left, t.clientY - r.top);
+      for (const t of e.changedTouches) onMove(t.identifier, lx(t.clientX - r.left), lx(t.clientY - r.top));
     }, { passive: false });
     const end = (e) => {
       e.preventDefault();
@@ -96,7 +98,7 @@ export class Input {
     // Mouse: on desktop, left-click ANYWHERE swings (movement is keyboard);
     // on touch devices a stray mouse still drives the joystick.
     c.addEventListener('mousedown', (e) => {
-      const r = rect(); const x = e.clientX - r.left, y = e.clientY - r.top;
+      const r = rect(); const x = lx(e.clientX - r.left), y = lx(e.clientY - r.top);
       if (this.desktop) {
         if (this.furyBtn.visible) {
           const dx = x - this.furyBtn.x, dy = y - this.furyBtn.y;
@@ -107,7 +109,7 @@ export class Input {
     });
     window.addEventListener('mousemove', (e) => {
       if (this.desktop) return;
-      const r = rect(); onMove('mouse', e.clientX - r.left, e.clientY - r.top);
+      const r = rect(); onMove('mouse', lx(e.clientX - r.left), lx(e.clientY - r.top));
     });
     window.addEventListener('mouseup', () => { if (this.desktop) this.swingHeld = false; else onUp('mouse'); });
 

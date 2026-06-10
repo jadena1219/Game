@@ -1566,11 +1566,13 @@ export class Game {
       glanceT: 4 + Math.random() * 4,      // the knight looks around while idle
       prompt: null, jump: null, sink: 0, sunk: false,
       bounds: { minX: ox + 44, maxX: ox + W - 44, minY: oy + wallH + 30, maxY: oy + H - 42 },
-      // THE COLD OPEN (first boot only): the knight alone in the black; flint is
-      // struck; the fire catches, ROARS, and its light reveals the camp — then
-      // the title drops from above and locks in. Tap to skip.
+      spawn: { x: fire.x + 10, y: fire.y + 62 },   // where he boots up (and crash-lands)
+      // THE COLD OPEN (first boot only): the knight alone in the black FALLS in
+      // from above, eats dirt, picks himself up frame by frame; flint is struck;
+      // the fire catches, ROARS, and its light reveals the camp — then the
+      // title drops from above and locks in. Tap to skip.
       intro: this._titleIntroPlayed ? null
-        : { t: 0, HOLD: 0.8, STRIKE: 1.3, IGNITE: 2.3, TITLE: 2.85, END: 3.35, burst: false, titleDropped: false },
+        : { t: 0, LAND: 0.55, RISE: 1.5, STRIKE: 2.7, IGNITE: 3.45, TITLE: 4.0, END: 4.5, landed: false, burst: false, titleDropped: false },
     };
     this._titleIntroPlayed = true;
     this._tapped = false;
@@ -1597,7 +1599,61 @@ export class Game {
       iv.wait = (iv.wait || 0) + dt;
       if (!Assets.images.knight && iv.wait < 3 && !this._tapped) return;
       iv.t += dt;
-      if (this._tapped) { this._tapped = false; iv.t = Math.max(iv.t, 99); }   // tap = skip
+      if (this._tapped) {                                       // tap = skip
+        this._tapped = false; iv.t = Math.max(iv.t, 99);
+        const k0 = this.titleKnight;
+        k0.pose = null; k0.x = tc.spawn.x; k0.y = tc.spawn.y;
+        iv.landed = true;
+      }
+      // THE PRATFALL: he drops out of the black, lands flat on his face, lies
+      // there a stunned beat, then peels himself up pose by pose. Castle
+      // Crashers school — the comedy lands BEFORE the fire does.
+      {
+        const k = this.titleKnight, sp = tc.spawn;
+        if (iv.t < iv.LAND) {
+          // gravity owns him: slow at first, then ALL AT ONCE
+          if (iv.drop === undefined) iv.drop = Math.max(120, sp.y - tc.oy + 44);
+          const f = Math.max(0, iv.t) / iv.LAND;
+          k.x = sp.x;
+          k.y = sp.y - iv.drop * (1 - f * f);
+          k.pose = (Math.floor(iv.t * 16) % 2) ? 'walkA' : 'walkB';   // limbs flailing
+          k.faceLeft = false;
+        } else if (iv.landed) {
+          // face-down → one stir → pushup → kneel → a knight again
+          if (iv.t < iv.RISE) {
+            k.pose = 'prone';
+            // the body gives one small bounce off the dirt, then settles
+            const bt = (iv.t - iv.LAND) / 0.16;
+            k.y = sp.y - (bt < 1 ? Math.sin(bt * Math.PI) * 5 : 0);
+            k.x = sp.x + ((iv.t > 1.08 && iv.t < 1.2) ? 1 : 0);   // a twitch: he lives
+          } else if (iv.t < iv.RISE + 0.3) k.pose = 'pushup';
+          else if (iv.t < iv.RISE + 0.6) k.pose = 'kneel';
+          else if (iv.t >= iv.STRIKE - 0.25 && iv.t < iv.IGNITE + 0.3) {
+            k.pose = 'kneel';                             // down on a knee to work the flint
+          } else if (k.pose) {
+            k.pose = null;
+            if (!iv.dusted) {
+              iv.dusted = true;
+              for (let i = 0; i < 6; i++) tc.parts.push({   // dirt shaken off the plate
+                x: sp.x + (Math.random() - 0.5) * 14, y: sp.y - 6 - Math.random() * 20,
+                vx: (Math.random() - 0.5) * 26, vy: 6 + Math.random() * 18,
+                life: 0, dur: 0.3 + Math.random() * 0.3, col: '#8d8699',
+              });
+            }
+          }
+        } else {
+          // IMPACT. The whole dark feels it.
+          iv.landed = true;
+          k.x = sp.x; k.y = sp.y; k.pose = 'prone';
+          Sound.play('hit', { vol: 1.25 }); Sound.play('hurt', { vol: 0.7 });
+          this.shake = Math.max(this.shake, 9);
+          for (let i = 0; i < 14; i++) tc.parts.push({   // a ring of kicked-up dust
+            x: sp.x + (Math.random() - 0.5) * 34, y: sp.y - 1 - Math.random() * 4,
+            vx: (Math.random() - 0.5) * 90, vy: -(12 + Math.random() * 42),
+            life: 0, dur: 0.35 + Math.random() * 0.45, col: '#9a93a8',
+          });
+        }
+      }
       if (iv.t >= iv.IGNITE && !iv.burst) {
         iv.burst = true;
         Sound.play('swing_ember', { vol: 1.3 }); Sound.play('explode', { vol: 0.22 });
@@ -1614,7 +1670,7 @@ export class Game {
         life: 0, dur: 0.8 + Math.random() * 0.7, hot: Math.random() < 0.5,
       });
       if (iv.t >= iv.TITLE && !iv.titleDropped) { iv.titleDropped = true; this.ui.titleEnter(); }
-      if (iv.t >= iv.END) { if (!iv.titleDropped) this.ui.titleEnter(); tc.intro = null; }
+      if (iv.t >= iv.END) { if (!iv.titleDropped) this.ui.titleEnter(); this.titleKnight.pose = null; tc.intro = null; }
       for (const p2 of tc.parts) { p2.life += dt; p2.x += p2.vx * dt; p2.y += p2.vy * dt; }
       tc.parts = tc.parts.filter((p2) => p2.life < p2.dur);
       return;
@@ -1866,14 +1922,22 @@ export class Game {
       const pd = Math.hypot(tc.pit.x - k.x, tc.pit.y - k.y) || 1;
       const kx = k.x + ((tc.pit.x - k.x) / pd) * 4 * c2 + Math.sin(t * 31) * 1.4 * c2;   // a smooth tremble, not noise
       const ky2 = k.y + ((tc.pit.y - k.y) / pd) * 2 * c2;
+      // mid-pratfall his shadow waits AT THE LANDING SPOT, swelling as he drops
+      const falling = iv && !iv.landed && iv.t < iv.LAND;
+      const shY = falling ? tc.spawn.y : ky2;
+      const shF = falling ? Math.max(0.3, 1 - (tc.spawn.y - k.y) / 360) : 1;
       ctx.save(); ctx.fillStyle = '#03020a';
-      ctx.globalAlpha = 0.3 * (1 - sink); ctx.beginPath(); ctx.ellipse(kx, ky2 + 2, 16, 6, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 0.3 * (1 - sink) * shF;
+      ctx.beginPath(); ctx.ellipse(kx, shY + 2, 16 * shF, 6 * shF, 0, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
       ctx.globalAlpha = Math.max(0, 1 - sink * 1.15);
       // close to the flame, his armor catches its warmth
       const fireD = Math.hypot(k.x - tc.fire.x, k.y - tc.fire.y);
       const warm = fireD < 130 ? { color: '#ff9a4a', a: 0.13 * (1 - fireD / 130) + 0.04 } : null;
-      drawSprite(ctx, 'knight', pickFrame(k, t), kx, ky2 - (k.moving ? 0 : Math.sin(t * 2.6) * 1), k.faceLeft, 1, warm, true);
+      // a forced pose (the pratfall's prone/pushup/kneel) overrides the
+      // walk-cycle picker, and the idle breathing bob sits out while it plays
+      drawSprite(ctx, 'knight', k.pose || pickFrame(k, t), kx,
+        ky2 - ((k.moving || k.pose) ? 0 : Math.sin(t * 2.6) * 1), k.faceLeft, 1, warm, true);
       ctx.globalAlpha = 1;
     }
     // floating labels — quiet names, bobbing, brighter as you draw near
@@ -1927,365 +1991,53 @@ export class Game {
     this._drawTransition(ctx);
   }
 
-  // THE LONG DESCENT — the cold open is a single rising shot up the shaft:
-  // it begins at the bottom of the world, on two red eyes in the dark. They
-  // blink. Then the camera climbs — up through all six acts of the descent,
-  // each one a band of the shaft with its own light and its own relics
-  // (moonlit throne-dark, the bleeding keep's chains, the vault's drifting
-  // runes, the iron keep's beams, the drowned halls' waterfalls, the catacombs'
-  // bones) — gathering speed until it bursts through the pit mouth into the
-  // light of the fire being struck above. THEN the title falls.
+  // THE COLD OPEN, Castle Crashers school: total black except a dim pool of
+  // almost-light around the knight — who FALLS IN FROM ABOVE, eats dirt,
+  // lies there a beat, then picks himself up frame by frame (prone → pushup →
+  // kneel → stand), dusts off, strikes the flint, and the fire reveals the
+  // camp. The pool follows him the whole way down. Comedy, then warmth.
   _drawTitleIntroDark(ctx, tc) {
     const iv = tc.intro; if (!iv) return;
-    const W = this.vw, H = this.vh, S = tc.scale;
+    const S = 0.5;
+    const sw = Math.max(1, Math.round(this.vw * S)), sh = Math.max(1, Math.round(this.vh * S));
+    let sc = this.shadowCanvas, g = this.shadowCtx;
+    if (!sc || sc.width !== sw || sc.height !== sh) {
+      sc = this.shadowCanvas = document.createElement('canvas');
+      sc.width = sw; sc.height = sh;
+      g = this.shadowCtx = sc.getContext('2d');
+      this._holeCache = new Map();
+    }
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalCompositeOperation = 'source-over';
+    g.clearRect(0, 0, sw, sh);
+    g.fillStyle = 'rgba(2,1,6,1)'; g.fillRect(0, 0, sw, sh);
+    g.globalCompositeOperation = 'destination-out';
+    const hole = (wx, wy, r, a) => {
+      const sx = (wx - tc.ox) * tc.scale * S, sy = (wy - tc.oy) * tc.scale * S, rr = r * tc.scale * S;
+      if (rr <= 0) return;
+      const grd = g.createRadialGradient(sx, sy, 1, sx, sy, rr);
+      grd.addColorStop(0, `rgba(0,0,0,${a})`); grd.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = grd;
+      g.beginPath(); g.arc(sx, sy, rr, 0, Math.PI * 2); g.fill();
+    };
+    const k = this.titleKnight;
+    hole(k.x, k.y - 26, 115, 0.62);                       // the knight, barely — it FOLLOWS his fall
+    if (iv.t >= iv.IGNITE) {
+      const pr = Math.min(1, (iv.t - iv.IGNITE) / 0.85);
+      const e2 = 1 - Math.pow(1 - pr, 3);                 // the light RUSHES out, then eases
+      hole(tc.fire.x, tc.fire.y - 6, 95 + e2 * (Math.hypot(this.vw, this.vh) / tc.scale), 1);
+    } else if (iv.t >= iv.STRIKE + 0.35 && Math.sin(iv.t * 26) > 0.55) {
+      hole(tc.fire.x, tc.fire.y - 6, 80, 0.5);            // a guttering catch-light
+    }
+    g.globalCompositeOperation = 'source-over';
+    ctx.save(); ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(sc, 0, 0, this.vw, this.vh);
+    ctx.restore();
+    // the ignition FLASH
     const fd = iv.t - iv.IGNITE;
-    const out = fd < 0 ? 0 : Math.min(1, fd / 0.22);     // bursting into the light
-    if (out >= 1) {
-      if (fd < 0.3) {
-        ctx.fillStyle = `rgba(255,244,221,${0.85 * (1 - fd / 0.3)})`;
-        ctx.fillRect(0, 0, W, H);
-      }
-      return;
-    }
-    // ---- the shaft (world units: y grows UPWARD from the eyes at 0) ----
-    const bandH = H * 0.72, BANDS = 6;
-    const shaftTop = BANDS * bandH + H * 0.55;           // the mouth slab sits above band 5
-    const travel = shaftTop - H * 0.9;
-    const p = Math.max(0, Math.min(1, (iv.t - iv.HOLD) / (iv.IGNITE - iv.HOLD)));
-    const climb = p * p * (3 - 2 * p) * p;               // slow leave, hard arrival
-    const camBot = -H * 0.18 + travel * climb;           // world-y at the screen bottom
-    const toY = (wy) => H - (wy - camBot);               // world -> screen
-    const vel = climb > 0 ? (p < 0.92 ? 3 * p * p : 2.2) : 0;   // for streak length
-    const hash = (n) => { const s2 = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return s2 - Math.floor(s2); };
-
-    // act palette, bottom -> top
-    const ACTS = [
-      { bg0: '#04050c', bg1: '#070811', edge: '#9fb6e8' },   // the throne's moonlit dark
-      { bg0: '#170609', bg1: '#0d0406', edge: '#d8413a' },   // the bleeding keep
-      { bg0: '#0e0718', bg1: '#090410', edge: '#b06bff' },   // the sunless vault
-      { bg0: '#130e0a', bg1: '#0b0806', edge: '#a8835a' },   // the iron keep
-      { bg0: '#06161a', bg1: '#041012', edge: '#2a9a9e' },   // the drowned halls
-      { bg0: '#16121e', bg1: '#0e0b14', edge: '#b9b2a0' },   // the catacombs
-    ];
-
-    ctx.save();
-    ctx.globalAlpha = 1 - out;
-    ctx.fillStyle = '#030207'; ctx.fillRect(0, 0, W, H);
-
-    // ---- band backgrounds (cached vertical gradients, drawn where visible) ----
-    for (let b = 0; b < BANDS; b++) {
-      const y0 = toY((b + 1) * bandH), y1 = toY(b * bandH);   // screen top/bottom of band
-      if (y1 < -40 || y0 > H + 40) continue;
-      const act = ACTS[b];
-      ctx.fillStyle = this._tGrad(`ld_bg${b}|${Math.round(bandH)}`, () => {
-        const gg = ctx.createLinearGradient(0, 0, 0, bandH);
-        gg.addColorStop(0, act.bg0); gg.addColorStop(1, act.bg1);
-        return gg;
-      });
-      ctx.save(); ctx.translate(0, y0); ctx.fillRect(0, 0, W, y1 - y0 + 1); ctx.restore();
-    }
-
-    // ---- the shaft walls: SOLID shaded rock, edge-lit, cracked with strata ----
-    const wallW = W * 0.17;
-    for (const side of [0, 1]) {
-      const pts = [];
-      const STEP = 46;
-      const yStart = Math.floor((camBot - 80) / STEP) * STEP;
-      for (let wy = yStart; wy < camBot + H + 100; wy += STEP) {
-        const j = hash(wy * 0.013 + side * 99) * 0.5 + hash(wy * 0.31 + side * 7) * 0.5;
-        pts.push([wallW * (0.84 + j * 0.30), toY(wy), wy]);
-      }
-      ctx.beginPath();
-      ctx.moveTo(side ? W : 0, -30);
-      for (const [xw, sy2] of pts) ctx.lineTo(side ? W - xw : xw, sy2);
-      ctx.lineTo(side ? W : 0, H + 30);
-      ctx.closePath();
-      ctx.fillStyle = this._tGrad(`ld_wall${side}|${Math.round(W)}`, () => {
-        const gg = ctx.createLinearGradient(side ? W : 0, 0, side ? W - wallW * 1.35 : wallW * 1.35, 0);
-        gg.addColorStop(0, '#04020a'); gg.addColorStop(0.65, '#130c20'); gg.addColorStop(1, '#241a3a');
-        return gg;
-      });
-      ctx.fill();
-      // edge-light ONLY the rock face (stroking the closed path drew phantom
-      // lines down the screen edges — the 'wireframe' look)
-      ctx.beginPath();
-      pts.forEach(([xw, sy2], i2) => { const ex2 = side ? W - xw : xw; i2 === 0 ? ctx.moveTo(ex2, sy2) : ctx.lineTo(ex2, sy2); });
-      ctx.strokeStyle = 'rgba(168,156,196,0.30)'; ctx.lineWidth = 2; ctx.stroke();
-      // strata cracks running back into the rock mass
-      ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 1.5;
-      for (const [xw, sy2, wy] of pts) {
-        if (hash(wy * 0.77 + side * 3) < 0.45) continue;
-        const inX = side ? W - xw : xw;
-        ctx.beginPath();
-        ctx.moveTo(inX, sy2);
-        ctx.lineTo(side ? inX + 30 : inX - 30, sy2 + 10 * (hash(wy * 1.3) - 0.5));
-        ctx.stroke();
-      }
-    }
-
-    // ---- per-act relics on the walls and in the air ----
-    for (let b = 0; b < BANDS; b++) {
-      const yB0 = b * bandH, yB1 = (b + 1) * bandH;
-      if (toY(yB0) < -60 || toY(yB1) > H + 60) continue;
-      const act = ACTS[b];
-      if (b === 0) {
-        // THE EYES at the bottom of everything. They hold the first beat — and blink.
-        const ex = W / 2, ey = toY(H * 0.42);
-        if (ey > -40 && ey < H + 40) {
-          const blink = iv.t < iv.HOLD ? (iv.t % 1.6) > 0.14 : ((iv.t * 1.3) % 2.2) > 0.16;
-          ctx.fillStyle = this._tGrad('ld_eyeglow', () => {
-            const gg = ctx.createRadialGradient(0, 0, 2, 0, 0, 90);
-            gg.addColorStop(0, 'rgba(160,20,10,1)'); gg.addColorStop(1, 'rgba(60,6,4,0)');
-            return gg;
-          });
-          ctx.save(); ctx.translate(ex, ey);
-          ctx.globalAlpha = (1 - out) * (0.5 + 0.18 * Math.sin(iv.t * 1.7));
-          ctx.beginPath(); ctx.arc(0, 0, 90, 0, Math.PI * 2); ctx.fill();
-          // the shape the glow refuses to light: a brow, horns, vast shoulders
-          ctx.globalAlpha = (1 - out) * 0.6;
-          ctx.fillStyle = '#02010a';
-          ctx.beginPath(); ctx.ellipse(0, 2 * S, 26 * S, 16 * S, 0, 0, Math.PI * 2); ctx.fill();
-          ctx.fillStyle = this._tGrad('ld_bulk', () => {
-            const gg = ctx.createRadialGradient(0, 0, 4, 0, 0, 70);
-            gg.addColorStop(0, 'rgba(2,1,10,1)'); gg.addColorStop(0.55, 'rgba(2,1,10,0.7)'); gg.addColorStop(1, 'rgba(2,1,10,0)');
-            return gg;
-          });
-          ctx.save(); ctx.globalAlpha = (1 - out) * 0.8;
-          ctx.translate(0, 46 * S); ctx.scale(1.5, 0.7);
-          ctx.beginPath(); ctx.arc(0, 0, 70, 0, Math.PI * 2); ctx.fill();
-          ctx.restore();
-          ctx.globalAlpha = (1 - out) * 0.6;
-          ctx.fillStyle = '#02010a';
-          for (const dir of [-1, 1]) {
-            ctx.beginPath();
-            ctx.moveTo(dir * 13 * S, -8 * S);
-            ctx.quadraticCurveTo(dir * 34 * S, -18 * S, dir * 44 * S, -42 * S);
-            ctx.quadraticCurveTo(dir * 29 * S, -16 * S, dir * 18 * S, -4 * S);
-            ctx.closePath(); ctx.fill();
-          }
-          if (blink) {
-            ctx.globalAlpha = 1 - out;
-            ctx.fillStyle = '#ff2412';
-            ctx.fillRect(-13 * S, -2 * S, 6 * S, 4 * S); ctx.fillRect(7 * S, -2 * S, 6 * S, 4 * S);
-            ctx.fillStyle = '#ffd0b0';
-            ctx.fillRect(-11 * S, -1 * S, 2 * S, 2 * S); ctx.fillRect(9 * S, -1 * S, 2 * S, 2 * S);
-          }
-          ctx.restore(); ctx.globalAlpha = 1 - out;
-        }
-      }
-      if (b > 0) {
-        // a wall-light of this act slides past (the single best motion cue)
-        for (const side of [0, 1]) {
-          if (hash(b * 41 + side * 5) < 0.3) continue;
-          const ly3 = toY(yB0 + (0.22 + side * 0.42 + hash(b * 3 + side) * 0.25) * bandH);
-          if (ly3 > -60 && ly3 < H + 60) {
-            const lx3 = side ? W - wallW * 0.74 : wallW * 0.74;
-            ctx.save(); ctx.translate(lx3, ly3);
-            ctx.globalAlpha = (1 - out) * (0.40 + 0.12 * Math.sin(iv.t * 7 + b));
-            ctx.fillStyle = this._tGrad(`ld_halo|${act.edge}`, () => {
-              const gg = ctx.createRadialGradient(0, 0, 2, 0, 0, 44);
-              gg.addColorStop(0, act.edge); gg.addColorStop(1, 'rgba(0,0,0,0)');
-              return gg;
-            });
-            ctx.beginPath(); ctx.arc(0, 0, 44, 0, Math.PI * 2); ctx.fill();
-            ctx.globalAlpha = 1 - out;
-            ctx.fillStyle = '#241c30'; ctx.fillRect(-2.5, -6, 5, 12);
-            ctx.fillStyle = act.edge; ctx.fillRect(-1.5, -4, 3, 6);
-            ctx.restore();
-          }
-        }
-      }
-      if (b === 1) {
-        for (let i = 0; i < 4; i++) {                    // chains hang in the bleeding dark
-          const cx2 = W * (0.3 + hash(b * 31 + i) * 0.4), top = yB1 - hash(i * 7) * 90;
-          const len = 60 + hash(i * 13) * 70;
-          ctx.strokeStyle = 'rgba(90,82,104,0.6)'; ctx.lineWidth = 2;
-          for (let l2 = 0; l2 < len; l2 += 9) {
-            const sy2 = toY(top - l2);
-            if (sy2 < -10 || sy2 > H + 10) continue;
-            ctx.beginPath(); ctx.ellipse(cx2 + Math.sin((top - l2) * 0.05 + iv.t) * 2, sy2, 2.5, 4, 0, 0, Math.PI * 2); ctx.stroke();
-          }
-        }
-        for (let i = 0; i < 4; i++) {                    // slow red drips down the walls
-          const dx2 = i % 2 ? wallW * 0.8 : W - wallW * 0.8;
-          const dy2 = toY(yB1 - ((iv.t * 26 + i * 130) % bandH));
-          ctx.fillStyle = 'rgba(216,65,58,0.5)';
-          ctx.fillRect(dx2 + i * 7, dy2, 2, 9);
-        }
-      } else if (b === 2) {
-        for (let i = 0; i < 7; i++) {                    // runes drift in the vault
-          const rx2 = W * (0.28 + hash(b * 17 + i) * 0.44) + Math.sin(iv.t * 0.8 + i * 2.2) * 9;
-          const ry2 = toY(yB0 + (hash(i * 5 + 2) * 0.8 + 0.1) * bandH);
-          if (ry2 < -20 || ry2 > H + 20) continue;
-          ctx.save(); ctx.translate(rx2, ry2); ctx.rotate(0.785 + Math.sin(iv.t + i) * 0.2);
-          ctx.globalAlpha = (1 - out) * (0.5 + 0.3 * Math.sin(iv.t * 2 + i * 1.7));
-          ctx.fillStyle = act.edge; ctx.fillRect(-4, -4, 8, 8);
-          ctx.fillStyle = '#0e0718'; ctx.fillRect(-1.5, -1.5, 3, 3);
-          ctx.restore();
-        }
-        ctx.globalAlpha = 1 - out;
-      } else if (b === 3) {
-        for (let i = 0; i < 2; i++) {                    // the iron keep's broken cross-beams
-          const fromLeft = i % 2 === 0;
-          const by2 = toY(yB0 + (0.3 + i * 0.4) * bandH);
-          if (by2 < -20 || by2 > H + 20) continue;
-          const bw = W * (0.34 + hash(i * 9 + 1) * 0.2);
-          const bx2 = fromLeft ? wallW * 0.6 : W - wallW * 0.6 - bw;
-          ctx.fillStyle = '#1c1410'; ctx.fillRect(bx2, by2, bw, 11);
-          ctx.fillStyle = '#2e2218'; ctx.fillRect(bx2, by2, bw, 3);
-          ctx.fillStyle = act.edge;
-          for (let rv = 0; rv < 4; rv++) ctx.fillRect(bx2 + 10 + rv * (bw / 4), by2 + 5, 2, 2);
-          ctx.fillStyle = '#120d0a';                     // the snapped end
-          ctx.fillRect(fromLeft ? bx2 + bw - 4 : bx2, by2 - 2, 4, 15);
-        }
-      } else if (b === 4) {
-        for (let i = 0; i < 3; i++) {                    // water sheets down the drowned walls
-          const fx2 = i % 2 ? wallW * (0.5 + i * 0.12) : W - wallW * (0.6 + i * 0.1);
-          const phase = (iv.t * 120 + i * 220) % (bandH + 140);
-          const fy0 = toY(yB1 - phase + 70), fLen = 90;
-          ctx.fillStyle = 'rgba(60,170,176,0.20)';
-          ctx.fillRect(fx2 - 2, Math.max(-20, fy0), 5, fLen);
-          ctx.fillStyle = 'rgba(190,240,244,0.5)';
-          ctx.fillRect(fx2, Math.max(-20, fy0 + fLen * 0.7), 1.5, 12);
-        }
-        for (let i = 0; i < 4; i++) {                    // glints in the wet dark
-          const gx2 = W * (0.3 + hash(b * 23 + i) * 0.4);
-          const gy2 = toY(yB0 + hash(i * 3 + 8) * bandH);
-          if (gy2 < 0 || gy2 > H) continue;
-          ctx.globalAlpha = (1 - out) * (Math.sin(iv.t * 4 + i * 2.6) > 0.5 ? 0.7 : 0.15);
-          ctx.fillStyle = '#bfe9ff'; ctx.fillRect(gx2, gy2, 2, 2);
-        }
-        ctx.globalAlpha = 1 - out;
-      } else if (b === 5) {
-        for (let i = 0; i < 8; i++) {                    // the catacombs: bones in the walls
-          const left = i % 2 === 0;
-          const bnY = toY(yB0 + (hash(i * 11 + 4) * 0.85 + 0.08) * bandH);
-          if (bnY < -16 || bnY > H + 16) continue;
-          const bx2 = left ? wallW * (0.55 + hash(i) * 0.4) : W - wallW * (0.55 + hash(i) * 0.4);
-          ctx.fillStyle = '#b9b2a0';
-          if (i % 3 === 0) {                             // a skull watching the climb
-            ctx.beginPath(); ctx.arc(bx2, bnY, 5, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = '#16121e'; ctx.fillRect(bx2 - 3, bnY - 1, 2, 2); ctx.fillRect(bx2 + 1, bnY - 1, 2, 2);
-          } else {
-            ctx.fillRect(bx2 - 6, bnY, 12, 2.5);
-            ctx.fillRect(bx2 - 7, bnY - 1, 2, 4); ctx.fillRect(bx2 + 5, bnY - 1, 2, 4);
-          }
-        }
-      }
-    }
-
-    // ---- the mouth above: warm firelight pouring DOWN into the shaft ----
-    {
-      const slabY = toY(BANDS * bandH + H * 0.1);
-      const warm = Math.max(0, Math.min(1, 1.25 - (slabY < H ? 0 : (slabY - H) / (H * 2.4))));
-      if (warm > 0.02) {
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';        // it GLOWS — it must never paint
-        ctx.fillStyle = this._tGrad(`ld_beam|${W}x${H}`, () => {
-          const gg = ctx.createLinearGradient(0, 0, 0, H * 1.05);
-          gg.addColorStop(0, 'rgba(255,150,60,0.30)'); gg.addColorStop(1, 'rgba(255,100,25,0)');
-          return gg;
-        });
-        ctx.globalAlpha = (1 - out) * warm * (0.55 + 0.12 * Math.sin(iv.t * 9) + 0.07 * Math.sin(iv.t * 23));
-        ctx.beginPath();
-        ctx.moveTo(W * 0.38, slabY); ctx.lineTo(W * 0.62, slabY);
-        ctx.lineTo(W * 0.84, slabY + H * 1.05); ctx.lineTo(W * 0.16, slabY + H * 1.05);
-        ctx.closePath();
-        ctx.clip();
-        ctx.translate(0, slabY); ctx.fillRect(0, 0, W, H * 1.05);
-        ctx.restore();
-        // embers sifting DOWN through the gap, into the dark below
-        ctx.fillStyle = '#ffb469';
-        for (let i = 0; i < 6; i++) {
-          const ph = (iv.t * 0.5 + i * 0.167) % 1;
-          const ex2 = W * (0.42 + hash(i * 3 + 1) * 0.16) + Math.sin(iv.t * 2 + i * 2.1) * 8;
-          const ey2 = slabY + ph * H * 0.7;
-          if (ey2 < -10 || ey2 > H + 10) continue;
-          ctx.globalAlpha = (1 - out) * (1 - ph) * 0.8 * warm;
-          ctx.fillRect(ex2, ey2, 2 * S, 2 * S);
-        }
-        ctx.globalAlpha = 1 - out;
-      }
-      if (slabY > -90 && slabY < H + 40) {               // the stone underside of the camp
-        ctx.fillStyle = '#100b1c';
-        ctx.fillRect(0, slabY - 70, W * 0.38, 70); ctx.fillRect(W * 0.62, slabY - 70, W * 0.38, 70);
-        ctx.fillStyle = 'rgba(40,32,58,1)';
-        ctx.fillRect(0, slabY - 70, W * 0.38, 5); ctx.fillRect(W * 0.62, slabY - 70, W * 0.38, 5);
-        // the gap's lips burn with the light from above
-        ctx.fillStyle = 'rgba(255,200,120,0.9)';
-        ctx.fillRect(W * 0.355, slabY - 6, W * 0.028, 6); ctx.fillRect(W * 0.617, slabY - 6, W * 0.028, 6);
-      }
-    }
-
-    // ---- band boundaries: broken ledges whip past — the floors you are passing ----
-    for (let b = 1; b <= BANDS; b++) {
-      const ly2 = toY(b * bandH);
-      if (ly2 < -10 || ly2 > H + 10) continue;
-      const ed = ACTS[b - 1].edge;
-      ctx.globalAlpha = (1 - out) * 0.30;
-      for (let s2 = 0; s2 < 5; s2++) {
-        const lx0 = W * (0.20 + s2 * 0.125 + hash(b * 13 + s2) * 0.03);
-        const lw2 = W * (0.05 + hash(b * 7 + s2) * 0.05);
-        ctx.fillStyle = ed; ctx.fillRect(lx0, ly2, lw2, 3);
-        ctx.fillStyle = '#06040c'; ctx.fillRect(lx0, ly2 + 3, lw2, 2);
-      }
-      ctx.globalAlpha = 1 - out;
-    }
-
-    // ---- motion: dust + speed-streaks scale with the climb ----
-    ctx.fillStyle = '#7a7090';
-    for (let i = 0; i < 8; i++) {
-      const mx2 = ((i * 137.7) % W) + Math.sin(iv.t + i * 1.9) * 8;
-      const my2 = ((i * 211 + iv.t * (26 + (i % 3) * 14)) % (H + 20)) - 10;
-      ctx.globalAlpha = (1 - out) * 0.20;
-      ctx.fillRect(mx2, my2, 1.5, 1.5 + (i % 3));
-    }
-    ctx.globalAlpha = 1 - out;
-    if (vel > 0.05) {
-      ctx.lineCap = 'round';
-      for (let i = 0; i < 14; i++) {
-        const sx2 = (i * 89.7) % W;
-        const len = (16 + hash(i) * 30) * (1 + vel * 2.2);
-        const sy2 = ((i * 131 + iv.t * (700 + vel * 1700)) % (H + len + 80)) - len - 40;
-        ctx.globalAlpha = (1 - out) * (0.10 + vel * 0.16);
-        ctx.strokeStyle = '#bdb2d6'; ctx.lineWidth = i % 3 ? 1.5 : 2;
-        ctx.beginPath(); ctx.moveTo(sx2, sy2); ctx.lineTo(sx2, sy2 + len); ctx.stroke();
-      }
-      ctx.globalAlpha = 1 - out;
-    }
-    // a cinematic vignette pressing in at the edges
-    ctx.fillStyle = this._tGrad(`ld_vig|${W}x${H}`, () => {
-      const gg = ctx.createRadialGradient(W / 2, H * 0.45, Math.min(W, H) * 0.34, W / 2, H * 0.5, Math.max(W, H) * 0.74);
-      gg.addColorStop(0, 'rgba(0,0,6,0)'); gg.addColorStop(1, 'rgba(0,0,6,0.55)');
-      return gg;
-    });
-    ctx.fillRect(0, 0, W, H);
-    ctx.restore(); ctx.globalAlpha = 1;
-    // radial speed-streaks tearing past as we burst through
-    if (out > 0 && out < 1) {
-      ctx.save();
-      ctx.globalAlpha = (1 - out) * 0.7;
-      ctx.strokeStyle = '#ffe9c8'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
-      for (let i = 0; i < 10; i++) {
-        const a = (i / 10) * Math.PI * 2 + 0.15;
-        const r0 = 40 + out * 320, r1 = r0 + 90 + out * 260;
-        ctx.beginPath();
-        ctx.moveTo(W / 2 + Math.cos(a) * r0 * 0.7, H * 0.4 + Math.sin(a) * r0);
-        ctx.lineTo(W / 2 + Math.cos(a) * r1 * 0.7, H * 0.4 + Math.sin(a) * r1);
-        ctx.stroke();
-      }
-      ctx.restore();
-    }
-    // letterbox bars: the film releases its frame on the burst
-    const barH = H * 0.075 * (1 - out);
-    if (barH > 0.5) {
-      ctx.fillStyle = '#000';
-      ctx.fillRect(0, 0, W, barH); ctx.fillRect(0, H - barH, W, barH);
-    }
-    // bursting through into the firelight — a hard white-hot pop, not a wash
     if (fd >= 0 && fd < 0.3) {
-      ctx.fillStyle = `rgba(255,244,221,${0.85 * (1 - fd / 0.3)})`;
-      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = `rgba(255,214,150,${0.5 * (1 - fd / 0.3)})`;
+      ctx.fillRect(0, 0, this.vw, this.vh);
     }
   }
 

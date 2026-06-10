@@ -381,7 +381,9 @@ function main() {
   const manifest = {
     frameW: FW,
     frameH: FH,
-    frames: { idle: 0, walkA: 1, walkB: 2, attack: 3 },
+    // prone/pushup/kneel exist only on the hero's sheet (the title pratfall);
+    // other sprites simply never ask for them
+    frames: { idle: 0, walkA: 1, walkB: 2, attack: 3, prone: 4, pushup: 5, kneel: 6 },
     sprites: {},
   };
 

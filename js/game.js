@@ -202,17 +202,18 @@ export class Game {
     }
     if (bossKind) this._bakeBossRoom(g, biome, W, H, bossKind, lava, torch);
     else {
-      // a ring of standing braziers THROUGH the arena, turned per floor — combat
-      // always happens within sight of firelight (the corners alone left every
-      // camera position a void), and each floor gets its own light layout.
-      const ringR = Math.min(W, H) * 0.30, rot = level * 0.73;
-      let s2 = ((level * 1103515245 + 12345) >>> 0);
-      const RJ = () => (s2 = (s2 * 1664525 + 1013904223) >>> 0) / 4294967296;
-      for (let i = 0; i < 8; i++) {
-        const a = rot + (i / 8) * Math.PI * 2;
-        const bx = W / 2 + Math.cos(a) * (ringR + (RJ() - 0.5) * 170);
-        const by = H / 2 + Math.sin(a) * (ringR + (RJ() - 0.5) * 170);
-        this._bakeBrazierPost(g, bx, by); this.braziers.push({ x: bx, y: by, lava, torch });
+      // COLONNADE light: stone fire-columns on a flagstone-aligned grid, like
+      // pillars down a great hall — even, architectural pools of light. (The
+      // earlier jittered ring read as random glowing clutter and patchy light.)
+      const step = 620, off = (level % 2) ? step / 2 : 0;   // alternate floors shift the hall
+      for (let gy = 350; gy < H - 120; gy += step) {
+        for (let gx = 350; gx < W - 120; gx += step) {
+          const bx = gx + off;
+          if (bx > W - 120) continue;
+          if (Math.hypot(bx - W / 2, gy - H / 2) < 230) continue;   // the spawn stays clear
+          this._bakeTorchColumn(g, bx, gy);
+          this.braziers.push({ x: bx, y: gy - 6, lava, torch });
+        }
       }
       this._bakeBiomeDecor(g, biome, W, H); this._bakeScatter(g, biome, W, H, level);
       // each floor wears its biome a little differently — a faint colour cast
@@ -448,6 +449,19 @@ export class Game {
     g.fillStyle = '#2a2530'; g.fillRect(x - 4, y, 2, 26);
     g.fillStyle = '#6b5a3a'; g.fillRect(x - 9, y - 6, 18, 8);      // bowl
     g.fillStyle = '#4a3d28'; g.fillRect(x - 9, y, 18, 2);
+  }
+  // A squat stone column bearing an iron fire-bowl — hall architecture, so the
+  // light source reads as part of the building, not furniture dropped mid-floor.
+  _bakeTorchColumn(g, x, y) {
+    g.fillStyle = 'rgba(0,0,0,0.35)'; g.beginPath(); g.ellipse(x, y + 30, 16, 6, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#2e2938'; g.fillRect(x - 7, y - 2, 14, 30);     // shaft
+    g.fillStyle = '#403a4e'; g.fillRect(x - 7, y - 2, 3, 30);      // lit edge
+    g.fillStyle = '#1f1b28'; g.fillRect(x + 4, y - 2, 3, 30);      // shadow edge
+    g.fillStyle = '#4a4258'; g.fillRect(x - 9, y - 6, 18, 5);      // cap
+    g.fillStyle = '#5c5066'; g.fillRect(x - 9, y - 6, 18, 1);
+    g.fillStyle = '#241f30'; g.fillRect(x - 9, y + 26, 18, 4);     // base
+    g.fillStyle = '#3a3340'; g.fillRect(x - 6, y - 11, 12, 6);     // iron bowl
+    g.fillStyle = '#15121c'; g.fillRect(x - 6, y - 6, 12, 1);
   }
   _bakeBanner(g, x, y, col) {
     g.fillStyle = '#5a4a2a'; g.fillRect(x - 16, y - 6, 32, 3);     // pole top
@@ -3949,7 +3963,12 @@ export class Game {
       const cy = bz.y - 4;
       const g1 = ctx.createRadialGradient(bz.x, cy - h * 0.3, 1, bz.x, cy, h);
       if (bz.lava) { g1.addColorStop(0, '#fff2b0'); g1.addColorStop(0.5, '#ff5a1e'); g1.addColorStop(1, 'rgba(150,20,0,0)'); }
-      else { g1.addColorStop(0, '#fff2c0'); g1.addColorStop(0.55, '#ff9a2a'); g1.addColorStop(1, 'rgba(200,80,0,0)'); }
+      else {
+        // soulfire takes the biome's hue — teal flames in the drowned halls,
+        // violet in the vault — so the hall and its light agree
+        const mid = bz.torch || '#ff9a2a';
+        g1.addColorStop(0, '#fff2c0'); g1.addColorStop(0.55, mid); g1.addColorStop(1, this._rgba(mid, 0));
+      }
       ctx.fillStyle = g1;
       ctx.beginPath();
       ctx.moveTo(bz.x - 6, cy + 2);
@@ -4085,20 +4104,22 @@ export class Game {
     g.globalCompositeOperation = 'destination-out';
     // cached light "holes": one gradient per rounded radius + edge profile,
     // reused via translate. `hard` = frost's crisp cone vs. the soft fire feather.
-    const hole = (wx, wy, r, hard = false) => {
+    // `soft` pools (torches) only PARTIALLY cut the dark with a long feather, so
+    // neighbouring pools blend into ambience instead of stamping bright circles.
+    const hole = (wx, wy, r, hard = false, soft = false) => {
       const sx = (wx - this.cam.x) * S, sy = (wy - this.cam.y) * S, rr = Math.round(r * S);
       if (sx < -rr || sx > sw + rr || sy < -rr || sy > sh + rr) return;
-      const key = hard ? -rr : rr;
+      const key = rr + (hard ? '|h' : soft ? '|s' : '');
       let grd = cache.get(key);
       if (!grd) {
-        grd = g.createRadialGradient(0, 0, rr * (hard ? 0.55 : 0.22), 0, 0, rr);
-        grd.addColorStop(0, 'rgba(0,0,0,1)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
+        grd = g.createRadialGradient(0, 0, rr * (hard ? 0.55 : soft ? 0.1 : 0.22), 0, 0, rr);
+        grd.addColorStop(0, `rgba(0,0,0,${soft ? 0.8 : 1})`); grd.addColorStop(1, 'rgba(0,0,0,0)');
         cache.set(key, grd);
       }
       g.fillStyle = grd;
       g.translate(sx, sy); g.beginPath(); g.arc(0, 0, rr, 0, Math.PI * 2); g.fill(); g.translate(-sx, -sy);
     };
-    for (const bz of this._torches) hole(bz.x, bz.y - 6, 186 + 9 * Math.sin(this.titleT * 17 + bz.x));
+    for (const bz of this._torches) hole(bz.x, bz.y - 6, 200 + 7 * Math.sin(this.titleT * 17 + bz.x), false, true);
     // the BLADE carries the light — reach/breath/edge follow blade + state
     const L = this._bladeLight();
     const hx = this.player ? this.player.x : this.world.w / 2;

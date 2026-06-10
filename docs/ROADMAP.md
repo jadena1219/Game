@@ -8,6 +8,25 @@ pitched so nothing gets lost.
 
 ## 🚢 Shipped
 
+### The arena readability pass — no more fighting in a void ✅
+- Combat darkness capped (`dark*0.8`, max 0.68): the floor stays readable on a
+  phone; the dark is mood at the edges. Bladelight radius 195→240, torch pools
+  widened, silhouette-tint capped so foes never strobe out of existence.
+- **A ring of 8 standing braziers THROUGH the arena** (turned + jittered per
+  floor) — every camera position has firelight. Floor scatter density ~2.5x.
+- **Per-floor variation**: the biome bake rebuilds EVERY floor (brazier layout
+  turns, scatter rerolls, a faint per-floor colour cast) — floors within one
+  biome stop looking like the same room three times.
+- **Spawn tells**: an expanding soul-ring + rising wisps wherever a foe enters
+  (bigger for heralds/the Revenant) — enemies stop materializing from black.
+- **Straggler compass**: when ≤3 foes remain and they're off-screen, pulsing
+  edge chevrons point at them — no more wandering the dark for the last imp.
+- Shrine staged: god-ray light shafts in each blade's colour, landing pools,
+  breathing rune-bands on the pedestals.
+- Shop compacted (smaller cards/icons/text — less scrolling); fury bar +
+  blade chip enlarged for phone legibility; joystick restyled as a worn gold
+  rune-ring to match the sword button.
+
 ### Per-blade swing effects ✅
 - The three Living Blades no longer share one recoloured crescent — each has
   its own cut: **Emberbrand** (flame tongues licking off the arc, popping

@@ -166,15 +166,30 @@ export class Input {
 
   draw(ctx) {
     if (this.desktop) return;   // keyboard + mouse, no on-screen joystick/sword button
-    // joystick
+    // joystick — a worn gold rune-ring (matches the sword button), not dev-art grey
     if (this.stick.active) {
       ctx.save();
-      ctx.globalAlpha = 0.5;
+      ctx.globalAlpha = 0.55;
       ctx.lineWidth = 3;
-      ctx.strokeStyle = '#cfc6e6';
+      ctx.strokeStyle = '#caa54a';
       ctx.beginPath(); ctx.arc(this.stick.ox, this.stick.oy, this.maxStick, 0, Math.PI * 2); ctx.stroke();
-      ctx.fillStyle = 'rgba(220,210,245,0.55)';
+      // rune ticks around the ring
+      ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(233,200,74,0.55)';
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        const r0 = this.maxStick - 6, r1 = this.maxStick - 2;
+        ctx.beginPath();
+        ctx.moveTo(this.stick.ox + Math.cos(a) * r0, this.stick.oy + Math.sin(a) * r0);
+        ctx.lineTo(this.stick.ox + Math.cos(a) * r1, this.stick.oy + Math.sin(a) * r1);
+        ctx.stroke();
+      }
+      // the knob: a dark disc with a gold rim and warm core
+      const kg = ctx.createRadialGradient(this.stick.x, this.stick.y - 4, 2, this.stick.x, this.stick.y, this.maxStick * 0.45);
+      kg.addColorStop(0, 'rgba(74,62,40,0.9)'); kg.addColorStop(1, 'rgba(28,22,38,0.9)');
+      ctx.fillStyle = kg;
       ctx.beginPath(); ctx.arc(this.stick.x, this.stick.y, this.maxStick * 0.45, 0, Math.PI * 2); ctx.fill();
+      ctx.lineWidth = 2.5; ctx.strokeStyle = '#caa54a';
+      ctx.beginPath(); ctx.arc(this.stick.x, this.stick.y, this.maxStick * 0.45, 0, Math.PI * 2); ctx.stroke();
       ctx.restore();
     }
     // swing button — a dark rune disc with a pixel sword

@@ -201,7 +201,25 @@ export class Game {
       this._bakeBrazierPost(g, bx, by); this.braziers.push({ x: bx, y: by, lava, torch });
     }
     if (bossKind) this._bakeBossRoom(g, biome, W, H, bossKind, lava, torch);
-    else { this._bakeBiomeDecor(g, biome, W, H); this._bakeScatter(g, biome, W, H, level); }
+    else {
+      // a ring of standing braziers THROUGH the arena, turned per floor — combat
+      // always happens within sight of firelight (the corners alone left every
+      // camera position a void), and each floor gets its own light layout.
+      const ringR = Math.min(W, H) * 0.30, rot = level * 0.73;
+      let s2 = ((level * 1103515245 + 12345) >>> 0);
+      const RJ = () => (s2 = (s2 * 1664525 + 1013904223) >>> 0) / 4294967296;
+      for (let i = 0; i < 8; i++) {
+        const a = rot + (i / 8) * Math.PI * 2;
+        const bx = W / 2 + Math.cos(a) * (ringR + (RJ() - 0.5) * 170);
+        const by = H / 2 + Math.sin(a) * (ringR + (RJ() - 0.5) * 170);
+        this._bakeBrazierPost(g, bx, by); this.braziers.push({ x: bx, y: by, lava, torch });
+      }
+      this._bakeBiomeDecor(g, biome, W, H); this._bakeScatter(g, biome, W, H, level);
+      // each floor wears its biome a little differently — a faint colour cast
+      const casts = ['rgba(120,80,200,0.045)', 'rgba(60,120,200,0.05)', 'rgba(200,90,60,0.04)',
+        'rgba(70,170,140,0.045)', 'rgba(200,60,110,0.04)'];
+      g.fillStyle = casts[level % casts.length]; g.fillRect(0, 0, W, H);
+    }
     this._bakeWalls(g, biome, W, H);
 
     // vignette (heavier — this is a dungeon; bloodier and tighter in a boss room)
@@ -365,7 +383,7 @@ export class Game {
     let s = (level * 2654435761) >>> 0;
     const R = () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
     const cx = W / 2, cy = H / 2;
-    const n = 11 + (R() * 4 | 0);
+    const n = 26 + (R() * 9 | 0);    // dense enough that the floor has TEXTURE everywhere
     for (let i = 0; i < n; i++) {
       const x = 100 + R() * (W - 200), y = 100 + R() * (H - 200);
       if (Math.hypot(x - cx, y - cy) < 140) continue;            // keep the spawn clear
@@ -470,7 +488,9 @@ export class Game {
     if (this.shake > 0) ctx.translate((Math.random() - 0.5) * this.shake, (Math.random() - 0.5) * this.shake);
     ctx.fillStyle = this.voidColor || '#070510'; ctx.fillRect(-30, -30, W + 60, H + 60);
     if (this.shrineBg) ctx.drawImage(this.shrineBg, 0, 0);
-    for (const s of sh.swords) this._drawPedestal(ctx, s.x, s.y + 46);
+    // each blade stands in its own shaft of falling element-light
+    for (const s of sh.swords) this._drawShrineShaft(ctx, s);
+    for (const s of sh.swords) this._drawPedestal(ctx, s.x, s.y + 46, bladeById(s.id).color);
     // depth-sort the knight among the swords
     const list = sh.swords.map((s) => ({ s, y: s.y })); list.push({ player: true, y: p.y });
     list.sort((a, b) => a.y - b.y);
@@ -584,12 +604,42 @@ export class Game {
     ctx.restore(); ctx.globalAlpha = 1;
   }
 
-  _drawPedestal(ctx, x, y) {
+  // A god-ray falling from the dark onto each pedestal, in the blade's colour.
+  _drawShrineShaft(ctx, s) {
+    const bd = bladeById(s.id), t = this.time;
+    const flick = 0.85 + 0.15 * Math.sin(t * 2.1 + s.x * 0.13);
+    const topW = 13, botW = 38, by = s.y + 52;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createLinearGradient(0, 0, 0, by);
+    g.addColorStop(0, this._rgba(bd.color, 0.16 * flick));
+    g.addColorStop(0.7, this._rgba(bd.color, 0.07 * flick));
+    g.addColorStop(1, this._rgba(bd.color, 0.02));
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(s.x - topW, 0); ctx.lineTo(s.x + topW, 0);
+    ctx.lineTo(s.x + botW, by); ctx.lineTo(s.x - botW, by);
+    ctx.closePath(); ctx.fill();
+    // the pool of light where the ray lands
+    const pg = ctx.createRadialGradient(s.x, by, 4, s.x, by, 56);
+    pg.addColorStop(0, this._rgba(bd.color, 0.22 * flick)); pg.addColorStop(1, this._rgba(bd.color, 0));
+    ctx.fillStyle = pg;
+    ctx.beginPath(); ctx.ellipse(s.x, by, 56, 22, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  _drawPedestal(ctx, x, y, col = '#9a6ce0') {
     ctx.save();
     ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(x, y + 7, 24, 7, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#322d42'; ctx.fillRect(x - 17, y - 7, 34, 13);
     ctx.fillStyle = '#473f5c'; ctx.fillRect(x - 17, y - 7, 34, 3);
     ctx.fillStyle = '#221d30'; ctx.fillRect(x - 13, y + 6, 26, 7);
+    // a band of living runes in the blade's colour, breathing
+    const pulse = 0.5 + 0.5 * Math.sin(this.time * 2.4 + x * 0.11);
+    ctx.globalAlpha = 0.55 + 0.4 * pulse;
+    ctx.fillStyle = col;
+    for (let i = 0; i < 4; i++) ctx.fillRect(x - 12 + i * 7, y - 2, 3, 2);
+    ctx.globalAlpha = 1;
     ctx.restore();
   }
 
@@ -1538,12 +1588,11 @@ export class Game {
       this._huskTimer = 3.5 + Math.random() * 3;
       this._namedDef = null;                     // the floor belongs to the Revenant
     }
-    // swap to this level's art. Rebuild when the biome changes — and ALWAYS for a
-    // boss level (its room is special) or right after one (restore the normal room),
-    // even when the biome itself didn't change (e.g. L5 shares the crypt with L4/L6).
-    const wasBoss = this.bossKind;
+    // swap to this level's art — rebuilt EVERY floor now: the brazier ring turns,
+    // the scatter rerolls and the colour cast shifts, so floors within one biome
+    // stop looking like the same room three times in a row.
     const bossType = (LEVELS[level - 1].boss && 'boss') || (LEVELS[level - 1].miniboss && 'miniboss');
-    if (!this.biome || !this.biome.levels.includes(level) || bossType || wasBoss) this._applyBiome(level);
+    this._applyBiome(level);
     this.state = 'playing';
     this.ui.showScreen(null);
     Sound.setScene(bossType ? 'boss' : 'combat');
@@ -2317,6 +2366,10 @@ export class Game {
         else if (this.level >= 3 && Math.random() < Math.min(0.16, 0.015 + this.level * 0.008)) this._eliteify(e);
       }
       this.enemies.push(e);
+      // arrival tell: a brief soul-glow where the dark gives this one up, so foes
+      // never just MATERIALIZE out of the black
+      this.addEffect({ kind: 'spawnmark', x: e.x, y: e.y, r: e.r + 10, t: 0, dur: 0.6,
+        color: e.elite ? (e.affix && e.affix.color) || '#ff7a2a' : (this.biome && this.biome.torch) || '#b06bff' });
       if (type === 'boss' || type === 'miniboss') break; // a boss is its own batch
     }
   }
@@ -2342,6 +2395,7 @@ export class Game {
     e.maxHP = Math.round(e.maxHP * 1.7); e.hp = e.maxHP;     // a true mini-threat
     e.dropsRelic = true;
     this.enemies.push(e);
+    this.addEffect({ kind: 'spawnmark', x: e.x, y: e.y, r: e.r + 18, t: 0, dur: 0.8, color: def.color });
     this.shake = Math.max(this.shake, 7);
     Sound.play('bossroar', { vol: 0.55 });
     this.namedToast = { name: def.name.toUpperCase(), sub: 'bears a relic', color: def.color, t: 0, dur: 2.6 };
@@ -2372,6 +2426,7 @@ export class Game {
       e.fireCD = 2.4;
     }
     this.enemies.push(e);
+    this.addEffect({ kind: 'spawnmark', x: e.x, y: e.y, r: e.r + 18, t: 0, dur: 0.9, color: col });
     this.shake = Math.max(this.shake, 8);
     Sound.play('bossroar', { vol: 0.5 });
     Sound.play('whisper', { vol: 1.4 });
@@ -2583,6 +2638,53 @@ export class Game {
         }
       }
     }
+  }
+
+  // Arrival tell: an expanding soul-ring + rising wisps where a foe enters the
+  // floor — the dark announces what it gives up.
+  _drawSpawnMark(ctx, fx) {
+    const k = fx.t / fx.dur, a = (1 - k) * 0.9;
+    if (a <= 0) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = a;
+    ctx.strokeStyle = fx.color; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(fx.x, fx.y + 2, fx.r * (0.4 + k * 1.1), fx.r * (0.4 + k * 1.1) * 0.4, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = a * 0.5;
+    ctx.beginPath(); ctx.ellipse(fx.x, fx.y + 2, fx.r * (0.2 + k * 0.7), fx.r * (0.2 + k * 0.7) * 0.4, 0, 0, Math.PI * 2); ctx.stroke();
+    // wisps streaming up out of the mark
+    ctx.fillStyle = fx.color;
+    for (let i = 0; i < 4; i++) {
+      const wx = fx.x + Math.sin(i * 2.4 + fx.x) * fx.r * 0.5;
+      const wy = fx.y - k * (16 + i * 7);
+      ctx.globalAlpha = a * (1 - i * 0.18);
+      ctx.fillRect(wx - 1, wy - 1, 2, 2);
+    }
+    ctx.restore(); ctx.globalAlpha = 1;
+  }
+
+  // When only stragglers remain and they're off-screen, a pulsing chevron on the
+  // screen edge points the way — no more wandering the dark for the last imp.
+  _drawStragglerPing(ctx) {
+    if (this.state !== 'playing' || this.cutscene || this.countdown > 0) return;
+    if (this.spawnQueue.length || !this.enemies.length || this.enemies.length > 3) return;
+    const m = 38, pulse = 0.6 + 0.4 * Math.sin(this.time * 6);
+    for (const e of this.enemies) {
+      const sx = e.x - this.cam.x, sy = e.y - this.cam.y;
+      if (sx > -20 && sx < this.vw + 20 && sy > -20 && sy < this.vh + 20) continue;   // visible already
+      const dx = sx - this.vw / 2, dy = sy - this.vh / 2;
+      const k = Math.min((this.vw / 2 - m) / Math.max(1e-6, Math.abs(dx)), (this.vh / 2 - m) / Math.max(1e-6, Math.abs(dy)));
+      const px = this.vw / 2 + dx * k, py = this.vh / 2 + dy * k;
+      const col = (e.named && e.named.color) || (e.elite && e.affix && e.affix.color) || '#ff8a5a';
+      ctx.save();
+      ctx.translate(px, py); ctx.rotate(Math.atan2(dy, dx));
+      ctx.globalAlpha = 0.85 * pulse;
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.moveTo(11, 0); ctx.lineTo(-4, -7); ctx.lineTo(-1, 0); ctx.lineTo(-4, 7); ctx.closePath(); ctx.fill();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.stroke();
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
   }
 
   _spark(x, y) {
@@ -3549,6 +3651,7 @@ export class Game {
     for (const fx of this.effects) if (fx.kind === 'lavafield') this._drawLavaField(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'fissure') this._drawFissure(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'firetrail') this._drawFireTrail(ctx, fx);
+    for (const fx of this.effects) if (fx.kind === 'spawnmark') this._drawSpawnMark(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'puff') this._drawPuff(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'death') this._drawDeathFx(ctx, fx);
 
@@ -3639,6 +3742,7 @@ export class Game {
     this._drawSweep(ctx);          // "LEVEL CLEARED" banner sweep
     this._drawCountdownIntro(ctx); // level/boss intro + 3..2..1..FIGHT
     if (!this.cutscene) this._drawHUD(ctx);
+    if (!this.cutscene) this._drawStragglerPing(ctx);   // edge chevrons to the last foes
     this._drawBossBar(ctx);        // big top-of-screen boss health bar
     if (!this.cutscene && (this.state === 'playing' || (this.state === 'camp' && !this.shopOpen))) this.input.draw(ctx);
     if (!this.cutscene) this._drawFuryButton(ctx);     // floating "unleash fury" button above the hero
@@ -3911,9 +4015,9 @@ export class Game {
     this._lightT = this.time;
     const p = this.player, t = this.time;
     let L;
-    if (!p) L = { r: 175, col: '#cfe6ff', hard: false, glowA: 0.16 };
+    if (!p) L = { r: 205, col: '#cfe6ff', hard: false, glowA: 0.16 };
     else {
-      let r = 195, col = '#ffd9a0', hard = false, glowA = 0.26;
+      let r = 240, col = '#ffd9a0', hard = false, glowA = 0.26;
       if (p.blade === 'ember') {        // warm firelight that breathes
         col = '#ff9a4a';
         r *= 1 + 0.05 * Math.sin(t * 11) + 0.03 * Math.sin(t * 27 + 1.7);
@@ -3948,7 +4052,7 @@ export class Game {
     }
     for (const bz of this._torches) {
       const d = Math.hypot(x - bz.x, y - (bz.y - 6));
-      const v = 1 - Math.max(0, d - 80) / 100;
+      const v = 1 - Math.max(0, d - 95) / 125;
       if (v > best) best = v;
     }
     return Math.max(0, Math.min(1, best));
@@ -3962,7 +4066,8 @@ export class Game {
     if (this.flashScreen > 0.02) return;   // the ultimate floods the room with light
     const darkLevel = this.state === 'camp' ? Math.min(b.dark, 0.34)
       : this.bossKind ? Math.min(b.dark, 0.32)               // boss halls are LIT — the inversion
-      : b.dark;
+      : Math.min(b.dark * 0.8, 0.68);   // combat: mood at the edges, never a void —
+                                        // the floor must stay readable on a phone
     const S = 0.5;                          // half-res shadow buffer (soft, cheap)
     const sw = Math.max(1, Math.round(this.vw * S)), sh = Math.max(1, Math.round(this.vh * S));
     let sc = this.shadowCanvas, g = this.shadowCtx;
@@ -3993,7 +4098,7 @@ export class Game {
       g.fillStyle = grd;
       g.translate(sx, sy); g.beginPath(); g.arc(0, 0, rr, 0, Math.PI * 2); g.fill(); g.translate(-sx, -sy);
     };
-    for (const bz of this._torches) hole(bz.x, bz.y - 6, 168 + 9 * Math.sin(this.titleT * 17 + bz.x));
+    for (const bz of this._torches) hole(bz.x, bz.y - 6, 186 + 9 * Math.sin(this.titleT * 17 + bz.x));
     // the BLADE carries the light — reach/breath/edge follow blade + state
     const L = this._bladeLight();
     const hx = this.player ? this.player.x : this.world.w / 2;
@@ -4996,8 +5101,10 @@ export class Game {
       : (e.elite ? { color: e.affix.color, a: 0.16 } : null)));
     // BLADELIGHT: outside the light, foes live as silhouettes with burning eyes.
     // Hit-flash / telegraphs / burning override — those must read through the dark.
+    // (Capped at 0.8 so a hint of body colour always survives — foes never strobe
+    // fully in and out of existence at the light's rim.)
     const lit = (e.boss || tint) ? 1 : this._litAt(e.x, e.y);
-    if (lit < 0.92) tint = { color: '#070310', a: Math.min(0.94, (1 - lit) * 1.05) };
+    if (lit < 0.85) tint = { color: '#070310', a: Math.min(0.8, (1 - lit) * 0.95) };
     // cold rim/backlight so the all-black Demon Lord reads against the dark throne
     if (e.boss && this.biome && this.biome.moonlit) {
       const rl = this.biome.moonlit, sh = e.r * 3.4;
@@ -5557,7 +5664,7 @@ export class Game {
     ctx.fillText(`${Math.max(0, Math.ceil(p.hp))}/${p.maxHP}`, bx + 7, by + bh / 2 + 1);
 
     // fury bar (under health) — glows when fully charged
-    const fy = 20 + bh + 5, fh = 9, fbx = 18;
+    const fy = 20 + bh + 5, fh = 11, fbx = 18;
     const ff = p.fury / p.furyMax;
     const pulse = 0.7 + 0.3 * Math.sin(this.time * 10);
     if (ff >= 1) {                                   // charged: a warm glow halo behind the bar
@@ -5575,12 +5682,16 @@ export class Game {
 
     // Living-Blade chip: name + three evolution pips, in the blade's colour
     if (p.blade) {
-      const bd = bladeById(p.blade), cy2 = fy + fh + 11;
-      ctx.fillStyle = bd.color; ctx.fillRect(fbx, cy2 - 5, 5, 9);
-      ctx.font = '9px "Silkscreen", monospace'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+      const bd = bladeById(p.blade), cy2 = fy + fh + 12;
+      ctx.save();
+      ctx.shadowColor = bd.color; ctx.shadowBlur = 6;          // legible at phone size
+      ctx.fillStyle = bd.color; ctx.fillRect(fbx, cy2 - 5, 5, 10);
+      ctx.font = 'bold 10px "Silkscreen", monospace'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
       ctx.fillStyle = bd.color; ctx.fillText(bd.name, fbx + 10, cy2);
+      ctx.restore();
+      ctx.font = 'bold 10px "Silkscreen", monospace'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
       const px0 = fbx + 12 + ctx.measureText(bd.name).width + 6;
-      for (let i = 0; i < 3; i++) { ctx.fillStyle = i < (p.bladeTier || 0) ? bd.color : 'rgba(255,255,255,0.2)';
+      for (let i = 0; i < 3; i++) { ctx.fillStyle = i < (p.bladeTier || 0) ? bd.color : 'rgba(255,255,255,0.25)';
         ctx.fillRect(px0 + i * 7, cy2 - 2, 4, 4); }
     }
 

@@ -140,46 +140,13 @@ function dreadcaller(ctx, ox, f) {
   if (atk) { p(6, 1 + oy, 1, 1, vio); p(10, 1 + oy, 1, 1, vio); }
 }
 
-// The hero — a sleek black-armoured knight: obsidian plate with silver edges,
-// a glowing visor, horned helm, and a long crimson-lined cape. Empty-handed
-// (he carries the chosen Living Blade, drawn separately and BIG). A real,
-// readable stride across the four frames.
-function knightUnarmed(ctx, ox, f) {
-  const p = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(ox + x, y, w, h); };
-  const K = '#14141d', K2 = '#262632', EDGE = '#4a4a5e', SIL = '#828299', GLOW = '#74e0ff';
-  const GOLD = '#caa54a', CAPE = '#23232f', CAPE2 = '#34344a', GREV = '#0b0b11';
-  const bob = (f === 1 || f === 2) ? -1 : 0, lean = f === 3 ? 1 : 0;
-  // a dark steel cape, trailing and fluttering (no shield)
-  const cx = f === 1 ? 1 : f === 3 ? 3 : 2;
-  p(cx, 6 + bob, 5, 14, CAPE); p(cx, 6 + bob, 1, 14, CAPE2); p(cx + 1, 18 + bob, 5, 3, CAPE);
-  // legs — a clear alternating stride
-  const leg = (x, y, h) => { p(x, y, 2, h, K); p(x, y, 1, h, K2); p(x, y + 2, 2, 1, SIL); p(x, y + h - 1, 2, 1, GREV); };
-  if (f === 0) { leg(6, 17, 6); leg(9, 17, 6); }
-  else if (f === 1) { leg(5, 18, 5); leg(10, 16, 6); }
-  else if (f === 2) { leg(6, 16, 6); leg(9, 18, 5); }
-  else { leg(4, 18, 5); leg(11, 18, 5); }
-  // back arm
-  p(4 + lean, 11 + bob, 2, 5, K); p(4 + lean, 11 + bob, 1, 5, K2);
-  // cuirass — slim, tapered, sharp
-  p(6 + lean, 9 + bob, 5, 8, K); p(6 + lean, 9 + bob, 5, 1, EDGE); p(6 + lean, 9 + bob, 1, 8, K2);
-  p(7 + lean, 10 + bob, 3, 4, K2); p(8 + lean, 11 + bob, 1, 1, GLOW);   // chest gem
-  p(7 + lean, 16 + bob, 4, 1, GOLD);                                   // belt
-  p(6 + lean, 9 + bob, 5, 1, SIL);                                     // gorget
-  // pointed pauldrons
-  p(5 + lean, 9 + bob, 2, 2, K2); p(5 + lean, 8 + bob, 1, 1, SIL);
-  p(10 + lean, 9 + bob, 2, 2, K2); p(11 + lean, 8 + bob, 1, 1, SIL);
-  // sword-hand gauntlet reaching forward (the blade attaches here)
-  p(11 + lean, 11 + bob, 2, 4, K); p(12 + lean, 13 + bob, 2, 3, EDGE); p(12 + lean, 13 + bob, 2, 1, SIL);
-  // helm — sleek, horned, glowing visor
-  p(6 + lean, 3 + bob, 6, 6, K); p(6 + lean, 3 + bob, 6, 1, EDGE); p(6 + lean, 4 + bob, 1, 5, K2);
-  p(7 + lean, 6 + bob, 4, 2, '#07070c'); p(8 + lean, 6 + bob, 3, 1, GLOW);   // visor + glow
-  p(5 + lean, 1 + bob, 1, 3, SIL); p(11 + lean, 1 + bob, 1, 3, SIL);         // horns
-  p(5 + lean, 1 + bob, 1, 1, '#a8a8c0'); p(11 + lean, 1 + bob, 1, 1, '#a8a8c0');
-}
+// (The hero is NOT generated here any more: a runtime knight used to be drawn
+// in code and registered over the loaded PNG, silently replacing any new art.
+// The hand-drawn black/crimson sheet from tools/gen-knight.js — knight.png —
+// is the one true knight now.)
 
 // The named-elite roster (names match NAMED_FOES[].sprite in game.js).
 export const CREATURES = [
-  { name: 'knight', scale: 1, draw: knightUnarmed },
   { name: 'gravewarden', scale: 1.6,  draw: gravewarden },
   { name: 'quickfang',   scale: 0.95, draw: quickfang },
   { name: 'palewidow',   scale: 1.2,  draw: palewidow },

@@ -1134,6 +1134,32 @@ export class Game {
     });
     ctx.fill();
     ctx.clip();
+    // THE LONG DESCENT: peer in and the shaft falls away — ledge after ledge,
+    // each ring tinted by the act it belongs to, down and down to a point of
+    // dark where two red eyes wait. (Strata breathe; the eyes blink.)
+    {
+      const ACTS = ['#6b6276', '#2a6a6e', '#5a4a3a', '#4a2a7a', '#6a1a24', '#2a3a6e'];
+      const breathe = Math.sin(t * 0.8) * 1.5;
+      for (let i = 0; i < 6; i++) {
+        const f2 = (i + 1) / 7;
+        const rx2 = 64 * (1 - f2 * 0.82) + breathe * (1 - f2);
+        const ry2 = 30 * (1 - f2 * 0.82);
+        const dy2 = 4 + f2 * 26;
+        ctx.globalAlpha = (0.20 - i * 0.024) * (0.6 + 0.4 * near);
+        ctx.strokeStyle = ACTS[i]; ctx.lineWidth = 2.5 - i * 0.25;
+        ctx.beginPath(); ctx.ellipse(0, dy2, rx2, ry2, 0, 0, Math.PI * 2); ctx.stroke();
+      }
+      // the eyes at the bottom of everything — they blink, and they see you
+      const blink = ((t + 1.7) % 4.6) > 0.18;
+      if (blink) {
+        ctx.globalAlpha = 0.35 + 0.6 * near;
+        ctx.fillStyle = '#ff2a16';
+        ctx.fillRect(-4, 28, 2, 2); ctx.fillRect(2, 28, 2, 2);
+        ctx.globalAlpha *= 0.4;
+        ctx.fillRect(-5, 27, 4, 4); ctx.fillRect(1, 27, 4, 4);
+      }
+      ctx.globalAlpha = 1;
+    }
     // a ledge of stone catching light just inside the rim — the depth read
     ctx.strokeStyle = 'rgba(200,190,230,0.10)'; ctx.lineWidth = 2;
     traceR(-5); ctx.stroke();
@@ -1393,8 +1419,28 @@ export class Game {
     }
     // the soul brazier (Sanctum), free-standing on the floor
     this._bakeTorchColumn(g, brazier.x - ox, brazier.y - oy);
-    // the campaign standard (the Bargain), planted in the stone where he can
-    // reach it — staff, finial, and the torn cloth hung from its crossbar
+    // …raised into a proper SOUL ALCOVE: a carved arch sheltering the flame,
+    // votive candles at its feet — the Sanctum reads as a shrine, not a lamp
+    {
+      const ax = brazier.x - ox, ay = brazier.y - oy;
+      g.save();
+      g.strokeStyle = '#3a3448'; g.lineWidth = 5; g.lineCap = 'round';
+      g.beginPath(); g.moveTo(ax - 22, ay + 6); g.lineTo(ax - 22, ay - 34);
+      g.quadraticCurveTo(ax, ay - 56, ax + 22, ay - 34); g.lineTo(ax + 22, ay + 6); g.stroke();
+      g.strokeStyle = 'rgba(120,108,150,0.35)'; g.lineWidth = 1.5;
+      g.beginPath(); g.moveTo(ax - 22, ay - 34); g.quadraticCurveTo(ax, ay - 56, ax + 22, ay - 34); g.stroke();
+      // rune dots along the arch
+      g.fillStyle = 'rgba(176,107,255,0.5)';
+      for (const [rx2, ry2] of [[-18, -30], [-9, -42], [0, -46], [9, -42], [18, -30]]) g.fillRect(ax + rx2 - 1, ay + ry2 - 1, 2, 2);
+      // votive candles
+      for (const [cx2, ch2] of [[-16, 5], [14, 7], [20, 4]]) {
+        g.fillStyle = '#cfc6b8'; g.fillRect(ax + cx2 - 1, ay + 8 - ch2, 3, ch2);
+        g.fillStyle = '#7a7468'; g.fillRect(ax + cx2 - 1, ay + 8, 3, 1);
+      }
+      g.restore();
+    }
+    // the campaign standard (the Bargain) — now a shrine corner: a kneeler
+    // stone and candles before it, a place he has knelt many times
     {
       const bnx = banner.x - ox, bny = banner.y - oy;
       g.fillStyle = 'rgba(0,0,0,0.35)'; g.beginPath(); g.ellipse(bnx, bny + 4, 15, 5, 0, 0, Math.PI * 2); g.fill();
@@ -1404,6 +1450,91 @@ export class Game {
       g.fillStyle = '#5d3d20'; g.fillRect(bnx - 2, bny - 84, 2, 84);
       g.fillStyle = '#6b5a3a'; g.fillRect(bnx - 4, bny - 88, 8, 5);             // finial
       this._bakeBanner(g, bnx, bny - 76, '#4e1d22');                            // crossbar + torn cloth
+      // the kneeler: a worn flat stone before the standard
+      g.fillStyle = 'rgba(0,0,0,0.3)'; g.beginPath(); g.ellipse(bnx - 26, bny + 14, 16, 6, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#332e42'; g.fillRect(bnx - 38, bny + 8, 24, 9);
+      g.fillStyle = '#454058'; g.fillRect(bnx - 38, bny + 8, 24, 3);
+      // two small candles by the foot
+      for (const [cx2, ch2] of [[14, 6], [19, 4]]) {
+        g.fillStyle = '#cfc6b8'; g.fillRect(bnx + cx2, bny - ch2 + 2, 3, ch2);
+        g.fillStyle = '#7a7468'; g.fillRect(bnx + cx2, bny + 2, 3, 1);
+      }
+    }
+    // THE ARMORY RACK — two shrouded silhouettes wait for hands that haven't
+    // come yet (the Rogue's daggers, the Paladin's hammer). No label. Locked.
+    {
+      const rx = ox + Math.min(W - 60, W * 0.84), ry = oy + wallH + 64;
+      const lx = rx - ox, ly = ry - oy;
+      g.fillStyle = 'rgba(0,0,0,0.35)'; g.beginPath(); g.ellipse(lx, ly + 26, 26, 6, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#4a3018'; g.fillRect(lx - 24, ly - 26, 4, 52); g.fillRect(lx + 20, ly - 26, 4, 52);   // posts
+      g.fillStyle = '#5d3d20'; g.fillRect(lx - 24, ly - 26, 2, 52); g.fillRect(lx + 20, ly - 26, 2, 52);
+      g.fillStyle = '#4a3018'; g.fillRect(lx - 24, ly - 22, 48, 4); g.fillRect(lx - 24, ly + 14, 48, 4);   // rails
+      // the daggers (crossed) and the hammer — near-black shapes, faintly edged
+      g.save(); g.translate(lx - 10, ly - 2);
+      g.rotate(0.5); g.fillStyle = '#16121f'; g.fillRect(-2, -13, 4, 24);
+      g.rotate(-1.0); g.fillStyle = '#16121f'; g.fillRect(-2, -13, 4, 24);
+      g.restore();
+      g.fillStyle = '#16121f'; g.fillRect(lx + 8, ly - 16, 5, 26); g.fillRect(lx + 2, ly - 18, 17, 9);     // hammer
+      g.strokeStyle = 'rgba(140,130,160,0.22)'; g.lineWidth = 1;
+      g.strokeRect(lx + 2.5, ly - 17.5, 16, 8);
+      // a small padlock on the rail
+      g.fillStyle = '#6b5a3a'; g.fillRect(lx - 3, ly + 16, 6, 5);
+      g.strokeStyle = '#6b5a3a'; g.lineWidth = 1.5; g.beginPath(); g.arc(lx, ly + 16, 3, Math.PI, 0); g.stroke();
+    }
+    // his bedroll, west of the fire — and a supply sack + whetstone by the log
+    {
+      const bx2 = fx - 78, by2 = fy + 14;
+      g.fillStyle = 'rgba(0,0,0,0.3)'; g.beginPath(); g.ellipse(bx2, by2 + 7, 28, 7, 0, 0, Math.PI * 2); g.fill();
+      g.save(); g.translate(bx2, by2); g.rotate(-0.10);
+      g.fillStyle = '#4e1d22'; g.fillRect(-26, -8, 52, 15);
+      g.fillStyle = '#6b2a30'; g.fillRect(-26, -8, 52, 4);
+      g.fillStyle = '#33141a'; g.fillRect(-26, 5, 52, 2);
+      g.fillStyle = '#8a8296'; g.fillRect(18, -7, 8, 13);
+      g.restore();
+      g.fillStyle = '#5a4a30'; g.beginPath(); g.ellipse(fx + 46, fy + 40, 8, 9, -0.2, 0, Math.PI * 2); g.fill();   // sack
+      g.fillStyle = '#6e5c3c'; g.beginPath(); g.ellipse(fx + 46, fy + 34, 5, 4, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#3a3140'; g.fillRect(fx - 46, fy + 44, 10, 5);                                               // whetstone
+      g.fillStyle = '#55495e'; g.fillRect(fx - 46, fy + 44, 10, 2);
+    }
+    // a cooking spit over the fire: forked sticks + crossbar + a small pot
+    {
+      g.fillStyle = '#4a3018';
+      g.fillRect(fx - 24, fy - 34, 3, 36); g.fillRect(fx + 21, fy - 34, 3, 36);
+      g.fillRect(fx - 27, fy - 38, 9, 3); g.fillRect(fx + 18, fy - 38, 9, 3);   // forks
+      g.fillRect(fx - 24, fy - 36, 48, 3);                                     // crossbar
+      g.fillStyle = '#2b2733'; g.fillRect(fx - 5, fy - 33, 10, 8);             // the pot
+      g.fillStyle = '#454052'; g.fillRect(fx - 5, fy - 33, 10, 2);
+      g.fillStyle = '#1c1923'; g.fillRect(fx - 1, fy - 36, 2, 3);              // its hook
+    }
+    // THE BROKEN SEAL: the pit didn't open — it BURST through a great carved
+    // ward. Shattered ring arcs + runes + snapped chains from anchor stones.
+    {
+      const px3 = pit.x - ox, py3 = pit.y - oy;
+      g.save(); g.translate(px3, py3);
+      g.strokeStyle = 'rgba(150,140,180,0.20)'; g.lineWidth = 3;
+      for (const [a0, a1] of [[0.3, 1.2], [1.7, 2.6], [3.1, 4.3], [4.8, 5.9]]) {   // broken ring
+        g.beginPath(); g.ellipse(0, 0, 118, 66, 0, a0, a1); g.stroke();
+      }
+      g.fillStyle = 'rgba(150,140,180,0.22)';
+      for (let i = 0; i < 10; i++) {                                               // ward runes
+        const a = (i / 10) * Math.PI * 2 + 0.31;
+        if (i % 3 === 0) continue;                                                 // gaps where it shattered
+        g.fillRect(Math.cos(a) * 105 - 2, Math.sin(a) * 59 - 2, 4, 4);
+      }
+      // snapped chains: links trailing from anchor stones, torn at the rim
+      for (const ca of [0.6, 2.4, 4.1]) {
+        const ax2 = Math.cos(ca) * 150, ay2 = Math.sin(ca) * 86;
+        g.fillStyle = '#3a3446'; g.fillRect(ax2 - 6, ay2 - 5, 12, 10);             // anchor stone
+        g.fillStyle = '#262232'; g.fillRect(ax2 - 6, ay2 + 2, 12, 3);
+        g.strokeStyle = '#55495e'; g.lineWidth = 2;
+        const n2 = 5;
+        for (let li = 0; li < n2; li++) {                                          // chain links
+          const f2 = li / n2, gx2 = ax2 * (1 - f2) + Math.cos(ca) * 92 * f2, gy2 = ay2 * (1 - f2) + Math.sin(ca) * 52 * f2;
+          g.beginPath(); g.ellipse(gx2, gy2, 4, 2.6, ca, 0, Math.PI * 2); g.stroke();
+        }
+        g.beginPath(); g.ellipse(Math.cos(ca) * 88, Math.sin(ca) * 50, 4, 2.6, ca, 0.8, Math.PI * 1.6); g.stroke();   // the torn link
+      }
+      g.restore();
     }
     // THE PIT rim is computed in WORLD coords (the torn mouth is drawn live in
     // _drawTornPit so the camp and title pit are byte-identical).
@@ -1796,52 +1927,101 @@ export class Game {
     this._drawTransition(ctx);
   }
 
-  // The cold open's darkness: total black with two pools cut out of it — a dim
-  // cold one around the knight (he is all you see), and once the fire catches,
-  // an expanding blaze of light that reveals the whole camp. Plus the ignition
-  // flash. Composed on the half-res shadow buffer, like the dungeon dark.
+  // BENEATH THE RIM — the cold open's opening shot: the camera is INSIDE the
+  // pit, looking up. The mouth is a pale opening far above; the knight stands
+  // on its rim in silhouette; dust falls past the lens; far below us the abyss
+  // glows red. The flint sparks read as falling glints; when the fire CATCHES,
+  // the camera rushes up through the mouth into the lit camp.
   _drawTitleIntroDark(ctx, tc) {
     const iv = tc.intro; if (!iv) return;
-    const S = 0.5;
-    const sw = Math.max(1, Math.round(this.vw * S)), sh = Math.max(1, Math.round(this.vh * S));
-    let sc = this.shadowCanvas, g = this.shadowCtx;
-    if (!sc || sc.width !== sw || sc.height !== sh) {
-      sc = this.shadowCanvas = document.createElement('canvas');
-      sc.width = sw; sc.height = sh;
-      g = this.shadowCtx = sc.getContext('2d');
-      this._holeCache = new Map();
-    }
-    g.setTransform(1, 0, 0, 1, 0, 0);
-    g.globalCompositeOperation = 'source-over';
-    g.clearRect(0, 0, sw, sh);
-    g.fillStyle = 'rgba(2,1,6,1)'; g.fillRect(0, 0, sw, sh);
-    g.globalCompositeOperation = 'destination-out';
-    const hole = (wx, wy, r, a) => {
-      const sx = (wx - tc.ox) * tc.scale * S, sy = (wy - tc.oy) * tc.scale * S, rr = r * tc.scale * S;
-      if (rr <= 0) return;
-      const grd = g.createRadialGradient(sx, sy, 1, sx, sy, rr);
-      grd.addColorStop(0, `rgba(0,0,0,${a})`); grd.addColorStop(1, 'rgba(0,0,0,0)');
-      g.fillStyle = grd;
-      g.beginPath(); g.arc(sx, sy, rr, 0, Math.PI * 2); g.fill();
-    };
-    const k = this.titleKnight;
-    hole(k.x, k.y - 26, 115, 0.62);                       // the knight, barely
-    if (iv.t >= iv.IGNITE) {
-      const pr = Math.min(1, (iv.t - iv.IGNITE) / 0.85);
-      const e2 = 1 - Math.pow(1 - pr, 3);                 // the light RUSHES out, then eases
-      hole(tc.fire.x, tc.fire.y - 6, 95 + e2 * (Math.hypot(this.vw, this.vh) / tc.scale), 1);
-    } else if (iv.t >= iv.STRIKE + 0.35 && Math.sin(iv.t * 26) > 0.55) {
-      hole(tc.fire.x, tc.fire.y - 6, 80, 0.5);            // a guttering catch-light
-    }
-    g.globalCompositeOperation = 'source-over';
-    ctx.save(); ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(sc, 0, 0, this.vw, this.vh);
-    ctx.restore();
-    // the ignition FLASH
+    const W = this.vw, H = this.vh;
     const fd = iv.t - iv.IGNITE;
-    if (fd >= 0 && fd < 0.3) {
-      ctx.fillStyle = `rgba(255,214,150,${0.5 * (1 - fd / 0.3)})`;
-      ctx.fillRect(0, 0, this.vw, this.vh);
+    const rise = fd < 0 ? 0 : Math.min(1, fd / 0.5);      // the rush up through the mouth
+    if (rise >= 1) {
+      if (fd < 0.32) {                                     // ignition flash lingers into the camp
+        ctx.fillStyle = `rgba(255,214,150,${0.5 * (1 - fd / 0.32)})`;
+        ctx.fillRect(0, 0, W, H);
+      }
+      return;
+    }
+    const ocx = W / 2, ocy = H * 0.30;
+    ctx.save();
+    ctx.globalAlpha = 1 - rise;
+    if (rise > 0) {                                        // the mouth swallows the lens
+      const z = 1 + rise * rise * 5;
+      ctx.translate(ocx, ocy); ctx.scale(z, z); ctx.translate(-ocx, -ocy);
+    }
+    // the shaft: black walls converging on the opening
+    ctx.fillStyle = '#040209';
+    ctx.fillRect(-W, -H, W * 3, H * 3);
+    // faint wall striations falling away from the mouth
+    ctx.strokeStyle = 'rgba(90,80,110,0.10)'; ctx.lineWidth = 2;
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2 + 0.3;
+      ctx.beginPath();
+      ctx.moveTo(ocx + Math.cos(a) * W * 0.20, ocy + Math.sin(a) * W * 0.10);
+      ctx.lineTo(ocx + Math.cos(a) * W * 1.1, ocy + Math.sin(a) * W * 0.62);
+      ctx.stroke();
+    }
+    // the abyss below the camera breathes red
+    ctx.fillStyle = this._tGrad(`rimabyss|${W}x${H}`, () => {
+      const gg = ctx.createRadialGradient(W / 2, H + 60, 10, W / 2, H + 60, H * 0.8);
+      gg.addColorStop(0, 'rgba(170,26,12,1)'); gg.addColorStop(1, 'rgba(0,0,0,0)');
+      return gg;
+    });
+    ctx.globalAlpha = (1 - rise) * (0.16 + 0.05 * Math.sin(iv.t * 2.1));
+    ctx.fillRect(0, H * 0.5, W, H * 0.55);
+    ctx.globalAlpha = 1 - rise;
+    // THE MOUTH far above: a pale torn opening (echoes the pit's rim shape)
+    const grow = 1 + (iv.t / iv.IGNITE) * 0.16;            // the slow rise before the rush
+    const orx = W * 0.27 * grow, ory = orx * 0.42;
+    ctx.save();
+    ctx.translate(ocx, ocy);
+    ctx.beginPath();
+    for (let i = 0; i <= 16; i++) {
+      const a = (i / 16) * Math.PI * 2;
+      const hsh = Math.sin(i * 12.9898 + 4.13) * 43758.5453;
+      const j = (hsh - Math.floor(hsh)) * 0.16 + 0.92;
+      const px2 = Math.cos(a) * orx * j, py2 = Math.sin(a) * ory * j;
+      i === 0 ? ctx.moveTo(px2, py2) : ctx.lineTo(px2, py2);
+    }
+    ctx.closePath();
+    // night-dark sky of the camp above, warming once the tinder starts catching
+    const catching = iv.t >= iv.STRIKE + 0.35 && Math.sin(iv.t * 26) > 0.55;
+    ctx.fillStyle = catching ? '#241723' : '#181226';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(150,140,180,0.30)'; ctx.lineWidth = 3; ctx.stroke();
+    // the knight on the rim — a silhouette against what little light there is
+    drawSprite(ctx, 'knight', 'idle', orx * 0.45, -ory * 0.55 + Math.sin(iv.t * 2.6), true, 0.9,
+      { color: '#05030c', a: 0.9 }, true);
+    // flint struck above: glints spark at the rim and fall INTO the shaft
+    if (iv.t >= iv.STRIKE) {
+      for (const st of [iv.STRIKE, iv.STRIKE + 0.45]) {
+        const pr = (iv.t - st) / 0.5;
+        if (pr < 0 || pr > 1) continue;
+        for (let i = 0; i < 3; i++) {
+          ctx.globalAlpha = (1 - pr) * (1 - rise);
+          ctx.fillStyle = i ? '#ffd36b' : '#fff3c0';
+          ctx.fillRect(orx * 0.30 - i * 4, -ory * 0.4 + pr * pr * (H * 0.5) + i * 7, 2, 2);
+        }
+      }
+      ctx.globalAlpha = 1 - rise;
+    }
+    ctx.restore();
+    // dust drifting down past the lens (we are deep; the world sheds on us)
+    ctx.fillStyle = '#8a8098';
+    for (let i = 0; i < 12; i++) {
+      const sp2 = 30 + (i % 4) * 26;
+      const dx2 = ((i * 97.3) % W) + Math.sin(iv.t * 1.2 + i) * 10;
+      const dy2 = ((i * 131.7 + iv.t * sp2) % (H + 40)) - 20;
+      ctx.globalAlpha = (0.16 + (i % 3) * 0.08) * (1 - rise);
+      ctx.fillRect(dx2, dy2, i % 3 ? 1.5 : 2, (i % 4) + 2);
+    }
+    ctx.restore(); ctx.globalAlpha = 1;
+    // the ignition FLASH rides the rush
+    if (fd >= 0 && fd < 0.32) {
+      ctx.fillStyle = `rgba(255,214,150,${0.5 * (1 - fd / 0.32)})`;
+      ctx.fillRect(0, 0, W, H);
     }
   }
 

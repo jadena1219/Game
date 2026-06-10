@@ -34,7 +34,11 @@ pitched so nothing gets lost.
 ### The Sanctum is LIVE — souls, permanent upgrades, lore ✅
 - Souls bank at the end of every run (god-mode runs bank nothing) and spend in
   the Sanctum: 6 permanent upgrades now genuinely apply at run start.
-- Executioner's Seal + Thunderbrand sealed behind 70-soul unlocks.
+- Executioner's Seal + Thunderbrand sealed behind 150-soul unlocks.
+- **Economy repriced for the long game** (2026-06): souls now pay for DEPTH
+  (`floors×2 + kills/12 + 50 on a win` — a floor-10 death ≈ 30, a clear ≈ 120),
+  kills can't be farmed, costs steepened (~3,200 souls to max everything ≈
+  dozens of runs). Old banks rebased ÷8 one time (`econ` flag in the save).
 - **Every upgrade reveals a lore fragment** (Garrick, the coffers, the sorcerer
   who fled) — the grind tells the story, per STORY.md Phase 1.
 - Entrances: title button w/ souls badge + straight from the death screen.

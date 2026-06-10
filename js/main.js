@@ -77,7 +77,7 @@ const ui = {
     if (kind === 'begin') {
       b.innerHTML = '⚔&nbsp; Begin the Stand';
       b.className = 'door big';
-      b.onclick = () => { Sound.unlock(); b.classList.add('hidden'); game.startPrologue(); };
+      b.onclick = () => { Sound.unlock(); b.classList.add('hidden'); game.titleBegin(); };
     } else if (kind === 'sanctum') {
       b.innerHTML = `The Sanctum &middot; <span class="soul-dot small"></span><span class="num">${souls || 0}</span>`;
       b.className = 'sanctum';

@@ -51,6 +51,76 @@ const ORDINALS = ['First', 'Second', 'Third', 'Fourth', 'Fifth', 'Sixth', 'Seven
   'Ninth', 'Tenth', 'Eleventh', 'Twelfth', 'Thirteenth', 'Fourteenth', 'Fifteenth'];
 const ordinal = (n) => ORDINALS[n - 1] || `${n}th`;
 
+// The title campfire — real animated pixel art, four hand-placed frames.
+// Palette: 1 ember bed, 2 deep red, 3 orange, 4 yellow, 5 white-hot core.
+const FIRE_PAL = { 1: '#7a1410', 2: '#d8431a', 3: '#ff7a2a', 4: '#ffd36b', 5: '#fff7d6' };
+const FIRE_FRAMES = [
+  [
+    '............',
+    '......4.....',
+    '.....44.....',
+    '.....343....',
+    '....3443....',
+    '....34543...',
+    '...334553...',
+    '...2345543..',
+    '..234555432.',
+    '..234555432.',
+    '.2234555432.',
+    '.2233444332.',
+    '..22333322..',
+    '...112211...',
+  ],
+  [
+    '.....4......',
+    '....44......',
+    '....343.....',
+    '...3443.....',
+    '...34543....',
+    '...345543...',
+    '..23455432..',
+    '..23455532..',
+    '.2334555432.',
+    '.2234555332.',
+    '.2234554322.',
+    '..223443322.',
+    '...2223222..',
+    '....11221...',
+  ],
+  [
+    '........4...',
+    '.......44...',
+    '......343...',
+    '..4...3443..',
+    '..34..34543.',
+    '...3.345543.',
+    '..23455543..',
+    '..234555432.',
+    '.2334555432.',
+    '.2234554322.',
+    '..223443222.',
+    '..22333322..',
+    '...222222...',
+    '....2211....',
+  ],
+  [
+    '......4.....',
+    '......44....',
+    '......54....',
+    '.....454....',
+    '.....4543...',
+    '....34553...',
+    '....345543..',
+    '...23455432.',
+    '..234555432.',
+    '..2345555432',
+    '.22345554322',
+    '.2223444322.',
+    '..22233322..',
+    '....11221...',
+  ],
+];
+
 // Kill-streak milestones: reach the count, get the title (and the stinger).
 const COMBO_TIERS = [
   { at: 10, name: 'FRENZY' },
@@ -502,6 +572,7 @@ export class Game {
     if (this.shake > 0) ctx.translate((Math.random() - 0.5) * this.shake, (Math.random() - 0.5) * this.shake);
     ctx.fillStyle = this.voidColor || '#070510'; ctx.fillRect(-30, -30, W + 60, H + 60);
     if (this.shrineBg) ctx.drawImage(this.shrineBg, 0, 0);
+    this._drawShrineMystique(ctx, false);   // cold high light + ground fog (under everything)
     // each blade stands in its own shaft of falling element-light
     for (const s of sh.swords) this._drawShrineShaft(ctx, s);
     for (const s of sh.swords) this._drawPedestal(ctx, s.x, s.y + 46, bladeById(s.id).color);
@@ -513,6 +584,7 @@ export class Game {
       else this._drawShrineSword(ctx, it.s);
     }
     ctx.restore();
+    this._drawShrineMystique(ctx, true);    // spirit wisps + the breathing dark (over the scene)
     this._drawShrineAmbiance(ctx, sh);   // volcano / blizzard / storm weather, faded by proximity
     // labels + title (screen space; cam is at the origin so world == screen)
     ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -538,9 +610,54 @@ export class Game {
       }
     }
     ctx.restore();
-    if (this.state === 'shrine' && !sh.chosen) this.input.draw(ctx);   // joystick feedback
+    if (this.state === 'shrine' && !sh.chosen) this.input.draw(ctx, true);   // walking only — no sword yet
     if (this.flashScreen > 0) { ctx.save(); ctx.globalAlpha = Math.min(0.6, this.flashScreen * 2); ctx.fillStyle = '#fff7e0'; ctx.fillRect(0, 0, W, H); ctx.restore(); }
+    this._drawPlunge(ctx);               // the fall from the title camp resolves here
     this._drawTransition(ctx);
+  }
+
+  // The Shrine of Blades is a haunted place: a cold light falls from somewhere
+  // far above, fog creeps along the floor, and the dead drift up to watch the
+  // choosing. Two layers: under the pedestals (ray + fog), over the scene
+  // (wisps + a breathing edge-dark).
+  _drawShrineMystique(ctx, over) {
+    const W = this.vw, H = this.vh, t = this.time;
+    ctx.save();
+    if (!over) {
+      ctx.globalCompositeOperation = 'lighter';
+      const ray = ctx.createLinearGradient(0, 0, 0, H * 0.75);
+      ray.addColorStop(0, 'rgba(150,170,220,0.10)'); ray.addColorStop(1, 'rgba(150,170,220,0)');
+      ctx.fillStyle = ray;
+      ctx.beginPath();
+      ctx.moveTo(W * 0.30, 0); ctx.lineTo(W * 0.70, 0);
+      ctx.lineTo(W * 0.86, H * 0.75); ctx.lineTo(W * 0.14, H * 0.75);
+      ctx.closePath(); ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+      for (let i = 0; i < 3; i++) {                      // fog banks creeping across the floor
+        const fy2 = H * (0.62 + i * 0.13);
+        const fx2 = ((t * (7 + i * 5) + i * 240) % (W + 360)) - 180;
+        ctx.fillStyle = `rgba(140,150,200,${0.045 + i * 0.012})`;
+        ctx.beginPath(); ctx.ellipse(fx2, fy2, 190, 26 + i * 8, 0, 0, Math.PI * 2); ctx.fill();
+      }
+    } else {
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < 9; i++) {                      // the dead, drifting up to watch
+        const ph = (t * 0.12 + i * 0.111) % 1;
+        const wx = ((i * 167.7) % W) + Math.sin(t * 0.8 + i * 2.2) * 24;
+        const wy = H * (1.02 - ph);
+        const a = Math.sin(ph * Math.PI) * (0.22 + (i % 3) * 0.05) * (0.6 + 0.4 * Math.sin(t * 3 + i * 1.7));
+        ctx.globalAlpha = Math.max(0, a);
+        ctx.fillStyle = i % 3 ? '#9fb6e8' : '#cfe0ff';
+        ctx.fillRect(wx | 0, wy | 0, 2, 2);
+        ctx.globalAlpha *= 0.4; ctx.fillRect(wx | 0, (wy + 3) | 0, 1, 3);
+      }
+      ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+      const v = ctx.createRadialGradient(W / 2, H * 0.45, Math.min(W, H) * 0.25, W / 2, H * 0.5, Math.max(W, H) * 0.7);
+      v.addColorStop(0, 'rgba(0,0,0,0)');
+      v.addColorStop(1, `rgba(2,2,10,${0.34 + 0.05 * Math.sin(t * 0.7)})`);
+      ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
+    }
+    ctx.restore(); ctx.globalAlpha = 1;
   }
 
   // The room transforms into the element of whichever blade you stand before.
@@ -1190,11 +1307,14 @@ export class Game {
     g.fillRect(0, wallH, 14, H - wallH); g.fillRect(W - 14, wallH, 14, H - wallH); g.fillRect(0, H - 16, W, 16);
 
     // ---- staging ----
-    const fire = { x: ox + W * 0.5, y: oy + H * 0.56 };
+    // Asymmetry is DELIBERATE here: the brazier is a free-standing thing on the
+    // floor (low-left); the banner is architecture, mounted ON the wall
+    // (high-right). Different heights, different contexts — never "almost level".
+    const fire = { x: ox + W * 0.5, y: oy + H * 0.55 };
     const pit = { x: ox + W * 0.5, y: oy + H - 96 };
-    const brazier = { x: ox + Math.max(64, W * 0.17), y: oy + H * 0.46 };
-    const banner = { x: ox + Math.min(W - 64, W * 0.83), y: oy + H * 0.40 };
-    // fire ring: scorched earth + a circle of stones (the fire itself is live)
+    const brazier = { x: ox + Math.max(64, W * 0.17), y: oy + H * 0.42 };
+    const banner = { x: ox + Math.min(W - 70, W * 0.80), y: oy + wallH + 6 };   // interact at the wall's foot
+    // fire pit: scorched earth + a circle of stones (the flame itself is live pixel art)
     const fx = fire.x - ox, fy = fire.y - oy;
     const ch = g.createRadialGradient(fx, fy, 2, fx, fy, 40);
     ch.addColorStop(0, 'rgba(10,6,4,0.55)'); ch.addColorStop(1, 'rgba(10,6,4,0)');
@@ -1205,21 +1325,52 @@ export class Game {
       g.fillStyle = i % 2 ? '#403a4e' : '#332d40'; g.beginPath(); g.arc(rx, ry, 4, 0, Math.PI * 2); g.fill();
       g.fillStyle = 'rgba(255,255,255,0.12)'; g.beginPath(); g.arc(rx - 1, ry - 1.5, 1.6, 0, Math.PI * 2); g.fill();
     }
-    // charred logs
-    g.fillStyle = '#241a14'; g.save(); g.translate(fx, fy);
-    g.rotate(0.5); g.fillRect(-14, -3, 28, 5); g.rotate(-1.1); g.fillRect(-14, -2, 28, 5); g.restore();
-    // his bedroll beside the fire — he has slept here a long time
-    const bx2 = fx - 74, by2 = fy + 26;
-    g.fillStyle = 'rgba(0,0,0,0.3)'; g.beginPath(); g.ellipse(bx2, by2 + 7, 30, 8, 0, 0, Math.PI * 2); g.fill();
-    g.save(); g.translate(bx2, by2); g.rotate(-0.12);
-    g.fillStyle = '#4e1d22'; g.fillRect(-28, -8, 56, 16);
-    g.fillStyle = '#6b2a30'; g.fillRect(-28, -8, 56, 4);
-    g.fillStyle = '#33141a'; g.fillRect(-28, 6, 56, 2);
-    g.fillStyle = '#8a8296'; g.fillRect(20, -7, 8, 14);    // rolled end
-    g.restore();
-    // the soul brazier (Sanctum) + the old banner (the Bargain)
+    // the log he keeps his watch on — square to the fire, just south of it,
+    // bark, knots and a sawn end-grain face (it must READ as a log)
+    {
+      const lx = fx, ly = fy + 38;
+      g.fillStyle = 'rgba(0,0,0,0.35)'; g.beginPath(); g.ellipse(lx, ly + 8, 38, 7, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#4a3018'; g.fillRect(lx - 34, ly - 7, 68, 15);            // trunk
+      g.fillStyle = '#5d3d20'; g.fillRect(lx - 34, ly - 7, 68, 5);             // top catches the firelight
+      g.fillStyle = '#33200f'; g.fillRect(lx - 34, ly + 5, 68, 3);             // belly shadow
+      g.fillStyle = 'rgba(0,0,0,0.30)';                                       // bark grooves
+      for (let bxx = -28; bxx <= 26; bxx += 9) g.fillRect(lx + bxx, ly - 6, 2, 13);
+      g.fillStyle = '#2a1a0c'; g.beginPath(); g.ellipse(lx - 10, ly - 1, 3, 2, 0, 0, Math.PI * 2); g.fill();   // knot
+      // sawn end-grain (right end): pale face + growth rings
+      g.fillStyle = '#8a6a42'; g.beginPath(); g.ellipse(lx + 34, ly + 0.5, 5, 7.5, 0, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = '#6b4e2c'; g.lineWidth = 1;
+      g.beginPath(); g.ellipse(lx + 34, ly + 0.5, 3, 5, 0, 0, Math.PI * 2); g.stroke();
+      g.fillStyle = '#5d3d20'; g.fillRect(lx + 33, ly, 2, 2);                  // heartwood
+    }
+    // the soul brazier (Sanctum), free-standing on the floor
     this._bakeTorchColumn(g, brazier.x - ox, brazier.y - oy);
-    this._bakeBanner(g, banner.x - ox, banner.y - oy - 18, '#4e1d22');
+    // the old banner (the Bargain), hung ON the brick wall
+    this._bakeBanner(g, banner.x - ox, wallH - 64, '#4e1d22');
+    // THE PIT — a torn mouth in the stone, not a doorway: jagged rim + cracks
+    const pitRim = [];
+    {
+      const px3 = pit.x - ox, py3 = pit.y - oy;
+      for (let i = 0; i < 16; i++) {
+        const a = (i / 16) * Math.PI * 2;
+        const hsh = Math.sin(i * 12.9898 + 4.13) * 43758.5453;
+        const j = hsh - Math.floor(hsh);
+        pitRim.push([px3 + Math.cos(a) * (60 + j * 14 - 7), py3 + Math.sin(a) * (32 + ((j * 7) % 1) * 8 - 4)]);
+      }
+      g.save(); g.lineJoin = 'round';
+      g.beginPath(); pitRim.forEach(([x2, y2], i) => (i ? g.lineTo(x2, y2) : g.moveTo(x2, y2))); g.closePath();
+      g.lineWidth = 14; g.strokeStyle = '#171221'; g.stroke();   // broken-soil lip
+      g.lineWidth = 5; g.strokeStyle = '#241c30'; g.stroke();
+      for (let i = 0; i < 7; i++) {                              // cracks radiating into the floor
+        const a = (i / 7) * Math.PI * 2 + 0.4;
+        const x0 = px3 + Math.cos(a) * 64, y0 = py3 + Math.sin(a) * 36;
+        g.strokeStyle = 'rgba(0,0,0,0.5)'; g.lineWidth = 2;
+        g.beginPath(); g.moveTo(x0, y0);
+        g.lineTo(x0 + Math.cos(a) * 14 + 4, y0 + Math.sin(a) * 9 - 3);
+        g.lineTo(x0 + Math.cos(a) * 26 - 3, y0 + Math.sin(a) * 16 + 2);
+        g.stroke();
+      }
+      g.restore();
+    }
     // vignette
     const v = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.62);
     v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.5)');
@@ -1229,12 +1380,14 @@ export class Game {
     this.titleCamp = {
       ox, oy, t: 0, sizeKey: W + 'x' + H,
       fire, pit, brazier, banner,
+      pitRim: pitRim.map(([x2, y2]) => [x2 + ox, y2 + oy]),
       parts: [],                           // live fire embers
-      prompt: null,
+      prompt: null, jump: null, sink: 0, sunk: false,
       bounds: { minX: ox + 44, maxX: ox + W - 44, minY: oy + wallH + 30, maxY: oy + H - 42 },
     };
-    this.titleKnight = { x: fire.x - 40, y: fire.y + 30, sprite: 'knight',
-      moving: false, faceLeft: true, attackAnim: 0 };
+    // he rises from his seat on the log
+    this.titleKnight = { x: fire.x + 10, y: fire.y + 62, sprite: 'knight',
+      moving: false, faceLeft: false, attackAnim: 0 };
   }
 
   _updateTitleCamp(dt) {
@@ -1246,6 +1399,30 @@ export class Game {
       if (tc.prompt) { tc.prompt = null; this.ui.setTitlePrompt(null); }
       return;
     }
+    // BEGIN was chosen: the knight leaps into the pit, drops, and the world
+    // plunges — the prologue/shrine takes over under the black.
+    if (tc.jump) {
+      const j = tc.jump, k2 = this.titleKnight; j.t += dt;
+      const raw = Math.min(1, j.t / j.dur), HOP = 0.62;
+      if (raw <= HOP) {
+        const pr = raw / HOP;
+        k2.x = j.x0 + (j.tx - j.x0) * pr;
+        k2.y = j.y0 + (j.ty - j.y0) * pr - j.h * Math.sin(pr * Math.PI);
+        tc.sink = 0;
+      } else {
+        const s2 = (raw - HOP) / (1 - HOP);
+        k2.x = j.tx; k2.y = j.ty + s2 * 22;
+        tc.sink = s2;
+      }
+      k2.moving = true;
+      if (raw >= 1) {
+        tc.jump = null; tc.sunk = true;
+        Sound.play('plunge');
+        this.plunge = { t: 0, dur: 2.2, half: 1.05, fired: false, mid: () => this.startPrologue() };
+      }
+      return;
+    }
+    if (tc.sunk) return;                   // falling through the dark
     this.input.poll();
     const k = this.titleKnight, mv = this.input.move, ml = Math.hypot(mv.x, mv.y);
     k.moving = ml > 0.08;
@@ -1258,12 +1435,14 @@ export class Game {
     const b = tc.bounds;
     k.x = Math.max(b.minX, Math.min(b.maxX, k.x));
     k.y = Math.max(b.minY, Math.min(b.maxY, k.y));
-    // the pit mouth is solid — stand at the rim, not on the void
-    {
-      const erx = 54, ery = 50, ecx = tc.pit.x, ecy = tc.pit.y - 6;
+    // solid things: the pit mouth (stand at the rim, not on the void) and the
+    // fire (it is FIRE — he walks around it)
+    const solid = (ecx, ecy, erx, ery) => {
       const nx = (k.x - ecx) / erx, ny = (k.y - ecy) / ery, dl = Math.hypot(nx, ny);
       if (dl < 1 && dl > 1e-4) { k.x = ecx + (nx / dl) * erx; k.y = ecy + (ny / dl) * ery; }
-    }
+    };
+    solid(tc.pit.x, tc.pit.y, 64, 36);
+    solid(tc.fire.x, tc.fire.y + 2, 32, 18);
     // the campfire breathes embers
     if (Math.random() < dt * 16) tc.parts.push({
       x: tc.fire.x + (Math.random() - 0.5) * 16, y: tc.fire.y - 8,
@@ -1289,8 +1468,8 @@ export class Game {
     ctx.save();
     ctx.translate(-this.cam.x, -this.cam.y);
     ctx.drawImage(this.titleBg, tc.ox, tc.oy);
-    // the pit — the way down, breathing its cold light
-    this._drawDescentPit(ctx, tc.pit, t);
+    // the pit — a torn mouth in the stone, breathing ember-light from below
+    this._drawPitMouth(ctx, tc, t);
     // warm + violet + cold light pools (additive, flickering)
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
     const pool = (x, y, r, col, a) => {
@@ -1303,8 +1482,8 @@ export class Game {
     pool(tc.brazier.x, tc.brazier.y - 14, 90, '#b06bff', 0.16 + 0.05 * Math.sin(t * 3));
     pool(tc.banner.x, tc.banner.y, 64, '#d8413a', 0.07 + 0.03 * Math.sin(t * 2.2));
     ctx.restore();
-    // the campfire itself + its embers
-    this._flameColumn(ctx, tc.fire.x, tc.fire.y + 2, 26 + Math.sin(t * 9) * 3, 3.7, 0.95);
+    // the campfire itself — animated pixel art — and its embers
+    this._drawPixelFire(ctx, tc.fire.x, tc.fire.y + 6, t, 2);
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
     for (const p2 of tc.parts) {
       const a = 1 - p2.life / p2.dur;
@@ -1325,11 +1504,16 @@ export class Game {
       ctx.quadraticCurveTo(bx + 4, by - h * 0.6, bx + 5, by + 2);
       ctx.closePath(); ctx.fill();
     }
-    // the knight (shadow + sprite), depth-free in this little scene
-    ctx.save(); ctx.fillStyle = '#03020a';
-    ctx.globalAlpha = 0.3; ctx.beginPath(); ctx.ellipse(k.x, k.y + 2, 16, 6, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.restore(); ctx.globalAlpha = 1;
-    drawSprite(ctx, 'knight', pickFrame(k, t), k.x, k.y - (k.moving ? 0 : Math.sin(t * 2.6) * 1), k.faceLeft, 1);
+    // the knight (shadow + sprite) — fading as he sinks into the pit
+    if (!tc.sunk) {
+      const sink = Math.max(0, Math.min(1, tc.sink || 0));
+      ctx.save(); ctx.fillStyle = '#03020a';
+      ctx.globalAlpha = 0.3 * (1 - sink); ctx.beginPath(); ctx.ellipse(k.x, k.y + 2, 16, 6, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      ctx.globalAlpha = Math.max(0, 1 - sink * 1.15);
+      drawSprite(ctx, 'knight', pickFrame(k, t), k.x, k.y - (k.moving ? 0 : Math.sin(t * 2.6) * 1), k.faceLeft, 1);
+      ctx.globalAlpha = 1;
+    }
     // floating labels — quiet names, bobbing, brighter as you draw near
     const label = (text, x, y, col, near) => {
       const bob = Math.sin(t * 2.2 + x * 0.05) * 2;
@@ -1343,10 +1527,86 @@ export class Game {
     };
     label('BEGIN ▾', tc.pit.x, tc.pit.y - 64, '#ffd86a', tc.prompt === 'begin');
     label(`SANCTUM ◆${this.meta.souls || 0}`, tc.brazier.x, tc.brazier.y - 58, '#c89aff', tc.prompt === 'sanctum');
-    label('THE BARGAIN', tc.banner.x, tc.banner.y - 50, '#e08a7a', tc.prompt === 'prologue');
+    label('THE BARGAIN', tc.banner.x, tc.banner.y - 78, '#e08a7a', tc.prompt === 'prologue');
     ctx.restore();
-    if (!this.ui.screenOpen || this.ui.screenOpen === 'title') this.input.draw(ctx);
+    // movement only on this screen — the sword button has no business here
+    if (!this.ui.screenOpen || this.ui.screenOpen === 'title') this.input.draw(ctx, true);
+    this._drawPlunge(ctx);
     this._drawTransition(ctx);
+  }
+
+  // BEGIN: the knight leaps from where he stands into the pit (the same arc he
+  // makes at every camp), sinks into the dark, and the plunge carries us down.
+  titleBegin() {
+    if (this.state !== 'title' || !this.titleCamp || this.titleCamp.jump || this.titleCamp.sunk || this.plunge) return;
+    const tc = this.titleCamp, k = this.titleKnight;
+    this.ui.setTitlePrompt(null);
+    this.ui.swipeTitleAway();              // the logo lifts away as he commits
+    Sound.play('jump');
+    tc.prompt = null;
+    tc.jump = { t: 0, dur: 0.72, x0: k.x, y0: k.y, tx: tc.pit.x, ty: tc.pit.y - 4, h: 52 };
+    if (tc.pit.x < k.x - 1) k.faceLeft = true; else if (tc.pit.x > k.x + 1) k.faceLeft = false;
+  }
+
+  // The animated pixel campfire: four hand-placed frames, stepped at ~9fps,
+  // with a breathing glow behind the flame.
+  _drawPixelFire(ctx, x, y, t, s = 2) {
+    const F = FIRE_FRAMES[Math.floor(t * 9) % FIRE_FRAMES.length];
+    const w = 12, h = F.length;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const flick = 0.8 + 0.2 * Math.sin(t * 13);
+    const g2 = ctx.createRadialGradient(x, y - h * s * 0.4, 2, x, y - h * s * 0.4, 34 * flick);
+    g2.addColorStop(0, 'rgba(255,170,70,0.40)'); g2.addColorStop(1, 'rgba(255,110,30,0)');
+    ctx.fillStyle = g2; ctx.beginPath(); ctx.arc(x, y - h * s * 0.4, 34 * flick, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    const x0 = Math.round(x - (w * s) / 2), y0 = Math.round(y - h * s);
+    for (let ry = 0; ry < h; ry++) {
+      const row = F[ry];
+      for (let cx2 = 0; cx2 < w; cx2++) {
+        const ch2 = row[cx2];
+        if (!ch2 || ch2 === '.') continue;
+        ctx.fillStyle = FIRE_PAL[ch2];
+        ctx.fillRect(x0 + cx2 * s, y0 + ry * s, s, s);
+      }
+    }
+  }
+
+  // The pit as a PIT: a jagged torn mouth (rim baked into the floor), a throat
+  // of black falling to a deep ember glow, and sparks drifting up out of it.
+  _drawPitMouth(ctx, tc, t) {
+    const d = tc.pit, k = this.titleKnight;
+    const near = k && !tc.sunk ? Math.max(0, 1 - Math.hypot(k.x - d.x, k.y - d.y) / 180) : 0.4;
+    ctx.save();
+    ctx.beginPath();
+    tc.pitRim.forEach(([x2, y2], i) => (i ? ctx.lineTo(x2, y2) : ctx.moveTo(x2, y2)));
+    ctx.closePath();
+    const vg = ctx.createLinearGradient(0, d.y - 36, 0, d.y + 34);
+    vg.addColorStop(0, '#020108');
+    vg.addColorStop(0.55, '#0a0306');
+    vg.addColorStop(1, '#2e0c06');
+    ctx.fillStyle = vg; ctx.fill();
+    ctx.clip();
+    // a ledge of stone catching light just inside the rim — the depth read
+    ctx.strokeStyle = 'rgba(200,190,230,0.10)'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    tc.pitRim.forEach(([x2, y2], i) => (i ? ctx.lineTo(x2, y2 - 4) : ctx.moveTo(x2, y2 - 4)));
+    ctx.closePath(); ctx.stroke();
+    // the ember glow far below, swelling as the knight draws near
+    const eg = ctx.createRadialGradient(d.x, d.y + 24, 2, d.x, d.y + 24, 50);
+    eg.addColorStop(0, `rgba(255,110,40,${0.26 + 0.22 * near + 0.07 * Math.sin(t * 2.4)})`);
+    eg.addColorStop(1, 'rgba(120,30,8,0)');
+    ctx.fillStyle = eg; ctx.fillRect(d.x - 64, d.y - 24, 128, 64);
+    // sparks rising out of the throat
+    for (let i = 0; i < 6; i++) {
+      const ph = (t * 0.4 + i * 0.167) % 1;
+      const ex = d.x + Math.sin(t * 1.3 + i * 2.4) * (26 - ph * 10);
+      const ey = d.y + 20 - ph * 48;
+      ctx.globalAlpha = (1 - ph) * (0.4 + 0.6 * near);
+      ctx.fillStyle = i % 2 ? '#ff9a4a' : '#ffd36b';
+      ctx.fillRect(ex, ey, 2, 2);
+    }
+    ctx.restore(); ctx.globalAlpha = 1;
   }
 
   // The cold open: the title lifts away and the knight walks on down the
@@ -1415,6 +1675,7 @@ export class Game {
     });
     if (pr.t > 1.2) { ctx.globalAlpha = 0.4 * a; ctx.font = '10px "Silkscreen", monospace'; ctx.fillStyle = '#fff'; ctx.fillText('tap to continue', W / 2, H * 0.955); }
     ctx.restore(); ctx.globalAlpha = 1;
+    this._drawPlunge(ctx);               // the fall from the title camp resolves here
     this._drawTransition(ctx);
   }
 

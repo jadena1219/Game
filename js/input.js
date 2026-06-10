@@ -164,7 +164,9 @@ export class Input {
     return this.move;
   }
 
-  draw(ctx) {
+  // `stickOnly`: scenes where you only WALK (title camp, shrine) draw the
+  // joystick but no sword button — there is nothing to swing at.
+  draw(ctx, stickOnly = false) {
     if (this.desktop) return;   // keyboard + mouse, no on-screen joystick/sword button
     // joystick — a worn gold rune-ring (matches the sword button), not dev-art grey
     if (this.stick.active) {
@@ -192,6 +194,7 @@ export class Input {
       ctx.beginPath(); ctx.arc(this.stick.x, this.stick.y, this.maxStick * 0.45, 0, Math.PI * 2); ctx.stroke();
       ctx.restore();
     }
+    if (stickOnly) return;
     // swing button — a dark rune disc with a pixel sword
     ctx.save();
     const bx = this.btn.x, by = this.btn.y, r = this.btn.r;

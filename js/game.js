@@ -4361,8 +4361,16 @@ export class Game {
   _frame(t) {
     const dt = Math.min(0.05, (t - this._last) / 1000);
     this._last = t;
-    this._update(dt);
-    this._render();
+    // The loop is UNKILLABLE: a thrown frame logs loudly and the next frame
+    // still runs. (A single first-frame exception once froze the whole game
+    // as a half-drawn screen — never again.)
+    try {
+      this._update(dt);
+      this._render();
+    } catch (err) {
+      this._frameErrs = (this._frameErrs || 0) + 1;
+      if (this._frameErrs <= 3) console.error('frame error (#' + this._frameErrs + ', loop continues):', err);
+    }
     requestAnimationFrame((t2) => this._frame(t2));
   }
 

@@ -8,7 +8,8 @@ export function pickFrame(entity, time) {
   // Per-sprite animation override. The Demon Lord defines a slow, smooth flap that
   // cycles ADJACENT poses (idle→walkA→walkB→walkA) instead of snapping between two
   // far-apart wing-spread frames at 6fps — which read as a seizure on a big sprite.
-  const sp = entity.sprite && Assets.manifest.sprites[entity.sprite];
+  // (manifest may not have arrived yet — the game renders before assets land)
+  const sp = entity.sprite && Assets.manifest && Assets.manifest.sprites[entity.sprite];
   if (sp && sp.anim) {
     const a = sp.anim;
     const seq = entity.moving ? (a.walk || ['walkA', 'walkB']) : (a.idle || ['idle']);
@@ -30,7 +31,7 @@ let _tintCv = null, _tintCx = null;
 export function drawSprite(ctx, name, frameLabel, x, y, faceLeft, extraScale = 1, tint = null) {
   const m = Assets.manifest;
   const img = Assets.images[name];
-  if (!img || (img.tagName === 'IMG' && !img.complete)) return;
+  if (!m || !img || (img.tagName === 'IMG' && !img.complete)) return;
   const sp = m.sprites[name] || {};
   const fw = sp.fw || m.frameW, fh = sp.fh || m.frameH;   // per-sprite frame size (custom sheets)
   const col = m.frames[frameLabel] ?? 0;
@@ -66,5 +67,6 @@ export function drawSprite(ctx, name, frameLabel, x, y, faceLeft, extraScale = 1
 
 export function spriteHeight(name) {
   const m = Assets.manifest;
+  if (!m) return 24 * CONFIG.pixelScale;
   return m.frameH * CONFIG.pixelScale * (m.sprites[name]?.scale || 1);
 }

@@ -1570,7 +1570,7 @@ export class Game {
       // struck; the fire catches, ROARS, and its light reveals the camp — then
       // the title drops from above and locks in. Tap to skip.
       intro: this._titleIntroPlayed ? null
-        : { t: 0, HOLD: 0.7, STRIKE: 1.2, IGNITE: 2.05, TITLE: 2.55, END: 3.05, burst: false, titleDropped: false },
+        : { t: 0, HOLD: 0.8, STRIKE: 1.3, IGNITE: 2.3, TITLE: 2.85, END: 3.35, burst: false, titleDropped: false },
     };
     this._titleIntroPlayed = true;
     this._tapped = false;
@@ -1985,24 +1985,42 @@ export class Game {
       ctx.save(); ctx.translate(0, y0); ctx.fillRect(0, 0, W, y1 - y0 + 1); ctx.restore();
     }
 
-    // ---- the shaft walls: jagged rock columns both sides, edge-lit per act ----
+    // ---- the shaft walls: SOLID shaded rock, edge-lit, cracked with strata ----
     const wallW = W * 0.17;
     for (const side of [0, 1]) {
-      ctx.beginPath();
-      const sx0 = side ? W : 0;
-      ctx.moveTo(sx0, -20);
+      const pts = [];
       const STEP = 46;
-      const yStart = Math.floor((camBot - 60) / STEP) * STEP;
-      for (let wy = yStart; wy < camBot + H + 80; wy += STEP) {
+      const yStart = Math.floor((camBot - 80) / STEP) * STEP;
+      for (let wy = yStart; wy < camBot + H + 100; wy += STEP) {
         const j = hash(wy * 0.013 + side * 99) * 0.5 + hash(wy * 0.31 + side * 7) * 0.5;
-        const xw = wallW * (0.72 + j * 0.55);
-        ctx.lineTo(side ? W - xw : xw, toY(wy));
+        pts.push([wallW * (0.84 + j * 0.30), toY(wy), wy]);
       }
-      ctx.lineTo(sx0, H + 20);
+      ctx.beginPath();
+      ctx.moveTo(side ? W : 0, -30);
+      for (const [xw, sy2] of pts) ctx.lineTo(side ? W - xw : xw, sy2);
+      ctx.lineTo(side ? W : 0, H + 30);
       ctx.closePath();
-      ctx.fillStyle = '#0a0712';
+      ctx.fillStyle = this._tGrad(`ld_wall${side}|${Math.round(W)}`, () => {
+        const gg = ctx.createLinearGradient(side ? W : 0, 0, side ? W - wallW * 1.35 : wallW * 1.35, 0);
+        gg.addColorStop(0, '#04020a'); gg.addColorStop(0.65, '#130c20'); gg.addColorStop(1, '#241a3a');
+        return gg;
+      });
       ctx.fill();
-      ctx.strokeStyle = 'rgba(120,110,150,0.14)'; ctx.lineWidth = 2; ctx.stroke();
+      // edge-light ONLY the rock face (stroking the closed path drew phantom
+      // lines down the screen edges — the 'wireframe' look)
+      ctx.beginPath();
+      pts.forEach(([xw, sy2], i2) => { const ex2 = side ? W - xw : xw; i2 === 0 ? ctx.moveTo(ex2, sy2) : ctx.lineTo(ex2, sy2); });
+      ctx.strokeStyle = 'rgba(168,156,196,0.30)'; ctx.lineWidth = 2; ctx.stroke();
+      // strata cracks running back into the rock mass
+      ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 1.5;
+      for (const [xw, sy2, wy] of pts) {
+        if (hash(wy * 0.77 + side * 3) < 0.45) continue;
+        const inX = side ? W - xw : xw;
+        ctx.beginPath();
+        ctx.moveTo(inX, sy2);
+        ctx.lineTo(side ? inX + 30 : inX - 30, sy2 + 10 * (hash(wy * 1.3) - 0.5));
+        ctx.stroke();
+      }
     }
 
     // ---- per-act relics on the walls and in the air ----
@@ -2023,6 +2041,28 @@ export class Game {
           ctx.save(); ctx.translate(ex, ey);
           ctx.globalAlpha = (1 - out) * (0.5 + 0.18 * Math.sin(iv.t * 1.7));
           ctx.beginPath(); ctx.arc(0, 0, 90, 0, Math.PI * 2); ctx.fill();
+          // the shape the glow refuses to light: a brow, horns, vast shoulders
+          ctx.globalAlpha = (1 - out) * 0.6;
+          ctx.fillStyle = '#02010a';
+          ctx.beginPath(); ctx.ellipse(0, 2 * S, 26 * S, 16 * S, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = this._tGrad('ld_bulk', () => {
+            const gg = ctx.createRadialGradient(0, 0, 4, 0, 0, 70);
+            gg.addColorStop(0, 'rgba(2,1,10,1)'); gg.addColorStop(0.55, 'rgba(2,1,10,0.7)'); gg.addColorStop(1, 'rgba(2,1,10,0)');
+            return gg;
+          });
+          ctx.save(); ctx.globalAlpha = (1 - out) * 0.8;
+          ctx.translate(0, 46 * S); ctx.scale(1.5, 0.7);
+          ctx.beginPath(); ctx.arc(0, 0, 70, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+          ctx.globalAlpha = (1 - out) * 0.6;
+          ctx.fillStyle = '#02010a';
+          for (const dir of [-1, 1]) {
+            ctx.beginPath();
+            ctx.moveTo(dir * 13 * S, -8 * S);
+            ctx.quadraticCurveTo(dir * 34 * S, -18 * S, dir * 44 * S, -42 * S);
+            ctx.quadraticCurveTo(dir * 29 * S, -16 * S, dir * 18 * S, -4 * S);
+            ctx.closePath(); ctx.fill();
+          }
           if (blink) {
             ctx.globalAlpha = 1 - out;
             ctx.fillStyle = '#ff2412';
@@ -2032,7 +2072,30 @@ export class Game {
           }
           ctx.restore(); ctx.globalAlpha = 1 - out;
         }
-      } else if (b === 1) {
+      }
+      if (b > 0) {
+        // a wall-light of this act slides past (the single best motion cue)
+        for (const side of [0, 1]) {
+          if (hash(b * 41 + side * 5) < 0.3) continue;
+          const ly3 = toY(yB0 + (0.22 + side * 0.42 + hash(b * 3 + side) * 0.25) * bandH);
+          if (ly3 > -60 && ly3 < H + 60) {
+            const lx3 = side ? W - wallW * 0.74 : wallW * 0.74;
+            ctx.save(); ctx.translate(lx3, ly3);
+            ctx.globalAlpha = (1 - out) * (0.40 + 0.12 * Math.sin(iv.t * 7 + b));
+            ctx.fillStyle = this._tGrad(`ld_halo|${act.edge}`, () => {
+              const gg = ctx.createRadialGradient(0, 0, 2, 0, 0, 44);
+              gg.addColorStop(0, act.edge); gg.addColorStop(1, 'rgba(0,0,0,0)');
+              return gg;
+            });
+            ctx.beginPath(); ctx.arc(0, 0, 44, 0, Math.PI * 2); ctx.fill();
+            ctx.globalAlpha = 1 - out;
+            ctx.fillStyle = '#241c30'; ctx.fillRect(-2.5, -6, 5, 12);
+            ctx.fillStyle = act.edge; ctx.fillRect(-1.5, -4, 3, 6);
+            ctx.restore();
+          }
+        }
+      }
+      if (b === 1) {
         for (let i = 0; i < 4; i++) {                    // chains hang in the bleeding dark
           const cx2 = W * (0.3 + hash(b * 31 + i) * 0.4), top = yB1 - hash(i * 7) * 90;
           const len = 60 + hash(i * 13) * 70;
@@ -2093,7 +2156,7 @@ export class Game {
           ctx.fillStyle = '#bfe9ff'; ctx.fillRect(gx2, gy2, 2, 2);
         }
         ctx.globalAlpha = 1 - out;
-      } else {
+      } else if (b === 5) {
         for (let i = 0; i < 8; i++) {                    // the catacombs: bones in the walls
           const left = i % 2 === 0;
           const bnY = toY(yB0 + (hash(i * 11 + 4) * 0.85 + 0.08) * bandH);
@@ -2161,8 +2224,8 @@ export class Game {
       const ed = ACTS[b - 1].edge;
       ctx.globalAlpha = (1 - out) * 0.30;
       for (let s2 = 0; s2 < 5; s2++) {
-        const lx0 = W * (0.06 + s2 * 0.19 + hash(b * 13 + s2) * 0.05);
-        const lw2 = W * (0.07 + hash(b * 7 + s2) * 0.08);
+        const lx0 = W * (0.20 + s2 * 0.125 + hash(b * 13 + s2) * 0.03);
+        const lw2 = W * (0.05 + hash(b * 7 + s2) * 0.05);
         ctx.fillStyle = ed; ctx.fillRect(lx0, ly2, lw2, 3);
         ctx.fillStyle = '#06040c'; ctx.fillRect(lx0, ly2 + 3, lw2, 2);
       }
@@ -2170,6 +2233,14 @@ export class Game {
     }
 
     // ---- motion: dust + speed-streaks scale with the climb ----
+    ctx.fillStyle = '#7a7090';
+    for (let i = 0; i < 8; i++) {
+      const mx2 = ((i * 137.7) % W) + Math.sin(iv.t + i * 1.9) * 8;
+      const my2 = ((i * 211 + iv.t * (26 + (i % 3) * 14)) % (H + 20)) - 10;
+      ctx.globalAlpha = (1 - out) * 0.20;
+      ctx.fillRect(mx2, my2, 1.5, 1.5 + (i % 3));
+    }
+    ctx.globalAlpha = 1 - out;
     if (vel > 0.05) {
       ctx.lineCap = 'round';
       for (let i = 0; i < 14; i++) {
@@ -2182,7 +2253,35 @@ export class Game {
       }
       ctx.globalAlpha = 1 - out;
     }
+    // a cinematic vignette pressing in at the edges
+    ctx.fillStyle = this._tGrad(`ld_vig|${W}x${H}`, () => {
+      const gg = ctx.createRadialGradient(W / 2, H * 0.45, Math.min(W, H) * 0.34, W / 2, H * 0.5, Math.max(W, H) * 0.74);
+      gg.addColorStop(0, 'rgba(0,0,6,0)'); gg.addColorStop(1, 'rgba(0,0,6,0.55)');
+      return gg;
+    });
+    ctx.fillRect(0, 0, W, H);
     ctx.restore(); ctx.globalAlpha = 1;
+    // radial speed-streaks tearing past as we burst through
+    if (out > 0 && out < 1) {
+      ctx.save();
+      ctx.globalAlpha = (1 - out) * 0.7;
+      ctx.strokeStyle = '#ffe9c8'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2 + 0.15;
+        const r0 = 40 + out * 320, r1 = r0 + 90 + out * 260;
+        ctx.beginPath();
+        ctx.moveTo(W / 2 + Math.cos(a) * r0 * 0.7, H * 0.4 + Math.sin(a) * r0);
+        ctx.lineTo(W / 2 + Math.cos(a) * r1 * 0.7, H * 0.4 + Math.sin(a) * r1);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    // letterbox bars: the film releases its frame on the burst
+    const barH = H * 0.075 * (1 - out);
+    if (barH > 0.5) {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, W, barH); ctx.fillRect(0, H - barH, W, barH);
+    }
     // bursting through into the firelight — a hard white-hot pop, not a wash
     if (fd >= 0 && fd < 0.3) {
       ctx.fillStyle = `rgba(255,244,221,${0.85 * (1 - fd / 0.3)})`;

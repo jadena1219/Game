@@ -9,11 +9,13 @@ pitched so nothing gets lost.
 ## 🚢 Shipped
 
 ### The Revenant — fight your past self ✅
-- Die, and the Lord raises what you left: your run (hero, Living Blade) is banked,
-  and the NEXT run meets it **two floors above where you fell** — on your way back
-  down, before the wall that killed you, never stacked on it. A named duelist
-  wearing your sprite, dashing like you, fighting with your blade (Ember husks lay
-  hostile fire-trails, Frost husks chill on touch, Storm husks loose bolts).
+- The Lord keeps only your FINEST corpse: a husk banks **only when a death sets a
+  new deepest-fall record**, so the Revenant is a rare, earned event — not a tax
+  on every death in a death-loop game. It appears **two floors above where you
+  fell** — on your way back down, before the wall that killed you, never stacked
+  on it. A named duelist wearing your sprite, dashing like you, fighting with
+  your blade (Ember husks lay hostile fire-trails, Frost husks chill on touch,
+  Storm husks loose bolts).
 - Titled by death count — Garrick was the First Sacrifice, so yours number from
   "The Second Sacrifice". **Guaranteed relic drop** — beating what you were is the
   power-up that helps you break through. A unique Lord taunt follows the floor

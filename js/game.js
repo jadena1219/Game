@@ -3154,17 +3154,22 @@ export class Game {
     this.dying = 1.5;
     this.shake = Math.max(this.shake, 9);
     this._buzz(220);
-    // the Lord raises what you leave — but it stands a couple of floors ABOVE
-    // where you fell: you meet what you were on the way back down, before the
-    // wall that killed you, never stacked on it. Its relic is your way through.
-    // (Boss floors shift up one more; god-mode runs leave nothing.)
+    // The Lord does not keep every corpse — only your FINEST. A husk is banked
+    // only when this death is your deepest fall yet, so the Revenant stays a
+    // rare, earned event (not a tax on every death in a death-loop game). It
+    // stands a couple of floors ABOVE where you fell: you meet what you were on
+    // the way back down, before the wall that killed you, and its relic is your
+    // way through. (Boss floors shift up one more; god-mode runs leave nothing.)
     if (!this.godMode && this.level >= 2 && this.player) {
-      let floor = Math.max(2, this.level - 2);
-      while (floor > 2 && (LEVELS[floor - 1].boss || LEVELS[floor - 1].miniboss)) floor--;
       this.meta.deaths = (this.meta.deaths || 0) + 1;
+      if (this.level > (this.meta.bestFall || 0)) {
+        this.meta.bestFall = this.level;
+        let floor = Math.max(2, this.level - 2);
+        while (floor > 2 && (LEVELS[floor - 1].boss || LEVELS[floor - 1].miniboss)) floor--;
+        // Garrick was the First Sacrifice — your husks number from the Second
+        saveHusk({ floor, n: this.meta.deaths + 1, blade: this.player.blade || null, hero: this.heroId || 'knight' });
+      }
       saveMeta(this.meta);
-      // Garrick was the First Sacrifice — your husks number from the Second
-      saveHusk({ floor, n: this.meta.deaths + 1, blade: this.player.blade || null, hero: this.heroId || 'knight' });
     }
     this._awardSouls(false);
     Sound.setScene('gameover'); Sound.play('lose');

@@ -1643,7 +1643,7 @@ export class Game {
             life: 0, dur: 0.5 + Math.random() * 0.5, hot: Math.random() < 0.5,
           });
           Sound.play('plunge');
-          this.plunge = { t: 0, dur: 2.0, half: 0.9, fired: false, mid: () => this.startPrologue() };
+          this.plunge = { t: 0, dur: 1.6, half: 0.72, fired: false, mid: () => this.startPrologue() };
         }
       }
       k2.moving = true;
@@ -1927,98 +1927,172 @@ export class Game {
     this._drawTransition(ctx);
   }
 
-  // BENEATH THE RIM — the cold open's opening shot: the camera is INSIDE the
-  // pit, looking up. The mouth is a pale opening far above; the knight stands
-  // on its rim in silhouette; dust falls past the lens; far below us the abyss
-  // glows red. The flint sparks read as falling glints; when the fire CATCHES,
-  // the camera rushes up through the mouth into the lit camp.
+  // BENEATH THE RIM v2 — the camera is deep INSIDE the shaft, looking up.
+  // Jagged ledge-rings recede toward the torn mouth far above (the camera is
+  // rising the whole time); the mouth has THICKNESS (bright lip, deep inner
+  // shadow band, rim-stones notching in); the knight stands on its edge in
+  // silhouette; below the lens the abyss burns and sheds rising embers. The
+  // flint glints fall in from above; ignition paints the rim from beyond it,
+  // then the camera RUSHES up through the mouth in a burst of speed-streaks.
   _drawTitleIntroDark(ctx, tc) {
     const iv = tc.intro; if (!iv) return;
-    const W = this.vw, H = this.vh;
+    const W = this.vw, H = this.vh, S = tc.scale;
     const fd = iv.t - iv.IGNITE;
-    const rise = fd < 0 ? 0 : Math.min(1, fd / 0.5);      // the rush up through the mouth
+    const rise = fd < 0 ? 0 : Math.min(1, fd / 0.5);
     if (rise >= 1) {
-      if (fd < 0.32) {                                     // ignition flash lingers into the camp
+      if (fd < 0.32) {
         ctx.fillStyle = `rgba(255,214,150,${0.5 * (1 - fd / 0.32)})`;
         ctx.fillRect(0, 0, W, H);
       }
       return;
     }
-    const ocx = W / 2, ocy = H * 0.30;
+    const ocx = W / 2, ocy = H * 0.34;
+    // one torn-rim language everywhere: the same 16-point hash as the pit
+    const rimPath = (rx, ry) => {
+      ctx.beginPath();
+      for (let i = 0; i <= 16; i++) {
+        const a = (i / 16) * Math.PI * 2;
+        const hsh = Math.sin(i * 12.9898 + 4.13) * 43758.5453;
+        const j = (hsh - Math.floor(hsh)) * 0.16 + 0.92;
+        const px2 = Math.cos(a) * rx * j, py2 = Math.sin(a) * ry * j;
+        i === 0 ? ctx.moveTo(px2, py2) : ctx.lineTo(px2, py2);
+      }
+      ctx.closePath();
+    };
+    const ease = (x2) => x2 * x2 * (3 - 2 * x2);
+    const grow = 1 + ease(Math.min(1, iv.t / iv.IGNITE)) * 0.34;   // the slow rise
+    const mrx = 150 * S * grow, mry = 64 * S * grow;               // the mouth
+    const catching = iv.t >= iv.STRIKE + 0.35 && Math.sin(iv.t * 26) > 0.55;
+    const flicker = catching ? 0.7 + 0.3 * Math.sin(iv.t * 40) : 0;
+
     ctx.save();
     ctx.globalAlpha = 1 - rise;
-    if (rise > 0) {                                        // the mouth swallows the lens
-      const z = 1 + rise * rise * 5;
+    if (rise > 0) {                                  // the mouth swallows the lens
+      const z = 1 + rise * rise * 6;
       ctx.translate(ocx, ocy); ctx.scale(z, z); ctx.translate(-ocx, -ocy);
     }
-    // the shaft: black walls converging on the opening
-    ctx.fillStyle = '#040209';
+    ctx.fillStyle = '#030208';
     ctx.fillRect(-W, -H, W * 3, H * 3);
-    // faint wall striations falling away from the mouth
-    ctx.strokeStyle = 'rgba(90,80,110,0.10)'; ctx.lineWidth = 2;
-    for (let i = 0; i < 9; i++) {
-      const a = (i / 9) * Math.PI * 2 + 0.3;
-      ctx.beginPath();
-      ctx.moveTo(ocx + Math.cos(a) * W * 0.20, ocy + Math.sin(a) * W * 0.10);
-      ctx.lineTo(ocx + Math.cos(a) * W * 1.1, ocy + Math.sin(a) * W * 0.62);
-      ctx.stroke();
-    }
-    // the abyss below the camera breathes red
-    ctx.fillStyle = this._tGrad(`rimabyss|${W}x${H}`, () => {
-      const gg = ctx.createRadialGradient(W / 2, H + 60, 10, W / 2, H + 60, H * 0.8);
-      gg.addColorStop(0, 'rgba(170,26,12,1)'); gg.addColorStop(1, 'rgba(0,0,0,0)');
-      return gg;
-    });
-    ctx.globalAlpha = (1 - rise) * (0.16 + 0.05 * Math.sin(iv.t * 2.1));
-    ctx.fillRect(0, H * 0.5, W, H * 0.55);
-    ctx.globalAlpha = 1 - rise;
-    // THE MOUTH far above: a pale torn opening (echoes the pit's rim shape)
-    const grow = 1 + (iv.t / iv.IGNITE) * 0.16;            // the slow rise before the rush
-    const orx = W * 0.27 * grow, ory = orx * 0.42;
+
+    // THE SHAFT: ledge-rings receding up toward the mouth, sliding as we rise
     ctx.save();
     ctx.translate(ocx, ocy);
-    ctx.beginPath();
-    for (let i = 0; i <= 16; i++) {
-      const a = (i / 16) * Math.PI * 2;
-      const hsh = Math.sin(i * 12.9898 + 4.13) * 43758.5453;
-      const j = (hsh - Math.floor(hsh)) * 0.16 + 0.92;
-      const px2 = Math.cos(a) * orx * j, py2 = Math.sin(a) * ory * j;
-      i === 0 ? ctx.moveTo(px2, py2) : ctx.lineTo(px2, py2);
+    const slide = (iv.t * 0.10) % (1 / 7);
+    for (let i = 6; i >= 0; i--) {
+      const f2 = Math.min(1, (i + 0.4) / 7 + slide);
+      const k = Math.pow(f2, 1.7);
+      const rx2 = mrx * (1 + k * 3.4), ry2 = mry * (1 + k * 4.2) + k * H * 0.16;
+      const a2 = (1 - f2) * 0.55 + 0.10;
+      rimPath(rx2, ry2);
+      ctx.strokeStyle = `rgba(28,22,40,${a2})`; ctx.lineWidth = 4 + k * 14; ctx.stroke();   // the ledge body
+      ctx.strokeStyle = `rgba(150,138,178,${a2 * 0.30 + flicker * 0.04})`; ctx.lineWidth = 1.5; ctx.stroke();   // its lip
     }
-    ctx.closePath();
-    // night-dark sky of the camp above, warming once the tinder starts catching
-    const catching = iv.t >= iv.STRIKE + 0.35 && Math.sin(iv.t * 26) > 0.55;
-    ctx.fillStyle = catching ? '#241723' : '#181226';
+    ctx.restore();
+
+    // the abyss below the lens: it burns, it breathes, it sheds embers upward
+    ctx.fillStyle = this._tGrad(`rimabyss|${W}x${H}`, () => {
+      const gg = ctx.createRadialGradient(W / 2, H + 50, 10, W / 2, H + 50, H * 0.85);
+      gg.addColorStop(0, 'rgba(200,40,16,1)'); gg.addColorStop(0.55, 'rgba(120,18,8,0.55)'); gg.addColorStop(1, 'rgba(0,0,0,0)');
+      return gg;
+    });
+    ctx.globalAlpha = (1 - rise) * (0.30 + 0.08 * Math.sin(iv.t * 2.1));
+    ctx.fillRect(0, H * 0.42, W, H * 0.6);
+    ctx.globalAlpha = 1 - rise;
+    for (let i = 0; i < 7; i++) {                    // embers climbing past the camera
+      const ph = (iv.t * 0.22 + i * 0.143) % 1;
+      const ex = W * 0.5 + Math.sin(iv.t * 0.9 + i * 2.6) * W * (0.18 + ph * 0.3) * (i % 2 ? 1 : -1);
+      const ey = H * 1.04 - ph * H * 0.95;
+      ctx.globalAlpha = Math.sin(ph * Math.PI) * 0.55 * (1 - rise);
+      ctx.fillStyle = i % 2 ? '#ff7a2a' : '#d8431a';
+      const es = (1 - ph) * 3 * S + 1;
+      ctx.fillRect(ex, ey, es, es);
+    }
+    ctx.globalAlpha = 1 - rise;
+
+    // THE MOUTH — night above, a lit lip, a deep inner shadow, rim-stones
+    ctx.save();
+    ctx.translate(ocx, ocy);
+    rimPath(mrx, mry);
+    ctx.fillStyle = this._tGrad(`rimsky|${S.toFixed(2)}`, () => {
+      const gg = ctx.createLinearGradient(0, -64 * S, 0, 64 * S);
+      gg.addColorStop(0, '#221a3e'); gg.addColorStop(0.6, '#161126'); gg.addColorStop(1, '#0d0a18');
+      return gg;
+    });
     ctx.fill();
-    ctx.strokeStyle = 'rgba(150,140,180,0.30)'; ctx.lineWidth = 3; ctx.stroke();
-    // the knight on the rim — a silhouette against what little light there is
-    drawSprite(ctx, 'knight', 'idle', orx * 0.45, -ory * 0.55 + Math.sin(iv.t * 2.6), true, 0.9,
-      { color: '#05030c', a: 0.9 }, true);
+    if (flicker > 0) {                               // the tinder catching, beyond the rim
+      ctx.globalAlpha = (1 - rise) * 0.30 * flicker;
+      ctx.fillStyle = this._tGrad(`rimwarm|${S.toFixed(2)}`, () => {
+        const gg = ctx.createRadialGradient(-mrx * 0.1, -mry * 0.3, 4, -mrx * 0.1, -mry * 0.3, mrx * 0.8);
+        gg.addColorStop(0, 'rgba(255,150,60,1)'); gg.addColorStop(1, 'rgba(255,90,20,0)');
+        return gg;
+      });
+      rimPath(mrx, mry); ctx.fill();
+      ctx.globalAlpha = 1 - rise;
+    }
+    rimPath(mrx * 0.94, mry * 0.90);                 // inner shadow band = THICKNESS
+    ctx.strokeStyle = 'rgba(6,4,12,0.9)'; ctx.lineWidth = 8 * S; ctx.stroke();
+    rimPath(mrx, mry);                               // the bright broken lip
+    ctx.strokeStyle = `rgba(176,166,206,${0.55 + flicker * 0.25})`; ctx.lineWidth = 2.5; ctx.stroke();
+    for (let i = 0; i < 8; i++) {                    // rim-stones notching into the opening
+      const a = (i / 8) * Math.PI * 2 + 0.43;
+      const hsh = Math.sin(i * 7.31 + 2.2) * 43758.5453;
+      const j = (hsh - Math.floor(hsh)) * 8 + 7;
+      const bx2 = Math.cos(a) * mrx * 0.96, by2 = Math.sin(a) * mry * 0.96;
+      ctx.fillStyle = '#0a0714';
+      ctx.beginPath();
+      ctx.moveTo(bx2 - Math.sin(a) * j, by2 + Math.cos(a) * j * 0.5);
+      ctx.lineTo(bx2 - Math.cos(a) * j * 1.4, by2 - Math.sin(a) * j * 0.8);
+      ctx.lineTo(bx2 + Math.sin(a) * j, by2 - Math.cos(a) * j * 0.5);
+      ctx.closePath(); ctx.fill();
+    }
+    // the knight on the rim — a real presence now, breathing, backlit when it catches
+    drawSprite(ctx, 'knight', 'idle', mrx * 0.42, -mry * 0.66 + Math.sin(iv.t * 2.6) * 1.5, true,
+      0.55 * S, { color: '#05030c', a: 0.92 }, true);
+    if (flicker > 0) {
+      ctx.globalAlpha = (1 - rise) * 0.35 * flicker;
+      drawSprite(ctx, 'knight', 'idle', mrx * 0.42 + 1.5, -mry * 0.66 + Math.sin(iv.t * 2.6) * 1.5 + 1, true,
+        0.55 * S, { color: '#ff9a4a', a: 0.8 }, true);
+      ctx.globalAlpha = 1 - rise;
+    }
     // flint struck above: glints spark at the rim and fall INTO the shaft
     if (iv.t >= iv.STRIKE) {
       for (const st of [iv.STRIKE, iv.STRIKE + 0.45]) {
-        const pr = (iv.t - st) / 0.5;
+        const pr = (iv.t - st) / 0.55;
         if (pr < 0 || pr > 1) continue;
-        for (let i = 0; i < 3; i++) {
+        for (let i = 0; i < 4; i++) {
           ctx.globalAlpha = (1 - pr) * (1 - rise);
-          ctx.fillStyle = i ? '#ffd36b' : '#fff3c0';
-          ctx.fillRect(orx * 0.30 - i * 4, -ory * 0.4 + pr * pr * (H * 0.5) + i * 7, 2, 2);
+          ctx.fillStyle = i % 2 ? '#ffd36b' : '#fff3c0';
+          ctx.fillRect(mrx * 0.30 - i * 5 + Math.sin(pr * 9 + i) * 3,
+            -mry * 0.4 + pr * pr * (H * 0.55) + i * 9, 2 * S, 2 * S);
         }
       }
       ctx.globalAlpha = 1 - rise;
     }
     ctx.restore();
-    // dust drifting down past the lens (we are deep; the world sheds on us)
-    ctx.fillStyle = '#8a8098';
-    for (let i = 0; i < 12; i++) {
-      const sp2 = 30 + (i % 4) * 26;
-      const dx2 = ((i * 97.3) % W) + Math.sin(iv.t * 1.2 + i) * 10;
+
+    // dust shed from the world above, falling past the lens
+    ctx.fillStyle = '#9a90ac';
+    for (let i = 0; i < 14; i++) {
+      const sp2 = 40 + (i % 4) * 34;
+      const dx2 = ((i * 97.3) % W) + Math.sin(iv.t * 1.2 + i) * 12;
       const dy2 = ((i * 131.7 + iv.t * sp2) % (H + 40)) - 20;
-      ctx.globalAlpha = (0.16 + (i % 3) * 0.08) * (1 - rise);
-      ctx.fillRect(dx2, dy2, i % 3 ? 1.5 : 2, (i % 4) + 2);
+      ctx.globalAlpha = (0.22 + (i % 3) * 0.10) * (1 - rise);
+      ctx.fillRect(dx2, dy2, (i % 3 ? 1.5 : 2) * S, ((i % 4) + 2) * S);
+    }
+    // the RUSH: speed-streaks tearing past as the camera surges up the shaft
+    if (rise > 0) {
+      ctx.globalAlpha = (1 - rise) * 0.8;
+      ctx.strokeStyle = '#cfc4e8'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2 + 0.2;
+        const r0 = (60 + (i % 4) * 50) * (1 + rise * 2), r1 = r0 + 70 + rise * 240;
+        ctx.beginPath();
+        ctx.moveTo(ocx + Math.cos(a) * r0, ocy + Math.sin(a) * r0 * 0.55);
+        ctx.lineTo(ocx + Math.cos(a) * r1, ocy + Math.sin(a) * r1 * 0.55);
+        ctx.stroke();
+      }
     }
     ctx.restore(); ctx.globalAlpha = 1;
-    // the ignition FLASH rides the rush
     if (fd >= 0 && fd < 0.32) {
       ctx.fillStyle = `rgba(255,214,150,${0.5 * (1 - fd / 0.32)})`;
       ctx.fillRect(0, 0, W, H);
@@ -4202,10 +4276,10 @@ export class Game {
     // plunge-into-darkness descent
     if (this.plunge) {
       const pl = this.plunge; pl.t += dt;
-      if (pl.t < pl.half) {                       // falling: a long, slow slide into the dark
+      if (pl.t < pl.half) {                       // falling: the world TEARS away upward
         const f = pl.t / pl.half;
-        this.camDrop = 940 * (f * f * 0.72 + f * 0.28);   // initial velocity so frame 1 already moves
-        this.shake = Math.max(this.shake, 1.5 + 3.5 * f);  // a low rumble, not a violent quake
+        this.camDrop = 1500 * (f * f * 0.8 + f * 0.2);     // initial velocity so frame 1 already moves
+        this.shake = Math.max(this.shake, 2.5 + 6 * f);    // it rattles the whole way down
       } else { this.camDrop = 0; }
       if (!pl.fired && pl.t >= pl.half) { pl.fired = true; if (pl.mid) pl.mid(); }
       if (pl.t >= pl.dur) { this.plunge = null; this.camDrop = 0; }
@@ -4685,12 +4759,11 @@ export class Game {
     // The voice is RARE now — silence is scarier than a guarantee. Only now and
     // then does the Demon Lord stir as you fall.
     const whisper = Math.random() < 0.22 ? whispers[(Math.random() * whispers.length) | 0] : null;
-    // seed t slightly so the very first rendered frame already shows the fall
-    // (darkness welling + camera dropping) rather than a static beat.
-    // A long, deliberate fall — the red abyss should linger and unsettle.
-    this.plunge = { t: 0.05, dur: 2.85, half: 1.6, fired: false, whisper,
+    // seed t slightly so the very first rendered frame already shows the fall.
+    // FAST now — a real drop, not a slow curtain (the whisper still lands).
+    this.plunge = { t: 0.05, dur: 1.9, half: 1.05, fired: false, whisper,
       mid: () => this._startLevel(this.level + 1, false) };
-    this.shake = Math.max(this.shake, 4);
+    this.shake = Math.max(this.shake, 6);
     Sound.play('plunge');
   }
 
@@ -4912,11 +4985,10 @@ export class Game {
     const pl = this.plunge, W = this.vw, H = this.vh;
     ctx.save();
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    if (pl.t < pl.half) {                          // FALLING
+    if (pl.t < pl.half) {                          // FALLING — and it should FEEL like falling
       const f = pl.t / pl.half;
-      // darkness welling up from the bottom of the screen (bucketed + cached —
-      // per-frame full-screen gradients were a Chrome jank source mid-leap)
-      const fb = Math.min(20, Math.round(f * 20));
+      const fe = Math.pow(f, 0.6);                 // the dark SLAMS up, front-loaded
+      const fb = Math.min(20, Math.round(fe * 20));
       const grd = this._tGrad(`plungefall|${fb}|${H}`, () => {
         const gg = ctx.createLinearGradient(0, H, 0, H * (1 - (fb / 20) * 1.15) - 20);
         gg.addColorStop(0, 'rgba(0,0,0,1)'); gg.addColorStop(1, 'rgba(0,0,0,0)');
@@ -4925,22 +4997,33 @@ export class Game {
       ctx.fillStyle = grd; ctx.fillRect(0, 0, W, H);
       // hold off full black until the very end so the red has room to breathe
       ctx.fillStyle = `rgba(0,0,0,${Math.max(0, (f - 0.82) / 0.18)})`; ctx.fillRect(0, 0, W, H);
-      // red abyss glow swelling from below — comes up early (pow<1) and lingers
+      // red abyss glow surging from below
       const rg = this._tGrad(`plungered|${W}x${H}`, () => {
         const gg = ctx.createRadialGradient(W / 2, H + 30, 8, W / 2, H + 30, H);
         gg.addColorStop(0, 'rgba(210,34,16,1)'); gg.addColorStop(1, 'rgba(0,0,0,0)');
         return gg;
       });
-      ctx.globalAlpha = 0.62 * Math.pow(f, 0.7);
+      ctx.globalAlpha = 0.66 * Math.pow(f, 0.55) * (0.92 + 0.08 * Math.sin(pl.t * 21));
       ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H);
       ctx.globalAlpha = 1;
-      // slow, languid downward streaks (not action speed-lines)
-      ctx.globalAlpha = 0.4 * f; ctx.strokeStyle = 'rgba(190,200,220,0.6)'; ctx.lineWidth = 2;
-      for (let i = 0; i < 16; i++) {
-        const x = (i * 97.3) % W, len = 36 + (i * 53) % 90;
-        const y = ((i * 131 + pl.t * 1050) % (H + 140)) - 70;
+      // WIND: two layers of hard vertical speed-streaks (near = fast and long,
+      // far = slower parallax), the whole sheet juddering with the fall
+      ctx.save();
+      ctx.translate(Math.sin(pl.t * 67) * 3 * f, 0);
+      ctx.lineCap = 'round';
+      ctx.globalAlpha = 0.55 * f; ctx.strokeStyle = 'rgba(205,212,230,0.7)'; ctx.lineWidth = 2.5;
+      for (let i = 0; i < 22; i++) {
+        const x = (i * 89.7) % W, len = 90 + (i * 53) % 130;
+        const y = ((i * 131 + pl.t * 2600) % (H + len + 160)) - len - 80;
         ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + len); ctx.stroke();
       }
+      ctx.globalAlpha = 0.28 * f; ctx.lineWidth = 1.5;
+      for (let i = 0; i < 12; i++) {
+        const x = (i * 137.3 + 40) % W, len = 40 + (i * 71) % 60;
+        const y = ((i * 97 + pl.t * 1400) % (H + len + 120)) - len - 60;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + len); ctx.stroke();
+      }
+      ctx.restore();
       ctx.globalAlpha = 1;
       if (pl.whisper && f > 0.24) {                // the whisper from below — eases in slowly (and rare)
         ctx.globalAlpha = Math.min(1, (f - 0.24) / 0.45) * 0.85;

@@ -1312,7 +1312,9 @@ export class Game {
     // floor (low-left); the banner is architecture, mounted ON the wall
     // (high-right). Different heights, different contexts — never "almost level".
     const fire = { x: ox + W * 0.5, y: oy + H * 0.55 };
-    const pit = { x: ox + W * 0.5, y: oy + H - 96 };
+    // the pit sits well INSIDE the view and big — a new player's eye should land
+    // on it without scrolling their thumb anywhere
+    const pit = { x: ox + W * 0.5, y: oy + H * 0.79 };
     const brazier = { x: ox + Math.max(64, W * 0.17), y: oy + H * 0.42 };
     const banner = { x: ox + Math.min(W - 64, W * 0.82), y: oy + H * 0.56 };   // a standard PLANTED on the floor
     // fire pit: scorched earth + a circle of stones (the flame itself is live pixel art)
@@ -1365,19 +1367,19 @@ export class Game {
         const a = (i / 16) * Math.PI * 2;
         const hsh = Math.sin(i * 12.9898 + 4.13) * 43758.5453;
         const j = hsh - Math.floor(hsh);
-        pitRim.push([px3 + Math.cos(a) * (60 + j * 14 - 7), py3 + Math.sin(a) * (32 + ((j * 7) % 1) * 8 - 4)]);
+        pitRim.push([px3 + Math.cos(a) * (80 + j * 18 - 9), py3 + Math.sin(a) * (42 + ((j * 7) % 1) * 10 - 5)]);
       }
       g.save(); g.lineJoin = 'round';
       g.beginPath(); pitRim.forEach(([x2, y2], i) => (i ? g.lineTo(x2, y2) : g.moveTo(x2, y2))); g.closePath();
-      g.lineWidth = 14; g.strokeStyle = '#171221'; g.stroke();   // broken-soil lip
-      g.lineWidth = 5; g.strokeStyle = '#241c30'; g.stroke();
-      for (let i = 0; i < 7; i++) {                              // cracks radiating into the floor
-        const a = (i / 7) * Math.PI * 2 + 0.4;
-        const x0 = px3 + Math.cos(a) * 64, y0 = py3 + Math.sin(a) * 36;
+      g.lineWidth = 16; g.strokeStyle = '#171221'; g.stroke();   // broken-soil lip
+      g.lineWidth = 6; g.strokeStyle = '#241c30'; g.stroke();
+      for (let i = 0; i < 8; i++) {                              // cracks radiating into the floor
+        const a = (i / 8) * Math.PI * 2 + 0.4;
+        const x0 = px3 + Math.cos(a) * 86, y0 = py3 + Math.sin(a) * 48;
         g.strokeStyle = 'rgba(0,0,0,0.5)'; g.lineWidth = 2;
         g.beginPath(); g.moveTo(x0, y0);
-        g.lineTo(x0 + Math.cos(a) * 14 + 4, y0 + Math.sin(a) * 9 - 3);
-        g.lineTo(x0 + Math.cos(a) * 26 - 3, y0 + Math.sin(a) * 16 + 2);
+        g.lineTo(x0 + Math.cos(a) * 16 + 4, y0 + Math.sin(a) * 10 - 3);
+        g.lineTo(x0 + Math.cos(a) * 30 - 3, y0 + Math.sin(a) * 19 + 2);
         g.stroke();
       }
       g.restore();
@@ -1463,7 +1465,7 @@ export class Game {
       const nx = (k.x - ecx) / erx, ny = (k.y - ecy) / ery, dl = Math.hypot(nx, ny);
       if (dl < 1 && dl > 1e-4) { k.x = ecx + (nx / dl) * erx; k.y = ecy + (ny / dl) * ery; }
     };
-    solid(tc.pit.x, tc.pit.y, 64, 36);
+    solid(tc.pit.x, tc.pit.y, 84, 48);
     solid(tc.fire.x, tc.fire.y + 2, 32, 18);
     // the campfire breathes embers
     if (Math.random() < dt * 16) tc.parts.push({
@@ -1476,7 +1478,7 @@ export class Game {
     // approach an object and the choice offers itself
     const d2 = (o) => Math.hypot(k.x - o.x, k.y - o.y);
     let prompt = null;
-    if (d2(tc.pit) < 88) prompt = 'begin';
+    if (d2(tc.pit) < 122) prompt = 'begin';     // wide rim: the offer reaches the whole edge
     else if (d2(tc.brazier) < 64) prompt = 'sanctum';
     else if (d2(tc.banner) < 64) prompt = 'prologue';
     if (prompt !== tc.prompt) { tc.prompt = prompt; this.ui.setTitlePrompt(prompt, this.meta.souls); }
@@ -1557,7 +1559,7 @@ export class Game {
       ctx.strokeText(text, x, y + bob); ctx.fillStyle = col; ctx.fillText(text, x, y + bob);
       ctx.restore();
     };
-    label('BEGIN ▾', tc.pit.x, tc.pit.y - 64, '#ffd86a', tc.prompt === 'begin');
+    label('BEGIN ▾', tc.pit.x, tc.pit.y - 92, '#ffd86a', tc.prompt === 'begin');
     label(`SANCTUM ◆${this.meta.souls || 0}`, tc.brazier.x, tc.brazier.y - 58, '#c89aff', tc.prompt === 'sanctum');
     label('THE BARGAIN', tc.banner.x, tc.banner.y - 102, '#e08a7a', tc.prompt === 'prologue');
     ctx.restore();
@@ -1620,7 +1622,7 @@ export class Game {
     ctx.beginPath();
     tc.pitRim.forEach(([x2, y2], i) => (i ? ctx.lineTo(x2, y2) : ctx.moveTo(x2, y2)));
     ctx.closePath();
-    const vg = ctx.createLinearGradient(0, d.y - 36, 0, d.y + 34);
+    const vg = ctx.createLinearGradient(0, d.y - 48, 0, d.y + 44);
     vg.addColorStop(0, '#020108');
     vg.addColorStop(0.55, '#0a0306');
     vg.addColorStop(1, '#2e0c06');
@@ -1629,18 +1631,18 @@ export class Game {
     // a ledge of stone catching light just inside the rim — the depth read
     ctx.strokeStyle = 'rgba(200,190,230,0.10)'; ctx.lineWidth = 2;
     ctx.beginPath();
-    tc.pitRim.forEach(([x2, y2], i) => (i ? ctx.lineTo(x2, y2 - 4) : ctx.moveTo(x2, y2 - 4)));
+    tc.pitRim.forEach(([x2, y2], i) => (i ? ctx.lineTo(x2, y2 - 5) : ctx.moveTo(x2, y2 - 5)));
     ctx.closePath(); ctx.stroke();
     // the ember glow far below, swelling as the knight draws near
-    const eg = ctx.createRadialGradient(d.x, d.y + 24, 2, d.x, d.y + 24, 50);
+    const eg = ctx.createRadialGradient(d.x, d.y + 30, 2, d.x, d.y + 30, 66);
     eg.addColorStop(0, `rgba(255,110,40,${0.26 + 0.22 * near + 0.07 * Math.sin(t * 2.4)})`);
     eg.addColorStop(1, 'rgba(120,30,8,0)');
-    ctx.fillStyle = eg; ctx.fillRect(d.x - 64, d.y - 24, 128, 64);
+    ctx.fillStyle = eg; ctx.fillRect(d.x - 84, d.y - 30, 168, 84);
     // sparks rising out of the throat
-    for (let i = 0; i < 6; i++) {
-      const ph = (t * 0.4 + i * 0.167) % 1;
-      const ex = d.x + Math.sin(t * 1.3 + i * 2.4) * (26 - ph * 10);
-      const ey = d.y + 20 - ph * 48;
+    for (let i = 0; i < 8; i++) {
+      const ph = (t * 0.4 + i * 0.125) % 1;
+      const ex = d.x + Math.sin(t * 1.3 + i * 2.4) * (34 - ph * 12);
+      const ey = d.y + 26 - ph * 60;
       ctx.globalAlpha = (1 - ph) * (0.4 + 0.6 * near);
       ctx.fillStyle = i % 2 ? '#ff9a4a' : '#ffd36b';
       ctx.fillRect(ex, ey, 2, 2);

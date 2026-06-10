@@ -200,9 +200,11 @@ function buildPreview(sheet, scale = 10, gap = 12) {
 
 function main() {
   const sheet = buildKnightSheetRGBA();
-  const out = path.join(__dirname, '..', 'assets', 'sprites', 'knight.png');
+  // versioned FILENAME (not a query): some CDNs (raw.githack) ignore query
+  // strings for their cache key, so new art must live at a new path.
+  const out = path.join(__dirname, '..', 'assets', 'sprites', 'knight2.png');
   fs.writeFileSync(out, encodePNG(sheet.w, sheet.h, sheet.d));
-  console.log(`  ✓ knight.png (${sheet.w}x${sheet.h})`);
+  console.log(`  ✓ knight2.png (${sheet.w}x${sheet.h})`);
   const pv = buildPreview(sheet);
   fs.writeFileSync('/tmp/knight-preview.png', encodePNG(pv.w, pv.h, pv.d));
   console.log('  ✓ /tmp/knight-preview.png');

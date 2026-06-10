@@ -391,7 +391,9 @@ function main() {
       ? require('./gen-knight').buildKnightSheetRGBA()
       : buildSheet(spec);
     const png = encodePNG(sheet.w, sheet.h, sheet.d);
-    const file = `${name}.png`;
+    // hero art is version-named: raw.githack ignores query strings, so new
+    // art needs a new PATH to bust CDN caches (see gen-knight.js)
+    const file = name === 'knight' ? 'knight2.png' : `${name}.png`;
     fs.writeFileSync(path.join(outDir, file), png);
     manifest.sprites[name] = { file, scale: spec.scale || 1.0 };
     console.log(`  ✓ ${file} (${sheet.w}x${sheet.h})`);

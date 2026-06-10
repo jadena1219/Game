@@ -435,8 +435,19 @@ const ui = {
 
 async function boot() {
   const canvas = document.getElementById('game');
-  // Cold loads (esp. mobile Safari) can drop a request; retry a couple of times
-  // so the title/start button is always wired up on first visit.
+  // The canvas comes alive IMMEDIATELY: the title camp is procedural, so the
+  // game constructs and renders before a single sprite arrives. The cold open
+  // holds (black + kindling note) until the hero's sheet streams in — no more
+  // dead screen while a cold CDN wakes up.
+  game = new Game(canvas, ui);
+  ui.showScreen('title');
+  // the cold open: the title waits in the dark until the campfire is lit
+  screens.title.classList.add('pre');
+  const note = document.createElement('div');
+  note.className = 'boot-note'; note.textContent = 'kindling…';
+  document.getElementById('app').appendChild(note);
+
+  // Cold loads (esp. mobile Safari) can drop a request; retry a couple of times.
   let loaded = false;
   for (let attempt = 0; attempt < 3 && !loaded; attempt++) {
     try { await loadAssets(); loaded = true; }
@@ -446,20 +457,16 @@ async function boot() {
     }
   }
   if (!loaded) {
-    document.querySelector('#title-screen .tag').textContent =
-      'Could not load sprites — tap to retry…';
-    document.getElementById('start-btn').onclick = () => location.reload();
+    note.textContent = 'the dark would not load — tap to retry';
+    note.classList.add('err');
+    note.onclick = () => location.reload();
     return;
   }
+  note.remove();
 
   // register the procedurally-generated creatures + keystone icons
   try { registerGeneratedSprites(); GEN_ICONS = buildKeystoneIcons(); BLADE_ICONS = buildBladeIcons(); }
   catch (err) { console.error('generated sprites failed', err); }
-
-  game = new Game(canvas, ui);
-  ui.showScreen('title');
-  // the cold open: the title waits in the dark until the campfire is lit
-  screens.title.classList.add('pre');
 
   // WebAudio can only start from a user gesture — unlock on the first interaction.
   const unlock = () => { Sound.unlock(); window.removeEventListener('pointerdown', unlock); window.removeEventListener('keydown', unlock); };

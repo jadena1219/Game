@@ -590,6 +590,16 @@ p { max-width: 30ch; line-height: 1.5; }
   }
 }
 
+/* boot: a quiet kindling note while the sheets stream in */
+.boot-note {
+  position: fixed; left: 50%; bottom: 7vh; transform: translateX(-50%);
+  z-index: 40; font-family: 'Press Start 2P', monospace; font-size: 9px;
+  letter-spacing: 2px; color: #8a7da6; text-shadow: 0 1px 0 #000;
+  animation: bootPulse 1.4s ease-in-out infinite; pointer-events: none;
+}
+.boot-note.err { color: #e08a7a; pointer-events: auto; cursor: pointer; animation: none; }
+@keyframes bootPulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.85; } }
+
 /* corner mute toggle */
 #mute-btn {
   position: fixed; top: 10px; right: 10px; z-index: 50;

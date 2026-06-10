@@ -32,26 +32,30 @@ function loadImage(src, tries = 3) {
   });
 }
 
-// Load a list of [key, src] in batches of `size` so Safari isn't flooded.
-async function loadBatched(entries, into, size = 4) {
-  for (let i = 0; i < entries.length; i += size) {
-    const batch = entries.slice(i, i + size);
-    await Promise.all(batch.map(async ([key, src]) => { into[key] = await loadImage(src); }));
-  }
+// Load a list of [key, src] in parallel (the browser queues connections itself).
+async function loadAll(entries, into) {
+  await Promise.all(entries.map(async ([key, src]) => { into[key] = await loadImage(src); }));
 }
 
 export async function loadAssets() {
   const manifest = await fetch(BASE + 'manifest.json', { cache: 'no-cache' }).then((r) => r.json());
   Assets.manifest = manifest;
-  await loadBatched(
-    Object.keys(manifest.sprites).map((name) => [name, BASE + manifest.sprites[name].file + ART_V]),
+  // the HERO first — the title's cold open holds until his sheet exists,
+  // so the one sprite the menu needs never waits behind the other ten
+  Assets.images.knight = await loadImage(BASE + manifest.sprites.knight.file + ART_V);
+  // the rest of the cast in parallel
+  await loadAll(
+    Object.keys(manifest.sprites).filter((n) => n !== 'knight')
+      .map((name) => [name, BASE + manifest.sprites[name].file + ART_V]),
     Assets.images);
-
-  const iconManifest = await fetch(Assets.iconBase + 'manifest.json', { cache: 'no-cache' }).then((r) => r.json());
-  await loadBatched(
-    Object.entries(iconManifest.icons).map(([id, file]) => [id, Assets.iconBase + file + ART_V]),
-    Assets.icons);
-
   Assets.ready = true;
+  // icons are shop/sanctum UI (the DOM uses the file paths directly) — warm the
+  // cache in the background, never block boot on them
+  fetch(Assets.iconBase + 'manifest.json', { cache: 'no-cache' })
+    .then((r) => r.json())
+    .then((im) => loadAll(
+      Object.entries(im.icons).map(([id, file]) => [id, Assets.iconBase + file + ART_V]),
+      Assets.icons))
+    .catch((e) => console.warn('icon prewarm failed (non-fatal)', e));
   return Assets;
 }

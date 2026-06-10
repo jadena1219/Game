@@ -197,7 +197,12 @@ export class Game {
     this.interludeFade = null; // black fading out of the taunt into the camp
     this._tapped = false;      // a screen tap (used to advance/skip the taunt)
     this.wipeEl = document.getElementById('wipe');
-    canvas.addEventListener('pointerdown', () => { this._tapped = true; });
+    canvas.addEventListener('pointerdown', (e) => {
+      this._tapped = true;
+      // where, in canvas coords (the title pit is tappable directly)
+      const r = canvas.getBoundingClientRect();
+      this._tapXY = [e.clientX - r.left, e.clientY - r.top];
+    });
 
     // --- Phase 3b: open world ---
     this.cam = { x: 0, y: 0 };  // top-left of the view in world space (locked to player)
@@ -240,7 +245,10 @@ export class Game {
     const m = 56;
     this.worldBounds = { minX: m, minY: m, maxX: this.world.w - m, maxY: this.world.h - m };
     this.bounds = this.worldBounds;
-    this._applyBiome(this.level || 1);
+    // The arena bake is DEFERRED to the first floor: the title camp is fully
+    // procedural, so nothing heavy blocks first paint (the old eager 2600x2600
+    // biome bake stalled cold boots for a screen nobody was looking at).
+    this.atmos = [];
   }
 
   // Switch to the biome for `level`: bake the whole arena (ground + scattered
@@ -1245,6 +1253,7 @@ export class Game {
     this.interlude = null; this.interludeFade = null; this.introCut = null; this.campToast = null;
     this.intro = null; this.sweep = null; this.transition = null; this.camp = null; this.bossKind = null;
     this.watchers = []; this.campWhisper = null;
+    this.plunge = null; this.camDrop = 0; this.descentJump = null;   // an in-flight fall must not hijack the menu
     this.titleCamp = null;       // rebuild fresh — the knight wakes by his fire again
     this.ui.showScreen('title');
     Sound.setScene('title');
@@ -1394,6 +1403,9 @@ export class Game {
     }
     // the cold open: no control until the fire has spoken
     if (tc.intro) {
+      // …and the fire waits for the HERO: the canvas is alive while a cold CDN
+      // streams the sprite sheets in, and the open begins the moment he exists
+      if (!Assets.images.knight) return;
       const iv = tc.intro; iv.t += dt;
       if (this._tapped) { this._tapped = false; iv.t = Math.max(iv.t, 99); }   // tap = skip
       if (iv.t >= iv.IGNITE && !iv.burst) {
@@ -1480,16 +1492,24 @@ export class Game {
     });
     for (const p2 of tc.parts) { p2.life += dt; p2.x += p2.vx * dt; p2.y += p2.vy * dt; }
     tc.parts = tc.parts.filter((p2) => p2.life < p2.dur);
-    // BEGIN is no button: you WALK INTO THE PIT. Standing at the rim and pushing
-    // toward the mouth makes the knight lean over the brink — a ring fills as he
-    // commits, and when it closes he tips in and the descent begins. (Brazier
-    // and banner keep their small side-prompts; they sit clear of the pit.)
+    // BEGIN is the threshold itself: come to the brink and the pit CLAIMS you —
+    // a ring sweeps closed while you stand there (step back to refuse). No
+    // direction-holding, no dexterity: the solid rim parks you in exactly the
+    // right spot, so reaching the edge IS the input. Tapping the mouth directly
+    // skips the wait and drops you at once.
     const d2 = (o) => Math.hypot(k.x - o.x, k.y - o.y);
-    const dpit = d2(tc.pit);
-    const toward = dpit > 1 ? ((tc.pit.x - k.x) * mv.x + (tc.pit.y - k.y) * mv.y) / dpit : 0;
-    tc.atBrink = dpit < 122;
-    if (tc.atBrink && toward > 0.3) {
-      tc.commit = Math.min(1, (tc.commit || 0) + dt / 0.55);   // ~0.55s of leaning in
+    const dl2 = Math.hypot((k.x - tc.pit.x) / 84, (k.y - tc.pit.y) / 48);   // vs the solid ellipse
+    tc.atBrink = dl2 < 1.22;
+    if (this._tapped) {
+      this._tapped = false;
+      const [tx2, ty2] = this._tapXY || [-999, -999];
+      const sx2 = (tc.pit.x - tc.ox) * tc.scale, sy2 = (tc.pit.y - tc.oy) * tc.scale;
+      if (tc.atBrink && Math.hypot((tx2 - sx2) / (96 * tc.scale), (ty2 - sy2) / (58 * tc.scale)) < 1) {
+        this.titleBegin(); return;
+      }
+    }
+    if (tc.atBrink) {
+      tc.commit = Math.min(1, (tc.commit || 0) + dt / 0.65);
       if (tc.commit >= 1) { this.titleBegin(); return; }
     } else {
       tc.commit = Math.max(0, (tc.commit || 0) - dt * 2.4);    // step back and it eases off
@@ -1589,14 +1609,19 @@ export class Game {
       ctx.quadraticCurveTo(bx + 4, by - h * 0.6, bx + 5, by + 2);
       ctx.closePath(); ctx.fill();
     }
-    // the knight (shadow + sprite) — fading as he sinks into the pit
+    // the knight (shadow + sprite) — teetering toward the mouth as the pit
+    // claims him, fading as he sinks
     if (!tc.sunk) {
       const sink = Math.max(0, Math.min(1, tc.sink || 0));
+      const c2 = (!tc.jump && tc.commit) || 0;
+      const pd = Math.hypot(tc.pit.x - k.x, tc.pit.y - k.y) || 1;
+      const kx = k.x + ((tc.pit.x - k.x) / pd) * 4 * c2 + (Math.random() - 0.5) * 1.6 * c2;
+      const ky2 = k.y + ((tc.pit.y - k.y) / pd) * 2 * c2;
       ctx.save(); ctx.fillStyle = '#03020a';
-      ctx.globalAlpha = 0.3 * (1 - sink); ctx.beginPath(); ctx.ellipse(k.x, k.y + 2, 16, 6, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 0.3 * (1 - sink); ctx.beginPath(); ctx.ellipse(kx, ky2 + 2, 16, 6, 0, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
       ctx.globalAlpha = Math.max(0, 1 - sink * 1.15);
-      drawSprite(ctx, 'knight', pickFrame(k, t), k.x, k.y - (k.moving ? 0 : Math.sin(t * 2.6) * 1), k.faceLeft, 1);
+      drawSprite(ctx, 'knight', pickFrame(k, t), kx, ky2 - (k.moving ? 0 : Math.sin(t * 2.6) * 1), k.faceLeft, 1);
       ctx.globalAlpha = 1;
     }
     // floating labels — quiet names, bobbing, brighter as you draw near

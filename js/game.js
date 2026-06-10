@@ -1570,7 +1570,7 @@ export class Game {
       // struck; the fire catches, ROARS, and its light reveals the camp — then
       // the title drops from above and locks in. Tap to skip.
       intro: this._titleIntroPlayed ? null
-        : { t: 0, STRIKE: 0.9, IGNITE: 1.8, TITLE: 2.5, END: 3.0, burst: false, titleDropped: false },
+        : { t: 0, HOLD: 0.7, STRIKE: 1.2, IGNITE: 2.05, TITLE: 2.55, END: 3.05, burst: false, titleDropped: false },
     };
     this._titleIntroPlayed = true;
     this._tapped = false;
@@ -1927,174 +1927,265 @@ export class Game {
     this._drawTransition(ctx);
   }
 
-  // BENEATH THE RIM v2 — the camera is deep INSIDE the shaft, looking up.
-  // Jagged ledge-rings recede toward the torn mouth far above (the camera is
-  // rising the whole time); the mouth has THICKNESS (bright lip, deep inner
-  // shadow band, rim-stones notching in); the knight stands on its edge in
-  // silhouette; below the lens the abyss burns and sheds rising embers. The
-  // flint glints fall in from above; ignition paints the rim from beyond it,
-  // then the camera RUSHES up through the mouth in a burst of speed-streaks.
+  // THE LONG DESCENT — the cold open is a single rising shot up the shaft:
+  // it begins at the bottom of the world, on two red eyes in the dark. They
+  // blink. Then the camera climbs — up through all six acts of the descent,
+  // each one a band of the shaft with its own light and its own relics
+  // (moonlit throne-dark, the bleeding keep's chains, the vault's drifting
+  // runes, the iron keep's beams, the drowned halls' waterfalls, the catacombs'
+  // bones) — gathering speed until it bursts through the pit mouth into the
+  // light of the fire being struck above. THEN the title falls.
   _drawTitleIntroDark(ctx, tc) {
     const iv = tc.intro; if (!iv) return;
     const W = this.vw, H = this.vh, S = tc.scale;
     const fd = iv.t - iv.IGNITE;
-    const rise = fd < 0 ? 0 : Math.min(1, fd / 0.5);
-    if (rise >= 1) {
-      if (fd < 0.32) {
-        ctx.fillStyle = `rgba(255,214,150,${0.5 * (1 - fd / 0.32)})`;
+    const out = fd < 0 ? 0 : Math.min(1, fd / 0.22);     // bursting into the light
+    if (out >= 1) {
+      if (fd < 0.3) {
+        ctx.fillStyle = `rgba(255,244,221,${0.85 * (1 - fd / 0.3)})`;
         ctx.fillRect(0, 0, W, H);
       }
       return;
     }
-    const ocx = W / 2, ocy = H * 0.34;
-    // one torn-rim language everywhere: the same 16-point hash as the pit
-    const rimPath = (rx, ry) => {
-      ctx.beginPath();
-      for (let i = 0; i <= 16; i++) {
-        const a = (i / 16) * Math.PI * 2;
-        const hsh = Math.sin(i * 12.9898 + 4.13) * 43758.5453;
-        const j = (hsh - Math.floor(hsh)) * 0.16 + 0.92;
-        const px2 = Math.cos(a) * rx * j, py2 = Math.sin(a) * ry * j;
-        i === 0 ? ctx.moveTo(px2, py2) : ctx.lineTo(px2, py2);
-      }
-      ctx.closePath();
-    };
-    const ease = (x2) => x2 * x2 * (3 - 2 * x2);
-    const grow = 1 + ease(Math.min(1, iv.t / iv.IGNITE)) * 0.34;   // the slow rise
-    const mrx = 150 * S * grow, mry = 64 * S * grow;               // the mouth
-    const catching = iv.t >= iv.STRIKE + 0.35 && Math.sin(iv.t * 26) > 0.55;
-    const flicker = catching ? 0.7 + 0.3 * Math.sin(iv.t * 40) : 0;
+    // ---- the shaft (world units: y grows UPWARD from the eyes at 0) ----
+    const bandH = H * 0.72, BANDS = 6;
+    const shaftTop = BANDS * bandH + H * 0.55;           // the mouth slab sits above band 5
+    const travel = shaftTop - H * 0.9;
+    const p = Math.max(0, Math.min(1, (iv.t - iv.HOLD) / (iv.IGNITE - iv.HOLD)));
+    const climb = p * p * (3 - 2 * p) * p;               // slow leave, hard arrival
+    const camBot = -H * 0.18 + travel * climb;           // world-y at the screen bottom
+    const toY = (wy) => H - (wy - camBot);               // world -> screen
+    const vel = climb > 0 ? (p < 0.92 ? 3 * p * p : 2.2) : 0;   // for streak length
+    const hash = (n) => { const s2 = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return s2 - Math.floor(s2); };
+
+    // act palette, bottom -> top
+    const ACTS = [
+      { bg0: '#04050c', bg1: '#070811', edge: '#9fb6e8' },   // the throne's moonlit dark
+      { bg0: '#170609', bg1: '#0d0406', edge: '#d8413a' },   // the bleeding keep
+      { bg0: '#0e0718', bg1: '#090410', edge: '#b06bff' },   // the sunless vault
+      { bg0: '#130e0a', bg1: '#0b0806', edge: '#a8835a' },   // the iron keep
+      { bg0: '#06161a', bg1: '#041012', edge: '#2a9a9e' },   // the drowned halls
+      { bg0: '#16121e', bg1: '#0e0b14', edge: '#b9b2a0' },   // the catacombs
+    ];
 
     ctx.save();
-    ctx.globalAlpha = 1 - rise;
-    if (rise > 0) {                                  // the mouth swallows the lens
-      const z = 1 + rise * rise * 6;
-      ctx.translate(ocx, ocy); ctx.scale(z, z); ctx.translate(-ocx, -ocy);
-    }
-    ctx.fillStyle = '#030208';
-    ctx.fillRect(-W, -H, W * 3, H * 3);
+    ctx.globalAlpha = 1 - out;
+    ctx.fillStyle = '#030207'; ctx.fillRect(0, 0, W, H);
 
-    // THE SHAFT: ledge-rings receding up toward the mouth, sliding as we rise
-    ctx.save();
-    ctx.translate(ocx, ocy);
-    const slide = (iv.t * 0.10) % (1 / 7);
-    for (let i = 6; i >= 0; i--) {
-      const f2 = Math.min(1, (i + 0.4) / 7 + slide);
-      const k = Math.pow(f2, 1.7);
-      const rx2 = mrx * (1 + k * 3.4), ry2 = mry * (1 + k * 4.2) + k * H * 0.16;
-      const a2 = (1 - f2) * 0.55 + 0.10;
-      rimPath(rx2, ry2);
-      ctx.strokeStyle = `rgba(28,22,40,${a2})`; ctx.lineWidth = 4 + k * 14; ctx.stroke();   // the ledge body
-      ctx.strokeStyle = `rgba(150,138,178,${a2 * 0.30 + flicker * 0.04})`; ctx.lineWidth = 1.5; ctx.stroke();   // its lip
-    }
-    ctx.restore();
-
-    // the abyss below the lens: it burns, it breathes, it sheds embers upward
-    ctx.fillStyle = this._tGrad(`rimabyss|${W}x${H}`, () => {
-      const gg = ctx.createRadialGradient(W / 2, H + 50, 10, W / 2, H + 50, H * 0.85);
-      gg.addColorStop(0, 'rgba(200,40,16,1)'); gg.addColorStop(0.55, 'rgba(120,18,8,0.55)'); gg.addColorStop(1, 'rgba(0,0,0,0)');
-      return gg;
-    });
-    ctx.globalAlpha = (1 - rise) * (0.30 + 0.08 * Math.sin(iv.t * 2.1));
-    ctx.fillRect(0, H * 0.42, W, H * 0.6);
-    ctx.globalAlpha = 1 - rise;
-    for (let i = 0; i < 7; i++) {                    // embers climbing past the camera
-      const ph = (iv.t * 0.22 + i * 0.143) % 1;
-      const ex = W * 0.5 + Math.sin(iv.t * 0.9 + i * 2.6) * W * (0.18 + ph * 0.3) * (i % 2 ? 1 : -1);
-      const ey = H * 1.04 - ph * H * 0.95;
-      ctx.globalAlpha = Math.sin(ph * Math.PI) * 0.55 * (1 - rise);
-      ctx.fillStyle = i % 2 ? '#ff7a2a' : '#d8431a';
-      const es = (1 - ph) * 3 * S + 1;
-      ctx.fillRect(ex, ey, es, es);
-    }
-    ctx.globalAlpha = 1 - rise;
-
-    // THE MOUTH — night above, a lit lip, a deep inner shadow, rim-stones
-    ctx.save();
-    ctx.translate(ocx, ocy);
-    rimPath(mrx, mry);
-    ctx.fillStyle = this._tGrad(`rimsky|${S.toFixed(2)}`, () => {
-      const gg = ctx.createLinearGradient(0, -64 * S, 0, 64 * S);
-      gg.addColorStop(0, '#221a3e'); gg.addColorStop(0.6, '#161126'); gg.addColorStop(1, '#0d0a18');
-      return gg;
-    });
-    ctx.fill();
-    if (flicker > 0) {                               // the tinder catching, beyond the rim
-      ctx.globalAlpha = (1 - rise) * 0.30 * flicker;
-      ctx.fillStyle = this._tGrad(`rimwarm|${S.toFixed(2)}`, () => {
-        const gg = ctx.createRadialGradient(-mrx * 0.1, -mry * 0.3, 4, -mrx * 0.1, -mry * 0.3, mrx * 0.8);
-        gg.addColorStop(0, 'rgba(255,150,60,1)'); gg.addColorStop(1, 'rgba(255,90,20,0)');
+    // ---- band backgrounds (cached vertical gradients, drawn where visible) ----
+    for (let b = 0; b < BANDS; b++) {
+      const y0 = toY((b + 1) * bandH), y1 = toY(b * bandH);   // screen top/bottom of band
+      if (y1 < -40 || y0 > H + 40) continue;
+      const act = ACTS[b];
+      ctx.fillStyle = this._tGrad(`ld_bg${b}|${Math.round(bandH)}`, () => {
+        const gg = ctx.createLinearGradient(0, 0, 0, bandH);
+        gg.addColorStop(0, act.bg0); gg.addColorStop(1, act.bg1);
         return gg;
       });
-      rimPath(mrx, mry); ctx.fill();
-      ctx.globalAlpha = 1 - rise;
+      ctx.save(); ctx.translate(0, y0); ctx.fillRect(0, 0, W, y1 - y0 + 1); ctx.restore();
     }
-    rimPath(mrx * 0.94, mry * 0.90);                 // inner shadow band = THICKNESS
-    ctx.strokeStyle = 'rgba(6,4,12,0.9)'; ctx.lineWidth = 8 * S; ctx.stroke();
-    rimPath(mrx, mry);                               // the bright broken lip
-    ctx.strokeStyle = `rgba(176,166,206,${0.55 + flicker * 0.25})`; ctx.lineWidth = 2.5; ctx.stroke();
-    for (let i = 0; i < 8; i++) {                    // rim-stones notching into the opening
-      const a = (i / 8) * Math.PI * 2 + 0.43;
-      const hsh = Math.sin(i * 7.31 + 2.2) * 43758.5453;
-      const j = (hsh - Math.floor(hsh)) * 8 + 7;
-      const bx2 = Math.cos(a) * mrx * 0.96, by2 = Math.sin(a) * mry * 0.96;
-      ctx.fillStyle = '#0a0714';
+
+    // ---- the shaft walls: jagged rock columns both sides, edge-lit per act ----
+    const wallW = W * 0.17;
+    for (const side of [0, 1]) {
       ctx.beginPath();
-      ctx.moveTo(bx2 - Math.sin(a) * j, by2 + Math.cos(a) * j * 0.5);
-      ctx.lineTo(bx2 - Math.cos(a) * j * 1.4, by2 - Math.sin(a) * j * 0.8);
-      ctx.lineTo(bx2 + Math.sin(a) * j, by2 - Math.cos(a) * j * 0.5);
-      ctx.closePath(); ctx.fill();
+      const sx0 = side ? W : 0;
+      ctx.moveTo(sx0, -20);
+      const STEP = 46;
+      const yStart = Math.floor((camBot - 60) / STEP) * STEP;
+      for (let wy = yStart; wy < camBot + H + 80; wy += STEP) {
+        const j = hash(wy * 0.013 + side * 99) * 0.5 + hash(wy * 0.31 + side * 7) * 0.5;
+        const xw = wallW * (0.72 + j * 0.55);
+        ctx.lineTo(side ? W - xw : xw, toY(wy));
+      }
+      ctx.lineTo(sx0, H + 20);
+      ctx.closePath();
+      ctx.fillStyle = '#0a0712';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(120,110,150,0.14)'; ctx.lineWidth = 2; ctx.stroke();
     }
-    // the knight on the rim — a real presence now, breathing, backlit when it catches
-    drawSprite(ctx, 'knight', 'idle', mrx * 0.42, -mry * 0.66 + Math.sin(iv.t * 2.6) * 1.5, true,
-      0.55 * S, { color: '#05030c', a: 0.92 }, true);
-    if (flicker > 0) {
-      ctx.globalAlpha = (1 - rise) * 0.35 * flicker;
-      drawSprite(ctx, 'knight', 'idle', mrx * 0.42 + 1.5, -mry * 0.66 + Math.sin(iv.t * 2.6) * 1.5 + 1, true,
-        0.55 * S, { color: '#ff9a4a', a: 0.8 }, true);
-      ctx.globalAlpha = 1 - rise;
-    }
-    // flint struck above: glints spark at the rim and fall INTO the shaft
-    if (iv.t >= iv.STRIKE) {
-      for (const st of [iv.STRIKE, iv.STRIKE + 0.45]) {
-        const pr = (iv.t - st) / 0.55;
-        if (pr < 0 || pr > 1) continue;
-        for (let i = 0; i < 4; i++) {
-          ctx.globalAlpha = (1 - pr) * (1 - rise);
-          ctx.fillStyle = i % 2 ? '#ffd36b' : '#fff3c0';
-          ctx.fillRect(mrx * 0.30 - i * 5 + Math.sin(pr * 9 + i) * 3,
-            -mry * 0.4 + pr * pr * (H * 0.55) + i * 9, 2 * S, 2 * S);
+
+    // ---- per-act relics on the walls and in the air ----
+    for (let b = 0; b < BANDS; b++) {
+      const yB0 = b * bandH, yB1 = (b + 1) * bandH;
+      if (toY(yB0) < -60 || toY(yB1) > H + 60) continue;
+      const act = ACTS[b];
+      if (b === 0) {
+        // THE EYES at the bottom of everything. They hold the first beat — and blink.
+        const ex = W / 2, ey = toY(H * 0.42);
+        if (ey > -40 && ey < H + 40) {
+          const blink = iv.t < iv.HOLD ? (iv.t % 1.6) > 0.14 : ((iv.t * 1.3) % 2.2) > 0.16;
+          ctx.fillStyle = this._tGrad('ld_eyeglow', () => {
+            const gg = ctx.createRadialGradient(0, 0, 2, 0, 0, 90);
+            gg.addColorStop(0, 'rgba(160,20,10,1)'); gg.addColorStop(1, 'rgba(60,6,4,0)');
+            return gg;
+          });
+          ctx.save(); ctx.translate(ex, ey);
+          ctx.globalAlpha = (1 - out) * (0.5 + 0.18 * Math.sin(iv.t * 1.7));
+          ctx.beginPath(); ctx.arc(0, 0, 90, 0, Math.PI * 2); ctx.fill();
+          if (blink) {
+            ctx.globalAlpha = 1 - out;
+            ctx.fillStyle = '#ff2412';
+            ctx.fillRect(-13 * S, -2 * S, 6 * S, 4 * S); ctx.fillRect(7 * S, -2 * S, 6 * S, 4 * S);
+            ctx.fillStyle = '#ffd0b0';
+            ctx.fillRect(-11 * S, -1 * S, 2 * S, 2 * S); ctx.fillRect(9 * S, -1 * S, 2 * S, 2 * S);
+          }
+          ctx.restore(); ctx.globalAlpha = 1 - out;
+        }
+      } else if (b === 1) {
+        for (let i = 0; i < 4; i++) {                    // chains hang in the bleeding dark
+          const cx2 = W * (0.3 + hash(b * 31 + i) * 0.4), top = yB1 - hash(i * 7) * 90;
+          const len = 60 + hash(i * 13) * 70;
+          ctx.strokeStyle = 'rgba(90,82,104,0.6)'; ctx.lineWidth = 2;
+          for (let l2 = 0; l2 < len; l2 += 9) {
+            const sy2 = toY(top - l2);
+            if (sy2 < -10 || sy2 > H + 10) continue;
+            ctx.beginPath(); ctx.ellipse(cx2 + Math.sin((top - l2) * 0.05 + iv.t) * 2, sy2, 2.5, 4, 0, 0, Math.PI * 2); ctx.stroke();
+          }
+        }
+        for (let i = 0; i < 4; i++) {                    // slow red drips down the walls
+          const dx2 = i % 2 ? wallW * 0.8 : W - wallW * 0.8;
+          const dy2 = toY(yB1 - ((iv.t * 26 + i * 130) % bandH));
+          ctx.fillStyle = 'rgba(216,65,58,0.5)';
+          ctx.fillRect(dx2 + i * 7, dy2, 2, 9);
+        }
+      } else if (b === 2) {
+        for (let i = 0; i < 7; i++) {                    // runes drift in the vault
+          const rx2 = W * (0.28 + hash(b * 17 + i) * 0.44) + Math.sin(iv.t * 0.8 + i * 2.2) * 9;
+          const ry2 = toY(yB0 + (hash(i * 5 + 2) * 0.8 + 0.1) * bandH);
+          if (ry2 < -20 || ry2 > H + 20) continue;
+          ctx.save(); ctx.translate(rx2, ry2); ctx.rotate(0.785 + Math.sin(iv.t + i) * 0.2);
+          ctx.globalAlpha = (1 - out) * (0.5 + 0.3 * Math.sin(iv.t * 2 + i * 1.7));
+          ctx.fillStyle = act.edge; ctx.fillRect(-4, -4, 8, 8);
+          ctx.fillStyle = '#0e0718'; ctx.fillRect(-1.5, -1.5, 3, 3);
+          ctx.restore();
+        }
+        ctx.globalAlpha = 1 - out;
+      } else if (b === 3) {
+        for (let i = 0; i < 2; i++) {                    // the iron keep's broken cross-beams
+          const fromLeft = i % 2 === 0;
+          const by2 = toY(yB0 + (0.3 + i * 0.4) * bandH);
+          if (by2 < -20 || by2 > H + 20) continue;
+          const bw = W * (0.34 + hash(i * 9 + 1) * 0.2);
+          const bx2 = fromLeft ? wallW * 0.6 : W - wallW * 0.6 - bw;
+          ctx.fillStyle = '#1c1410'; ctx.fillRect(bx2, by2, bw, 11);
+          ctx.fillStyle = '#2e2218'; ctx.fillRect(bx2, by2, bw, 3);
+          ctx.fillStyle = act.edge;
+          for (let rv = 0; rv < 4; rv++) ctx.fillRect(bx2 + 10 + rv * (bw / 4), by2 + 5, 2, 2);
+          ctx.fillStyle = '#120d0a';                     // the snapped end
+          ctx.fillRect(fromLeft ? bx2 + bw - 4 : bx2, by2 - 2, 4, 15);
+        }
+      } else if (b === 4) {
+        for (let i = 0; i < 3; i++) {                    // water sheets down the drowned walls
+          const fx2 = i % 2 ? wallW * (0.5 + i * 0.12) : W - wallW * (0.6 + i * 0.1);
+          const phase = (iv.t * 120 + i * 220) % (bandH + 140);
+          const fy0 = toY(yB1 - phase + 70), fLen = 90;
+          ctx.fillStyle = 'rgba(60,170,176,0.20)';
+          ctx.fillRect(fx2 - 2, Math.max(-20, fy0), 5, fLen);
+          ctx.fillStyle = 'rgba(190,240,244,0.5)';
+          ctx.fillRect(fx2, Math.max(-20, fy0 + fLen * 0.7), 1.5, 12);
+        }
+        for (let i = 0; i < 4; i++) {                    // glints in the wet dark
+          const gx2 = W * (0.3 + hash(b * 23 + i) * 0.4);
+          const gy2 = toY(yB0 + hash(i * 3 + 8) * bandH);
+          if (gy2 < 0 || gy2 > H) continue;
+          ctx.globalAlpha = (1 - out) * (Math.sin(iv.t * 4 + i * 2.6) > 0.5 ? 0.7 : 0.15);
+          ctx.fillStyle = '#bfe9ff'; ctx.fillRect(gx2, gy2, 2, 2);
+        }
+        ctx.globalAlpha = 1 - out;
+      } else {
+        for (let i = 0; i < 8; i++) {                    // the catacombs: bones in the walls
+          const left = i % 2 === 0;
+          const bnY = toY(yB0 + (hash(i * 11 + 4) * 0.85 + 0.08) * bandH);
+          if (bnY < -16 || bnY > H + 16) continue;
+          const bx2 = left ? wallW * (0.55 + hash(i) * 0.4) : W - wallW * (0.55 + hash(i) * 0.4);
+          ctx.fillStyle = '#b9b2a0';
+          if (i % 3 === 0) {                             // a skull watching the climb
+            ctx.beginPath(); ctx.arc(bx2, bnY, 5, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#16121e'; ctx.fillRect(bx2 - 3, bnY - 1, 2, 2); ctx.fillRect(bx2 + 1, bnY - 1, 2, 2);
+          } else {
+            ctx.fillRect(bx2 - 6, bnY, 12, 2.5);
+            ctx.fillRect(bx2 - 7, bnY - 1, 2, 4); ctx.fillRect(bx2 + 5, bnY - 1, 2, 4);
+          }
         }
       }
-      ctx.globalAlpha = 1 - rise;
     }
-    ctx.restore();
 
-    // dust shed from the world above, falling past the lens
-    ctx.fillStyle = '#9a90ac';
-    for (let i = 0; i < 14; i++) {
-      const sp2 = 40 + (i % 4) * 34;
-      const dx2 = ((i * 97.3) % W) + Math.sin(iv.t * 1.2 + i) * 12;
-      const dy2 = ((i * 131.7 + iv.t * sp2) % (H + 40)) - 20;
-      ctx.globalAlpha = (0.22 + (i % 3) * 0.10) * (1 - rise);
-      ctx.fillRect(dx2, dy2, (i % 3 ? 1.5 : 2) * S, ((i % 4) + 2) * S);
-    }
-    // the RUSH: speed-streaks tearing past as the camera surges up the shaft
-    if (rise > 0) {
-      ctx.globalAlpha = (1 - rise) * 0.8;
-      ctx.strokeStyle = '#cfc4e8'; ctx.lineWidth = 2; ctx.lineCap = 'round';
-      for (let i = 0; i < 12; i++) {
-        const a = (i / 12) * Math.PI * 2 + 0.2;
-        const r0 = (60 + (i % 4) * 50) * (1 + rise * 2), r1 = r0 + 70 + rise * 240;
+    // ---- the mouth above: warm firelight pouring DOWN into the shaft ----
+    {
+      const slabY = toY(BANDS * bandH + H * 0.1);
+      const warm = Math.max(0, Math.min(1, 1.25 - (slabY < H ? 0 : (slabY - H) / (H * 2.4))));
+      if (warm > 0.02) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';        // it GLOWS — it must never paint
+        ctx.fillStyle = this._tGrad(`ld_beam|${W}x${H}`, () => {
+          const gg = ctx.createLinearGradient(0, 0, 0, H * 1.05);
+          gg.addColorStop(0, 'rgba(255,150,60,0.30)'); gg.addColorStop(1, 'rgba(255,100,25,0)');
+          return gg;
+        });
+        ctx.globalAlpha = (1 - out) * warm * (0.55 + 0.12 * Math.sin(iv.t * 9) + 0.07 * Math.sin(iv.t * 23));
         ctx.beginPath();
-        ctx.moveTo(ocx + Math.cos(a) * r0, ocy + Math.sin(a) * r0 * 0.55);
-        ctx.lineTo(ocx + Math.cos(a) * r1, ocy + Math.sin(a) * r1 * 0.55);
-        ctx.stroke();
+        ctx.moveTo(W * 0.38, slabY); ctx.lineTo(W * 0.62, slabY);
+        ctx.lineTo(W * 0.84, slabY + H * 1.05); ctx.lineTo(W * 0.16, slabY + H * 1.05);
+        ctx.closePath();
+        ctx.clip();
+        ctx.translate(0, slabY); ctx.fillRect(0, 0, W, H * 1.05);
+        ctx.restore();
+        // embers sifting DOWN through the gap, into the dark below
+        ctx.fillStyle = '#ffb469';
+        for (let i = 0; i < 6; i++) {
+          const ph = (iv.t * 0.5 + i * 0.167) % 1;
+          const ex2 = W * (0.42 + hash(i * 3 + 1) * 0.16) + Math.sin(iv.t * 2 + i * 2.1) * 8;
+          const ey2 = slabY + ph * H * 0.7;
+          if (ey2 < -10 || ey2 > H + 10) continue;
+          ctx.globalAlpha = (1 - out) * (1 - ph) * 0.8 * warm;
+          ctx.fillRect(ex2, ey2, 2 * S, 2 * S);
+        }
+        ctx.globalAlpha = 1 - out;
+      }
+      if (slabY > -90 && slabY < H + 40) {               // the stone underside of the camp
+        ctx.fillStyle = '#100b1c';
+        ctx.fillRect(0, slabY - 70, W * 0.38, 70); ctx.fillRect(W * 0.62, slabY - 70, W * 0.38, 70);
+        ctx.fillStyle = 'rgba(40,32,58,1)';
+        ctx.fillRect(0, slabY - 70, W * 0.38, 5); ctx.fillRect(W * 0.62, slabY - 70, W * 0.38, 5);
+        // the gap's lips burn with the light from above
+        ctx.fillStyle = 'rgba(255,200,120,0.9)';
+        ctx.fillRect(W * 0.355, slabY - 6, W * 0.028, 6); ctx.fillRect(W * 0.617, slabY - 6, W * 0.028, 6);
       }
     }
+
+    // ---- band boundaries: broken ledges whip past — the floors you are passing ----
+    for (let b = 1; b <= BANDS; b++) {
+      const ly2 = toY(b * bandH);
+      if (ly2 < -10 || ly2 > H + 10) continue;
+      const ed = ACTS[b - 1].edge;
+      ctx.globalAlpha = (1 - out) * 0.30;
+      for (let s2 = 0; s2 < 5; s2++) {
+        const lx0 = W * (0.06 + s2 * 0.19 + hash(b * 13 + s2) * 0.05);
+        const lw2 = W * (0.07 + hash(b * 7 + s2) * 0.08);
+        ctx.fillStyle = ed; ctx.fillRect(lx0, ly2, lw2, 3);
+        ctx.fillStyle = '#06040c'; ctx.fillRect(lx0, ly2 + 3, lw2, 2);
+      }
+      ctx.globalAlpha = 1 - out;
+    }
+
+    // ---- motion: dust + speed-streaks scale with the climb ----
+    if (vel > 0.05) {
+      ctx.lineCap = 'round';
+      for (let i = 0; i < 14; i++) {
+        const sx2 = (i * 89.7) % W;
+        const len = (16 + hash(i) * 30) * (1 + vel * 2.2);
+        const sy2 = ((i * 131 + iv.t * (700 + vel * 1700)) % (H + len + 80)) - len - 40;
+        ctx.globalAlpha = (1 - out) * (0.10 + vel * 0.16);
+        ctx.strokeStyle = '#bdb2d6'; ctx.lineWidth = i % 3 ? 1.5 : 2;
+        ctx.beginPath(); ctx.moveTo(sx2, sy2); ctx.lineTo(sx2, sy2 + len); ctx.stroke();
+      }
+      ctx.globalAlpha = 1 - out;
+    }
     ctx.restore(); ctx.globalAlpha = 1;
-    if (fd >= 0 && fd < 0.32) {
-      ctx.fillStyle = `rgba(255,214,150,${0.5 * (1 - fd / 0.32)})`;
+    // bursting through into the firelight — a hard white-hot pop, not a wash
+    if (fd >= 0 && fd < 0.3) {
+      ctx.fillStyle = `rgba(255,244,221,${0.85 * (1 - fd / 0.3)})`;
       ctx.fillRect(0, 0, W, H);
     }
   }

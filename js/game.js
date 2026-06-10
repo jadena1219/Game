@@ -3154,11 +3154,12 @@ export class Game {
     this.dying = 1.5;
     this.shake = Math.max(this.shake, 9);
     this._buzz(220);
-    // the Lord raises what you leave: bank this run as a husk on the floor where
-    // you fell — the next run will have to cut it down. (Boss floors shift up one;
-    // god-mode runs leave nothing.)
+    // the Lord raises what you leave — but it stands a couple of floors ABOVE
+    // where you fell: you meet what you were on the way back down, before the
+    // wall that killed you, never stacked on it. Its relic is your way through.
+    // (Boss floors shift up one more; god-mode runs leave nothing.)
     if (!this.godMode && this.level >= 2 && this.player) {
-      let floor = this.level;
+      let floor = Math.max(2, this.level - 2);
       while (floor > 2 && (LEVELS[floor - 1].boss || LEVELS[floor - 1].miniboss)) floor--;
       this.meta.deaths = (this.meta.deaths || 0) + 1;
       saveMeta(this.meta);

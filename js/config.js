@@ -65,6 +65,12 @@ export const CONFIG = {
                             // 4-5 hits, not 3; the pressure comes from density instead
   },
 
+  // Feature pins — built & verified, intentionally disabled for now (see
+  // ROADMAP "Parked"). Flip to re-enable, e.g. for a future hero/world.
+  features: {
+    perfectDodge: false,    // dash-through parry: slow-mo + fury + dash refund
+  },
+
   spawn: {
     interval: 0.52,         // s between spawn batches (tighter pressure)
     batch: 4,               // enemies per batch (bosses ignore this)

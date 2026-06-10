@@ -64,11 +64,12 @@ cursed relics, named elites, both bosses, 7 biomes, the Prologue, procedural aud
 and a **user-art pipeline** (drop a magenta-keyed PNG → it's cleaned and wired into
 the game — that's how the Demon Lord's art got in).
 
-Combat feel (new): **perfect dodge** (dash through an attack → slow-mo + Fury +
-dash refund), a **mechanized combo meter** (streaks grant damage/Fury, milestones
-at 10/25/50, broken by taking a hit), camera zoom-punch, haptics, loot-vacuum on
-clear — and **the Revenant**: die, and your next run must cut down your previous
-self (your hero, your blade) on the floor where you fell.
+Combat feel (new): a **mechanized combo meter** (streaks grant damage/Fury,
+milestones at 10/25/50, broken by taking a hit), camera zoom-punch, haptics,
+loot-vacuum on clear — and **the Revenant**: die, and your next run meets your
+previous self (your hero, your blade) two floors above where you fell — a
+relic-bearing duel on the way back down to your wall. (A perfect-dodge parry is
+built but pinned — see ROADMAP "Parked".)
 
 ---
 

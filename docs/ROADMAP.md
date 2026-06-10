@@ -9,19 +9,17 @@ pitched so nothing gets lost.
 ## 🚢 Shipped
 
 ### The Revenant — fight your past self ✅
-- Die, and the Lord raises what you left: your run (hero, Living Blade, floor) is
-  banked, and the NEXT run meets it on the floor where you fell — a named duelist
+- Die, and the Lord raises what you left: your run (hero, Living Blade) is banked,
+  and the NEXT run meets it **two floors above where you fell** — on your way back
+  down, before the wall that killed you, never stacked on it. A named duelist
   wearing your sprite, dashing like you, fighting with your blade (Ember husks lay
   hostile fire-trails, Frost husks chill on touch, Storm husks loose bolts).
 - Titled by death count — Garrick was the First Sacrifice, so yours number from
-  "The Second Sacrifice". Guaranteed relic drop; a unique Lord taunt follows the
-  floor ("I CAN RAISE AS MANY OF YOU AS YOU LEAVE ME"). Boss-floor deaths bank one
-  floor up; god-mode runs leave nothing.
+  "The Second Sacrifice". **Guaranteed relic drop** — beating what you were is the
+  power-up that helps you break through. A unique Lord taunt follows the floor
+  ("I CAN RAISE AS MANY OF YOU AS YOU LEAVE ME"). God-mode runs leave nothing.
 
-### Combat feel: perfect dodge, combos with teeth, juice ✅
-- **Perfect dodge**: dash THROUGH an attack (contact or projectile) → slow-mo
-  beat, cold shock-ring, "PERFECT", +Fury, and the dash refunds to 25% CD so the
-  dance chains. One per dash; parried projectiles shatter.
+### Combat feel: combos with teeth, juice ✅
 - **Combo meter mechanized**: kill-streak now grants +1%/kill sword damage (cap
   +30%, shown live) and up to +50% Fury gain; taking a hit breaks it. Milestones
   at 10/25/50 (FRENZY / RAMPAGE / MASSACRE) with stinger + banner. HUD shows a
@@ -118,7 +116,6 @@ pitched so nothing gets lost.
 ## 🗃️ Backlog (pitched, not yet greenlit)
 
 ### Combat depth — make the blade a language
-- ~~**Perfect-dodge / parry**~~ ✅ shipped.
 - ~~**Combo meter**~~ ✅ shipped (damage + fury scaling; audio layer still open).
 - **Held heavy swing**: a slower knockback cleave.
 
@@ -142,6 +139,11 @@ pitched so nothing gets lost.
 ---
 
 ## 💤 Parked (built, intentionally disabled — revisit later)
+- **Perfect dodge / parry**: fully built & verified (dash through an attack →
+  slow-mo, shock ring, +Fury, dash refund; parried bolts shatter) but it didn't
+  earn its place in the current kit — pinned behind
+  `CONFIG.features.perfectDodge`. Revisit for a future world or a hero whose
+  identity IS the dodge-dance (the Rogue wants this).
 - **Watchers ("eyes in the dark")**: `_spawnWatcher` / `_drawWatchers` exist but
   spawning + drawing are commented out in `_updateDread` / `_render`.
   Whispers + the dread vignette are still live.

@@ -86,8 +86,9 @@ export class Player {
     this.dashTimer = h.dashDur;
     this.dashCD = this.dashCooldown0;
     this.invuln = Math.max(this.invuln, h.dashDur + h.dashInvuln + this.mods.dashInvulnBonus);
-    // anything that would have connected in this window is a PERFECT dodge
-    this.parryT = h.dashDur + h.dashInvuln * 0.5;
+    // PERFECT-dodge window — currently pinned (CONFIG.features.perfectDodge);
+    // kept for a future hero/world whose identity is the dodge-dance
+    if (CONFIG.features && CONFIG.features.perfectDodge) this.parryT = h.dashDur + h.dashInvuln * 0.5;
     game.onDash(this);
   }
 

@@ -835,6 +835,56 @@ export class Game {
   }
 
   // ❄️ the freezing shockwave + radiating shards
+  // CATACLYSM Act I — the rolling wall of flame, drawn as a travelling ring of
+  // fire with tongues riding the rim.
+  _drawFireWave(ctx, fx) {
+    const r = fx.t * fx.speed, k = fx.t / fx.dur, a = 1 - k * k;
+    if (a <= 0) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineWidth = 30; ctx.strokeStyle = `rgba(255,110,30,${0.38 * a})`;
+    ctx.beginPath(); ctx.arc(fx.x, fx.y, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.lineWidth = 12; ctx.strokeStyle = `rgba(255,210,110,${0.6 * a})`;
+    ctx.beginPath(); ctx.arc(fx.x, fx.y, r, 0, Math.PI * 2); ctx.stroke();
+    for (let i = 0; i < 26; i++) {
+      const ang = (i / 26) * Math.PI * 2 + fx.t * 0.6;
+      const fl = 0.6 + 0.4 * Math.sin(this.time * 17 + i * 2.3);
+      const bx = fx.x + Math.cos(ang) * r, by = fx.y + Math.sin(ang) * r;
+      const len = (16 + 14 * fl) * a;
+      ctx.fillStyle = i % 2 ? `rgba(255,140,40,${0.7 * a})` : `rgba(255,220,120,${0.6 * a})`;
+      ctx.beginPath();
+      ctx.moveTo(bx - Math.sin(ang) * 5, by + Math.cos(ang) * 5);
+      ctx.lineTo(bx + Math.cos(ang) * len * 0.4, by + Math.sin(ang) * len * 0.4 - len * 0.8);
+      ctx.lineTo(bx + Math.sin(ang) * 5, by - Math.cos(ang) * 5);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // CATACLYSM Act III — a pillar of flame: a tightening aim-ring, then the column.
+  _drawFirePillar(ctx, fx) {
+    if (fx.t < fx.warn) {
+      const wk = fx.t / fx.warn, wr = 30 * (1 - wk * 0.4) + 12;
+      ctx.save();
+      ctx.strokeStyle = `rgba(255,120,40,${0.4 + 0.4 * wk})`; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.ellipse(fx.x, fx.y, wr, wr * 0.45, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = `rgba(255,90,30,${0.14 * wk})`;
+      ctx.beginPath(); ctx.ellipse(fx.x, fx.y, 26, 12, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      return;
+    }
+    const pk = (fx.t - fx.warn) / (fx.dur - fx.warn);
+    const a = 1 - pk * pk;
+    const h = 120 * (pk < 0.25 ? pk / 0.25 : 1);          // erupts up fast, then gutters
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const g2 = ctx.createRadialGradient(fx.x, fx.y, 2, fx.x, fx.y, 56);
+    g2.addColorStop(0, `rgba(255,200,110,${0.5 * a})`); g2.addColorStop(1, 'rgba(255,90,20,0)');
+    ctx.fillStyle = g2; ctx.beginPath(); ctx.ellipse(fx.x, fx.y, 56, 24, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    this._flameColumn(ctx, fx.x, fx.y, h, fx.x * 0.37, a);
+  }
+
   _drawFrostNova(ctx, fx) {
     const k = fx.t / fx.dur, a = 1 - k, rr = 560 * Math.min(1, k * 1.8);
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
@@ -1874,7 +1924,8 @@ export class Game {
   // The Dark Knight's slam cracks the floor: jagged molten fissures radiate out
   // from the impact, glow hot for a few seconds, and burn anyone standing on
   // them. Paths are baked once at creation (no per-frame randomness).
-  spawnFissures(x, y, n, baseDmg) {
+  // `friendly` flips the allegiance: CATACLYSM's fissures burn the foes instead.
+  spawnFissures(x, y, n, baseDmg, friendly = false) {
     const b = this.bounds;
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2 + (Math.random() - 0.5) * 0.7;
@@ -1888,8 +1939,8 @@ export class Game {
         const py = y + Math.sin(a) * d + Math.cos(a) * wob;
         pts.push({ x: Math.max(b.minX, Math.min(b.maxX, px)), y: Math.max(b.minY, Math.min(b.maxY, py)) });
       }
-      this.addEffect({ kind: 'fissure', pts, w: 12, t: 0, dur: 6.5, warn: 0.55, tick: 0,
-        dmg: baseDmg * 0.55, seed: Math.random() * 6.28 });
+      this.addEffect({ kind: 'fissure', pts, w: 12, t: 0, dur: 6.5, warn: friendly ? 0.1 : 0.55, tick: 0,
+        dmg: baseDmg * 0.55, friendly, seed: Math.random() * 6.28 });
     }
     Sound.play('explode', { vol: 0.55 });
   }
@@ -2254,22 +2305,31 @@ export class Game {
     this.flashScreen = 0.22;
   }
 
-  // 🔥 ERUPTION — the earth splits, foes are hurled back and seared, and a lake
-  // of fire is left behind to burn anything that lingers.
+  // 🔥 CATACLYSM — the fire ultimate in three acts:
+  //   I.   A WALL OF FLAME rolls out from the knight across the entire arena,
+  //        striking each foe as it reaches them — hurled, ignited, staggered
+  //        hits that read as one travelling catastrophe.
+  //   II.  The floor SPLITS: molten fissures radiate out — ours this time —
+  //        burning anything that stands on them for seconds.
+  //   III. The sky answers: pillars of flame rain on the survivors.
+  //   ...and a lake of fire is left where he stood.
   _ultEruption() {
     const p = this.player, lvl = 1 + CONFIG.scaling.dmgPerLevel * (this.level - 1);
-    const R = 170, dmg = 150 * p.mods.abilityDmgMult * lvl;
-    this.addEffect({ kind: 'banner', text: 'ERUPTION', t: 0, dur: 1.2 });
-    this.flashScreen = 0.3; this.flashCol = '#ffd9a0';
-    Sound.play('explode');
-    for (const e of this.enemies) {
-      if (Math.hypot(e.x - p.x, e.y - p.y) > R) continue;
-      const a = Math.atan2(e.y - p.y, e.x - p.x);
-      this._ultHit(e, dmg, Math.cos(a) * 460, Math.sin(a) * 460);
-      if (!e.dead) { e.burnDmg = Math.max(e.burnDmg, dmg * 0.12); e.burnT = Math.max(e.burnT, 4.5); e.burnTickT = Math.min(e.burnTickT || 9, 0.3); }
-    }
-    this.addEffect({ kind: 'erupt', x: p.x, y: p.y, t: 0, dur: 0.75, r: R });
-    this.addEffect({ kind: 'lavafield', x: p.x, y: p.y, r: R * 0.92, t: 0, dur: 5.0, dmgT: 0.1, dmg: dmg * 0.22 });
+    const dmg = 130 * p.mods.abilityDmgMult * lvl;
+    this.addEffect({ kind: 'banner', text: 'CATACLYSM', t: 0, dur: 1.3 });
+    this.flashScreen = 0.32; this.flashCol = '#ffd9a0';
+    Sound.play('explode'); Sound.play('bossroar', { vol: 0.35 });   // the deep rumble under it
+    this.shake = Math.max(this.shake, 15);
+    this.zoom = Math.max(this.zoom, 1.2);
+    // ACT I — the travelling wave
+    this.addEffect({ kind: 'firewave', x: p.x, y: p.y, t: 0, dur: 1.15, speed: 640, dmg, hit: new Set() });
+    // ACT II — the floor splits (friendly fissures)
+    this.spawnFissures(p.x, p.y, 6, dmg * 0.5, true);
+    // ACT III — fire rains on whoever is left
+    this.addEffect({ kind: 'firestorm', t: 0, dur: 2.3, strikeT: 0.35, dmg: dmg * 0.55 });
+    // the lake of fire
+    this.addEffect({ kind: 'erupt', x: p.x, y: p.y, t: 0, dur: 0.75, r: 170 });
+    this.addEffect({ kind: 'lavafield', x: p.x, y: p.y, r: 150, t: 0, dur: 5.0, dmgT: 0.1, dmg: dmg * 0.2 });
     this._gib(p.x, p.y - 8, '#ff7a2a', 16, 240, { size: 3, g: 700 });
     this._gib(p.x, p.y - 8, '#3a1408', 8, 180, { size: 3, g: 800 });
   }
@@ -2309,6 +2369,40 @@ export class Game {
       if (fx.kind === 'lavafield') {
         fx.dmgT -= sdt;
         if (fx.dmgT <= 0) { fx.dmgT = 0.35; for (const e of this.enemiesInRadius(fx.x, fx.y, fx.r)) { this._ultHit(e, fx.dmg, 0, 0); if (!e.dead) { e.burnDmg = Math.max(e.burnDmg, fx.dmg * 0.5); e.burnT = Math.max(e.burnT, 1.4); } } }
+      } else if (fx.kind === 'firewave') {
+        // the travelling wall of flame: each foe is struck AS THE WAVE ARRIVES
+        const r = fx.t * fx.speed;
+        for (const e of this.enemies) {
+          if (e.dead || fx.hit.has(e)) continue;
+          const d = Math.hypot(e.x - fx.x, e.y - fx.y);
+          if (d < r + 26 && d > r - 64) {
+            fx.hit.add(e);
+            const a = Math.atan2(e.y - fx.y, e.x - fx.x);
+            this._ultHit(e, fx.dmg, Math.cos(a) * 480, Math.sin(a) * 480);
+            if (!e.dead) { e.burnDmg = Math.max(e.burnDmg, fx.dmg * 0.12); e.burnT = Math.max(e.burnT, 4); e.burnTickT = Math.min(e.burnTickT || 9, 0.3); }
+            this.addEffect({ kind: 'boom', x: e.x, y: e.y, r: e.r + 16, t: 0, dur: 0.3 });
+            this.shake = Math.max(this.shake, 5);
+          }
+        }
+      } else if (fx.kind === 'firestorm') {
+        // fire rains on the survivors for a few seconds
+        fx.strikeT -= sdt;
+        if (fx.strikeT <= 0 && this.enemies.length) {
+          fx.strikeT = 0.22;
+          const e = this.enemies[(Math.random() * this.enemies.length) | 0];
+          if (e && !e.dead) this.addEffect({ kind: 'firepillar', x: e.x + (Math.random() - 0.5) * 20,
+            y: e.y + (Math.random() - 0.5) * 14, t: 0, dur: 0.62, warn: 0.26, dmg: fx.dmg, fired: false });
+        }
+      } else if (fx.kind === 'firepillar') {
+        if (!fx.fired && fx.t >= fx.warn) {
+          fx.fired = true;
+          Sound.play('explode', { vol: 0.45 });
+          this.shake = Math.max(this.shake, 6);
+          for (const o of this.enemiesInRadius(fx.x, fx.y, 64)) {
+            this._ultHit(o, fx.dmg, 0, 0);
+            if (!o.dead) { o.burnDmg = Math.max(o.burnDmg, fx.dmg * 0.15); o.burnT = Math.max(o.burnT, 3); }
+          }
+        }
       } else if (fx.kind === 'thunderstorm') {
         fx.strikeT -= sdt;
         if (fx.strikeT <= 0 && this.enemies.length) {
@@ -3031,9 +3125,19 @@ export class Game {
         fx.tick -= sdt;
         if (fx.tick <= 0) {
           fx.tick = 0.4;
-          const p = this.player;
-          if (p && !p.dead && this._nearPolyline(p.x, p.y, fx.pts, fx.w + p.r * 0.7)) {
-            if (p.takeHit(fx.dmg, 'the molten earth')) this.shake = Math.max(this.shake, 4);
+          if (fx.friendly) {
+            // CATACLYSM's cracks are OURS: foes on them burn
+            for (const e of this.enemies) {
+              if (!e.dead && this._nearPolyline(e.x, e.y, fx.pts, fx.w + e.r * 0.7)) {
+                this.hitEnemy(e, fx.dmg, 0, 0, 'ability');
+                if (!e.dead) { e.burnDmg = Math.max(e.burnDmg, fx.dmg * 0.3); e.burnT = Math.max(e.burnT, 2); }
+              }
+            }
+          } else {
+            const p = this.player;
+            if (p && !p.dead && this._nearPolyline(p.x, p.y, fx.pts, fx.w + p.r * 0.7)) {
+              if (p.takeHit(fx.dmg, 'the molten earth')) this.shake = Math.max(this.shake, 4);
+            }
           }
         }
       }
@@ -3699,6 +3803,8 @@ export class Game {
     for (const fb of this.allyProjectiles) this._drawFireball(ctx, fb);
     for (const fx of this.effects) this._drawAbilityFx(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'erupt') this._drawErupt(ctx, fx);
+    for (const fx of this.effects) if (fx.kind === 'firewave') this._drawFireWave(ctx, fx);
+    for (const fx of this.effects) if (fx.kind === 'firepillar') this._drawFirePillar(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'frostnova') this._drawFrostNova(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'thunderstorm') this._drawStormOverlay(ctx, fx);
     for (const fx of this.effects) if (fx.kind === 'megabolt') this._drawMegabolt(ctx, fx);
@@ -4137,6 +4243,15 @@ export class Game {
       if (fx.kind === 'boom' || fx.kind === 'ult') hole(fx.x, fx.y, Math.round((fx.r || 80) * 1.1));
       else if (fx.kind === 'lavafield') hole(fx.x, fx.y, fx.r * 1.15);
       else if (fx.kind === 'firetrail') hole(fx.x, fx.y, 52);
+      else if (fx.kind === 'firepillar') hole(fx.x, fx.y, 120);
+      else if (fx.kind === 'firewave') {
+        // the wave carries its own ring of light across the dark
+        const wr = fx.t * fx.speed;
+        for (let i = 0; i < 10; i++) {
+          const a2 = (i / 10) * Math.PI * 2;
+          hole(fx.x + Math.cos(a2) * wr, fx.y + Math.sin(a2) * wr, 110);
+        }
+      }
       else if (fx.kind === 'bolt' && fx.pts) hole(fx.pts[fx.pts.length - 1].x, fx.pts[fx.pts.length - 1].y, 70);
       else if (fx.kind === 'fissure' && fx.t > fx.warn * 0.6) {
         for (let i = 1; i < fx.pts.length; i += 2) hole(fx.pts[i].x, fx.pts[i].y, 54);

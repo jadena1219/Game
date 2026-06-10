@@ -1496,15 +1496,21 @@ export class Game {
       g.fillStyle = '#3a3140'; g.fillRect(fx - 46, fy + 44, 10, 5);                                               // whetstone
       g.fillStyle = '#55495e'; g.fillRect(fx - 46, fy + 44, 10, 2);
     }
-    // a cooking spit over the fire: forked sticks + crossbar + a small pot
+    // a cooking spit over the fire: forked sticks + crossbar + a small pot.
+    // Baked on its OWN little canvas, not the floor: it stands at the fire's
+    // depth, so it must paint OVER a knight standing behind the flame — the
+    // render layers it live instead of welding it to the background.
+    const spitCv = document.createElement('canvas');
     {
-      g.fillStyle = '#4a3018';
-      g.fillRect(fx - 24, fy - 34, 3, 36); g.fillRect(fx + 21, fy - 34, 3, 36);
-      g.fillRect(fx - 27, fy - 38, 9, 3); g.fillRect(fx + 18, fy - 38, 9, 3);   // forks
-      g.fillRect(fx - 24, fy - 36, 48, 3);                                     // crossbar
-      g.fillStyle = '#2b2733'; g.fillRect(fx - 5, fy - 33, 10, 8);             // the pot
-      g.fillStyle = '#454052'; g.fillRect(fx - 5, fy - 33, 10, 2);
-      g.fillStyle = '#1c1923'; g.fillRect(fx - 1, fy - 36, 2, 3);              // its hook
+      spitCv.width = 60; spitCv.height = 44;
+      const sg = spitCv.getContext('2d');
+      sg.fillStyle = '#4a3018';
+      sg.fillRect(6, 4, 3, 36); sg.fillRect(51, 4, 3, 36);                     // posts
+      sg.fillRect(3, 0, 9, 3); sg.fillRect(48, 0, 9, 3);                       // forks
+      sg.fillRect(6, 2, 48, 3);                                                // crossbar
+      sg.fillStyle = '#2b2733'; sg.fillRect(25, 5, 10, 8);                     // the pot
+      sg.fillStyle = '#454052'; sg.fillRect(25, 5, 10, 2);
+      sg.fillStyle = '#1c1923'; sg.fillRect(29, 2, 2, 3);                      // its hook
     }
     // THE BROKEN SEAL: the pit didn't open — it BURST through a great carved
     // ward. Shattered ring arcs + runes + snapped chains from anchor stones.
@@ -1558,6 +1564,7 @@ export class Game {
     this.titleCamp = {
       ox, oy, t: 0, sizeKey: this.vw + 'x' + this.vh, scale: SC,
       fire, pit, brazier, banner,
+      spit: { cv: spitCv, x: fire.x - 30, y: fire.y - 38 },   // live-layered (depth)
       pitRim,                              // already world coords (see _pitRim)
       parts: [],                           // live fire embers
       smoke: [],                           // woodsmoke puffs climbing off the flame
@@ -1566,10 +1573,10 @@ export class Game {
       glanceT: 4 + Math.random() * 4,      // the knight looks around while idle
       prompt: null, jump: null, sink: 0, sunk: false,
       bounds: { minX: ox + 44, maxX: ox + W - 44, minY: oy + wallH + 30, maxY: oy + H - 42 },
-      // where he boots up (and crash-lands): dead-centre ABOVE the fire, so
-      // the flint-kneel leans him over the stone ring — and once it's lit the
-      // flame burns in FRONT of his boots (depth-sorted in the render)
-      spawn: { x: fire.x, y: fire.y - 9 },
+      // where he boots up (and crash-lands): just up-left of the stone ring,
+      // so the flint-kneel leans him over it without standing IN the pit —
+      // and once it's lit, flame and spit both burn in FRONT of him (depth)
+      spawn: { x: fire.x - 16, y: fire.y - 20 },
       // THE COLD OPEN (first boot only): the knight alone in the black FALLS in
       // from above, eats dirt, picks himself up frame by frame; flint is struck;
       // the fire catches, ROARS, and its light reveals the camp — then the
@@ -1580,7 +1587,7 @@ export class Game {
     this._titleIntroPlayed = true;
     this._tapped = false;
     // he boots up at the fire's edge (the pratfall's landing spot)
-    this.titleKnight = { x: fire.x, y: fire.y - 9, sprite: 'knight',
+    this.titleKnight = { x: fire.x - 16, y: fire.y - 20, sprite: 'knight',
       moving: false, faceLeft: false, attackAnim: 0 };
   }
 
@@ -1884,6 +1891,9 @@ export class Game {
     // fire paints over his boots (the classic campfire shot)
     const kBehind = k.y < tc.fire.y + 10;
     if (!tc.sunk && kBehind) drawKnight();
+    // the cooking spit straddles the fire — SOUTH of a knight on the north
+    // rim, so it paints over him here (and under him when he walks in front)
+    ctx.drawImage(tc.spit.cv, tc.spit.x, tc.spit.y);
     // the campfire itself — animated pixel art — and its embers.
     // During the cold open it ROARS on ignition (tall, wild) and settles.
     if (lit) {

@@ -1401,7 +1401,14 @@ export class Game {
       parts: [],                           // live fire embers
       prompt: null, jump: null, sink: 0, sunk: false,
       bounds: { minX: ox + 44, maxX: ox + W - 44, minY: oy + wallH + 30, maxY: oy + H - 42 },
+      // THE COLD OPEN (first boot only): the knight alone in the black; flint is
+      // struck; the fire catches, ROARS, and its light reveals the camp — then
+      // the title drops from above and locks in. Tap to skip.
+      intro: this._titleIntroPlayed ? null
+        : { t: 0, STRIKE: 0.9, IGNITE: 1.8, TITLE: 2.5, END: 3.0, burst: false, titleDropped: false },
     };
+    this._titleIntroPlayed = true;
+    this._tapped = false;
     // he rises from his seat on the log
     this.titleKnight = { x: fire.x + 10, y: fire.y + 62, sprite: 'knight',
       moving: false, faceLeft: false, attackAnim: 0 };
@@ -1414,6 +1421,31 @@ export class Game {
     // a DOM panel (the Sanctum) is open: hold the camp, hide the prompt
     if (this.ui.screenOpen && this.ui.screenOpen !== 'title') {
       if (tc.prompt) { tc.prompt = null; this.ui.setTitlePrompt(null); }
+      return;
+    }
+    // the cold open: no control until the fire has spoken
+    if (tc.intro) {
+      const iv = tc.intro; iv.t += dt;
+      if (this._tapped) { this._tapped = false; iv.t = Math.max(iv.t, 99); }   // tap = skip
+      if (iv.t >= iv.IGNITE && !iv.burst) {
+        iv.burst = true;
+        Sound.play('swing_ember', { vol: 1.3 }); Sound.play('explode', { vol: 0.22 });
+        this.shake = Math.max(this.shake, 6);
+        for (let i = 0; i < 14; i++) tc.parts.push({
+          x: tc.fire.x + (Math.random() - 0.5) * 20, y: tc.fire.y - 8,
+          vx: (Math.random() - 0.5) * 60, vy: -(50 + Math.random() * 80),
+          life: 0, dur: 0.5 + Math.random() * 0.6, hot: Math.random() < 0.6,
+        });
+      }
+      if (iv.t >= iv.IGNITE && Math.random() < dt * 16) tc.parts.push({
+        x: tc.fire.x + (Math.random() - 0.5) * 16, y: tc.fire.y - 8,
+        vx: (Math.random() - 0.5) * 12, vy: -(26 + Math.random() * 34),
+        life: 0, dur: 0.8 + Math.random() * 0.7, hot: Math.random() < 0.5,
+      });
+      if (iv.t >= iv.TITLE && !iv.titleDropped) { iv.titleDropped = true; this.ui.titleEnter(); }
+      if (iv.t >= iv.END) { if (!iv.titleDropped) this.ui.titleEnter(); tc.intro = null; }
+      for (const p2 of tc.parts) { p2.life += dt; p2.x += p2.vx * dt; p2.y += p2.vy * dt; }
+      tc.parts = tc.parts.filter((p2) => p2.life < p2.dur);
       return;
     }
     // BEGIN was chosen: the knight leaps into the pit, drops, and the world
@@ -1519,13 +1551,44 @@ export class Game {
       g2.addColorStop(0, this._rgba(col, a)); g2.addColorStop(1, this._rgba(col, 0));
       ctx.fillStyle = g2; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
     };
+    const iv = tc.intro;
+    const lit = !iv || iv.t >= iv.IGNITE;
     const flick = 0.85 + 0.15 * Math.sin(t * 11) + 0.06 * Math.sin(t * 27);
-    pool(tc.fire.x, tc.fire.y - 6, 150 * flick, '#ff9a4a', 0.20);
+    if (lit) pool(tc.fire.x, tc.fire.y - 6, 150 * flick, '#ff9a4a', 0.20);
     pool(tc.brazier.x, tc.brazier.y - 14, 90, '#b06bff', 0.16 + 0.05 * Math.sin(t * 3));
     pool(tc.banner.x, tc.banner.y, 64, '#d8413a', 0.07 + 0.03 * Math.sin(t * 2.2));
     ctx.restore();
-    // the campfire itself — animated pixel art — and its embers
-    this._drawPixelFire(ctx, tc.fire.x, tc.fire.y + 6, t, 2);
+    // the campfire itself — animated pixel art — and its embers.
+    // During the cold open it ROARS on ignition (tall, wild) and settles.
+    if (lit) {
+      let fs = 2;
+      if (iv) {
+        const roar = Math.max(0, 1 - (iv.t - iv.IGNITE) / 0.7);
+        fs = 2 + 2.4 * roar * (0.75 + 0.25 * Math.sin(t * 31));
+      }
+      this._drawPixelFire(ctx, tc.fire.x, tc.fire.y + 6, t, fs);
+    } else if (iv && iv.t >= iv.STRIKE + 0.35 && Math.sin(iv.t * 26) > 0.55) {
+      // the tinder almost catches — weak, stuttering licks of flame
+      ctx.globalAlpha = 0.55;
+      this._drawPixelFire(ctx, tc.fire.x, tc.fire.y + 6, t, 1.1);
+      ctx.globalAlpha = 1;
+    }
+    // flint struck in the dark: sparks arc from his hand onto the tinder
+    if (iv && iv.t >= iv.STRIKE && iv.t < iv.IGNITE) {
+      for (const st of [iv.STRIKE, iv.STRIKE + 0.45]) {
+        const pr = (iv.t - st) / 0.3;
+        if (pr < 0 || pr > 1) continue;
+        for (let i = 0; i < 3; i++) {
+          const f2 = Math.min(1, pr + i * 0.07);
+          const sx2 = (k.x - 8) + (tc.fire.x - (k.x - 8)) * f2;
+          const sy2 = (k.y - 30) + (tc.fire.y - 4 - (k.y - 30)) * f2 - Math.sin(f2 * Math.PI) * 7 + i * 2;
+          ctx.globalAlpha = 1 - f2 * 0.35;
+          ctx.fillStyle = i ? '#ffd36b' : '#fff3c0';
+          ctx.fillRect(sx2, sy2, 2, 2);
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
     for (const p2 of tc.parts) {
       const a = 1 - p2.life / p2.dur;
@@ -1567,15 +1630,67 @@ export class Game {
       ctx.strokeText(text, x, y + bob); ctx.fillStyle = col; ctx.fillText(text, x, y + bob);
       ctx.restore();
     };
-    label('BEGIN ▾', tc.pit.x, tc.pit.y - 92, '#ffd86a', tc.prompt === 'begin');
-    label(`SANCTUM ◆${this.meta.souls || 0}`, tc.brazier.x, tc.brazier.y - 58, '#c89aff', tc.prompt === 'sanctum');
-    label('THE BARGAIN', tc.banner.x, tc.banner.y - 102, '#e08a7a', tc.prompt === 'prologue');
+    if (!iv) {                             // names wait for the light
+      label('BEGIN ▾', tc.pit.x, tc.pit.y - 92, '#ffd86a', tc.prompt === 'begin');
+      label(`SANCTUM ◆${this.meta.souls || 0}`, tc.brazier.x, tc.brazier.y - 58, '#c89aff', tc.prompt === 'sanctum');
+      label('THE BARGAIN', tc.banner.x, tc.banner.y - 102, '#e08a7a', tc.prompt === 'prologue');
+    }
     ctx.restore();
     if (leaned) ctx.restore();             // end the lean-in (overlays stay screen-true)
+    this._drawTitleIntroDark(ctx, tc);     // the cold open's black, opened by firelight
     // movement only on this screen — the sword button has no business here
     if (!this.ui.screenOpen || this.ui.screenOpen === 'title') this.input.draw(ctx, true);
     this._drawPlunge(ctx);
     this._drawTransition(ctx);
+  }
+
+  // The cold open's darkness: total black with two pools cut out of it — a dim
+  // cold one around the knight (he is all you see), and once the fire catches,
+  // an expanding blaze of light that reveals the whole camp. Plus the ignition
+  // flash. Composed on the half-res shadow buffer, like the dungeon dark.
+  _drawTitleIntroDark(ctx, tc) {
+    const iv = tc.intro; if (!iv) return;
+    const S = 0.5;
+    const sw = Math.max(1, Math.round(this.vw * S)), sh = Math.max(1, Math.round(this.vh * S));
+    let sc = this.shadowCanvas, g = this.shadowCtx;
+    if (!sc || sc.width !== sw || sc.height !== sh) {
+      sc = this.shadowCanvas = document.createElement('canvas');
+      sc.width = sw; sc.height = sh;
+      g = this.shadowCtx = sc.getContext('2d');
+      this._holeCache = new Map();
+    }
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalCompositeOperation = 'source-over';
+    g.clearRect(0, 0, sw, sh);
+    g.fillStyle = 'rgba(2,1,6,1)'; g.fillRect(0, 0, sw, sh);
+    g.globalCompositeOperation = 'destination-out';
+    const hole = (wx, wy, r, a) => {
+      const sx = (wx - tc.ox) * tc.scale * S, sy = (wy - tc.oy) * tc.scale * S, rr = r * tc.scale * S;
+      if (rr <= 0) return;
+      const grd = g.createRadialGradient(sx, sy, 1, sx, sy, rr);
+      grd.addColorStop(0, `rgba(0,0,0,${a})`); grd.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = grd;
+      g.beginPath(); g.arc(sx, sy, rr, 0, Math.PI * 2); g.fill();
+    };
+    const k = this.titleKnight;
+    hole(k.x, k.y - 26, 115, 0.62);                       // the knight, barely
+    if (iv.t >= iv.IGNITE) {
+      const pr = Math.min(1, (iv.t - iv.IGNITE) / 0.85);
+      const e2 = 1 - Math.pow(1 - pr, 3);                 // the light RUSHES out, then eases
+      hole(tc.fire.x, tc.fire.y - 6, 95 + e2 * (Math.hypot(this.vw, this.vh) / tc.scale), 1);
+    } else if (iv.t >= iv.STRIKE + 0.35 && Math.sin(iv.t * 26) > 0.55) {
+      hole(tc.fire.x, tc.fire.y - 6, 80, 0.5);            // a guttering catch-light
+    }
+    g.globalCompositeOperation = 'source-over';
+    ctx.save(); ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(sc, 0, 0, this.vw, this.vh);
+    ctx.restore();
+    // the ignition FLASH
+    const fd = iv.t - iv.IGNITE;
+    if (fd >= 0 && fd < 0.3) {
+      ctx.fillStyle = `rgba(255,214,150,${0.5 * (1 - fd / 0.3)})`;
+      ctx.fillRect(0, 0, this.vw, this.vh);
+    }
   }
 
   // BEGIN: the knight leaps from where he stands into the pit (the same arc he

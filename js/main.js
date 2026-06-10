@@ -69,6 +69,14 @@ const ui = {
     if (gs) gs.classList.toggle('hidden', !(godMode && name === null));
   },
 
+  // The cold open ends: the title drops from above and bounce-locks into place
+  // (the canvas fire-reveal cues this at the moment the light reaches the walls).
+  titleEnter() {
+    const el = screens.title;
+    el.classList.remove('pre');
+    el.classList.add('enter');
+  },
+
   // The walkable title camp: approach an object and its choice offers itself.
   setTitlePrompt(kind, souls) {
     const b = document.getElementById('camp-prompt');
@@ -453,6 +461,8 @@ async function boot() {
 
   game = new Game(canvas, ui);
   ui.showScreen('title');
+  // the cold open: the title waits in the dark until the campfire is lit
+  screens.title.classList.add('pre');
 
   // WebAudio can only start from a user gesture — unlock on the first interaction.
   const unlock = () => { Sound.unlock(); window.removeEventListener('pointerdown', unlock); window.removeEventListener('keydown', unlock); };

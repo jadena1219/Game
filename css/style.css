@@ -99,7 +99,27 @@ h1 {
   padding: 7px 10px; font-size: 9px; opacity: 0.45;
 }
 
-/* the cold open: the title lifts, blurs and fades, revealing the live corridor */
+/* THE COLD OPEN: the title waits in the dark while the fire is struck… */
+#title-screen.pre h1, #title-screen.pre .tag, #title-screen.pre .hint, #title-screen.pre .btn {
+  opacity: 0; pointer-events: none;
+}
+/* …then DROPS from above, slams through its mark, springs back and LOCKS. */
+#title-screen.enter h1 { animation: titleDrop 0.9s cubic-bezier(0.3, 0.7, 0.4, 1) both; }
+@keyframes titleDrop {
+  0%   { transform: translateY(-160%); opacity: 0; }
+  45%  { transform: translateY(0);     opacity: 1; }
+  62%  { transform: translateY(6%); }
+  78%  { transform: translateY(-2.5%); }
+  90%  { transform: translateY(1%); }
+  100% { transform: translateY(0); }
+}
+#title-screen.enter .tag { animation: fadeRise 0.5s ease 0.7s both; }
+#title-screen.enter .hint { animation: fadeRise 0.6s ease 1.05s both; }
+#title-screen.enter #god-btn { animation: godFade 0.6s ease 1.25s both; }
+@keyframes fadeRise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes godFade { from { opacity: 0; } to { opacity: 0.45; } }
+
+/* the title lifts, blurs and fades when the knight commits to the pit */
 #title-screen.swipe-out {
   animation: titleSwipe 0.6s cubic-bezier(0.7, 0, 0.25, 1) forwards;
   pointer-events: none;

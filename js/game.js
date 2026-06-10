@@ -583,6 +583,7 @@ export class Game {
       if (it.player) drawSprite(ctx, p.sprite, pickFrame(p, this.time), p.x, p.y, p.faceLeft, 1);
       else this._drawShrineSword(ctx, it.s);
     }
+    for (const fx of this.effects) if (fx.kind === 'puff') this._drawPuff(ctx, fx);   // landing dust
     ctx.restore();
     this._drawShrineMystique(ctx, true);    // spirit wisps + the breathing dark (over the scene)
     this._drawShrineAmbiance(ctx, sh);   // volcano / blizzard / storm weather, faded by proximity
@@ -1313,7 +1314,7 @@ export class Game {
     const fire = { x: ox + W * 0.5, y: oy + H * 0.55 };
     const pit = { x: ox + W * 0.5, y: oy + H - 96 };
     const brazier = { x: ox + Math.max(64, W * 0.17), y: oy + H * 0.42 };
-    const banner = { x: ox + Math.min(W - 70, W * 0.80), y: oy + wallH + 6 };   // interact at the wall's foot
+    const banner = { x: ox + Math.min(W - 64, W * 0.82), y: oy + H * 0.56 };   // a standard PLANTED on the floor
     // fire pit: scorched earth + a circle of stones (the flame itself is live pixel art)
     const fx = fire.x - ox, fy = fire.y - oy;
     const ch = g.createRadialGradient(fx, fy, 2, fx, fy, 40);
@@ -1344,8 +1345,18 @@ export class Game {
     }
     // the soul brazier (Sanctum), free-standing on the floor
     this._bakeTorchColumn(g, brazier.x - ox, brazier.y - oy);
-    // the old banner (the Bargain), hung ON the brick wall
-    this._bakeBanner(g, banner.x - ox, wallH - 64, '#4e1d22');
+    // the campaign standard (the Bargain), planted in the stone where he can
+    // reach it — staff, finial, and the torn cloth hung from its crossbar
+    {
+      const bnx = banner.x - ox, bny = banner.y - oy;
+      g.fillStyle = 'rgba(0,0,0,0.35)'; g.beginPath(); g.ellipse(bnx, bny + 4, 15, 5, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#3a3446'; g.fillRect(bnx - 7, bny - 2, 14, 6);             // stone footing
+      g.fillStyle = '#262232'; g.fillRect(bnx - 7, bny + 2, 14, 2);
+      g.fillStyle = '#4a3018'; g.fillRect(bnx - 2, bny - 84, 4, 84);            // staff
+      g.fillStyle = '#5d3d20'; g.fillRect(bnx - 2, bny - 84, 2, 84);
+      g.fillStyle = '#6b5a3a'; g.fillRect(bnx - 4, bny - 88, 8, 5);             // finial
+      this._bakeBanner(g, bnx, bny - 76, '#4e1d22');                            // crossbar + torn cloth
+    }
     // THE PIT — a torn mouth in the stone, not a doorway: jagged rim + cracks
     const pitRim = [];
     {
@@ -1413,13 +1424,24 @@ export class Game {
         const s2 = (raw - HOP) / (1 - HOP);
         k2.x = j.tx; k2.y = j.ty + s2 * 22;
         tc.sink = s2;
+        // the moment he breaks the mouth's plane: embers startle up out of it,
+        // and the plunge begins UNDER him (overlap = no seam between the two)
+        if (!tc.plunged) {
+          tc.plunged = true;
+          for (let i = 0; i < 9; i++) tc.parts.push({
+            x: tc.pit.x + (Math.random() - 0.5) * 40, y: tc.pit.y - 4,
+            vx: (Math.random() - 0.5) * 30, vy: -(40 + Math.random() * 60),
+            life: 0, dur: 0.5 + Math.random() * 0.5, hot: Math.random() < 0.5,
+          });
+          Sound.play('plunge');
+          this.plunge = { t: 0, dur: 2.0, half: 0.9, fired: false, mid: () => this.startPrologue() };
+        }
       }
       k2.moving = true;
-      if (raw >= 1) {
-        tc.jump = null; tc.sunk = true;
-        Sound.play('plunge');
-        this.plunge = { t: 0, dur: 2.2, half: 1.05, fired: false, mid: () => this.startPrologue() };
-      }
+      if (raw >= 1) { tc.jump = null; tc.sunk = true; }
+      // embers keep animating through the leap
+      for (const p2 of tc.parts) { p2.life += dt; p2.x += p2.vx * dt; p2.y += p2.vy * dt; }
+      tc.parts = tc.parts.filter((p2) => p2.life < p2.dur);
       return;
     }
     if (tc.sunk) return;                   // falling through the dark
@@ -1465,6 +1487,16 @@ export class Game {
     ctx.clearRect(0, 0, this.vw, this.vh);
     if (!tc) return;
     const t = tc.t, k = this.titleKnight;
+    // as he commits to the pit the camera LEANS IN over the mouth — the zoom
+    // rides his sink and holds while the plunge swallows the screen
+    const lean = tc.sunk ? 1 : (tc.jump ? Math.max(0, tc.sink || 0) : 0);
+    const leaned = lean > 0.001;
+    if (leaned) {
+      const z = 1 + 0.22 * lean * lean;
+      const px2 = tc.pit.x - this.cam.x, py2 = tc.pit.y - this.cam.y;
+      ctx.save();
+      ctx.translate(px2, py2); ctx.scale(z, z); ctx.translate(-px2, -py2);
+    }
     ctx.save();
     ctx.translate(-this.cam.x, -this.cam.y);
     ctx.drawImage(this.titleBg, tc.ox, tc.oy);
@@ -1488,7 +1520,7 @@ export class Game {
     for (const p2 of tc.parts) {
       const a = 1 - p2.life / p2.dur;
       ctx.globalAlpha = a;
-      ctx.fillStyle = p2.hot ? '#ffd36b' : '#ff7a2a';
+      ctx.fillStyle = p2.col || (p2.hot ? '#ffd36b' : '#ff7a2a');
       ctx.fillRect(p2.x - 1, p2.y - 1, 2, 2);
     }
     ctx.restore(); ctx.globalAlpha = 1;
@@ -1527,8 +1559,9 @@ export class Game {
     };
     label('BEGIN ▾', tc.pit.x, tc.pit.y - 64, '#ffd86a', tc.prompt === 'begin');
     label(`SANCTUM ◆${this.meta.souls || 0}`, tc.brazier.x, tc.brazier.y - 58, '#c89aff', tc.prompt === 'sanctum');
-    label('THE BARGAIN', tc.banner.x, tc.banner.y - 78, '#e08a7a', tc.prompt === 'prologue');
+    label('THE BARGAIN', tc.banner.x, tc.banner.y - 102, '#e08a7a', tc.prompt === 'prologue');
     ctx.restore();
+    if (leaned) ctx.restore();             // end the lean-in (overlays stay screen-true)
     // movement only on this screen — the sword button has no business here
     if (!this.ui.screenOpen || this.ui.screenOpen === 'title') this.input.draw(ctx, true);
     this._drawPlunge(ctx);
@@ -1544,6 +1577,12 @@ export class Game {
     this.ui.swipeTitleAway();              // the logo lifts away as he commits
     Sound.play('jump');
     tc.prompt = null;
+    // takeoff dust kicked from his heels
+    for (let i = 0; i < 6; i++) tc.parts.push({
+      x: k.x + (Math.random() - 0.5) * 14, y: k.y + 2,
+      vx: (Math.random() - 0.5) * 50, vy: -(6 + Math.random() * 16),
+      life: 0, dur: 0.35 + Math.random() * 0.25, col: '#9a93a8',
+    });
     tc.jump = { t: 0, dur: 0.72, x0: k.x, y0: k.y, tx: tc.pit.x, ty: tc.pit.y - 4, h: 52 };
     if (tc.pit.x < k.x - 1) k.faceLeft = true; else if (tc.pit.x > k.x + 1) k.faceLeft = false;
   }
@@ -1934,10 +1973,13 @@ export class Game {
     this.player.blade = null;                            // weaponless until he takes one up
     const W = this.vw, H = this.vh, sy = H * 0.42;
     this.cam.x = 0; this.cam.y = 0;                      // screen-sized chamber at the origin
-    this.player.x = W / 2; this.player.y = H * 0.82; this.player.faceLeft = false;
+    // he FALLS into the chamber (continuing the leap into the pit): the drop
+    // plays out as the plunge-black clears, landing where he used to just stand
+    this.player.x = W / 2; this.player.y = H * 0.30; this.player.faceLeft = false;
     this.bounds = { minX: 40, minY: H * 0.52, maxX: W - 40, maxY: H - 46 };
     this.shrine = { t: 0, chosen: null, drawT: 0, fired: false, near: null, promptFor: undefined,
       amb: 0, ambId: null, flash: 0, lightT: 0,            // scenery-morph state (volcano/blizzard/storm)
+      drop: { t: 0, dur: 0.55, y0: H * 0.30, y1: H * 0.82 },
       swords: [ { id: 'ember', x: W * 0.26, y: sy }, { id: 'frost', x: W * 0.5, y: sy - 10 }, { id: 'storm', x: W * 0.74, y: sy } ] };
     this.state = 'shrine';
     Sound.setScene('camp');
@@ -1965,6 +2007,22 @@ export class Game {
 
   _updateShrine(dt) {
     const sh = this.shrine, p = this.player; sh.t += dt;
+    // the fall resolves: he drops out of the dark and lands hard
+    if (sh.drop) {
+      const d = sh.drop; d.t += dt;
+      const k = Math.min(1, d.t / d.dur);
+      p.y = d.y0 + (d.y1 - d.y0) * k * k;                // accelerating fall
+      p.moving = true;
+      if (k >= 1) {
+        sh.drop = null; p.moving = false;
+        this.shake = Math.max(this.shake, 7);
+        this._puff(p.x - 8, p.y, '#4a4350', 3, 6, { r0: 3, r1: 12, dur: 0.4 });
+        this._puff(p.x + 8, p.y, '#4a4350', 3, 6, { r0: 3, r1: 12, dur: 0.4 });
+        Sound.play('hit', { vol: 0.5 });
+      }
+      this._updateProjAndFx(dt);
+      return;
+    }
     if (sh.chosen) {                                     // the chosen blade flies to his hand, then we descend
       sh.amb = Math.min(1, sh.amb + dt * 3);             // its element surges as you take it up
       this._shrineWeather(sh, dt);
@@ -1985,6 +2043,7 @@ export class Game {
     if (sh.ambId === target) sh.amb += ((target ? 1 : 0) - sh.amb) * Math.min(1, dt * 5);
     else { sh.amb -= sh.amb * Math.min(1, dt * 6); if (sh.amb < 0.04) { sh.amb = 0; sh.ambId = target; } }
     this._shrineWeather(sh, dt);
+    this._updateProjAndFx(dt);             // landing dust etc. animate out
   }
 
   _shrineWeather(sh, dt) {
@@ -3472,8 +3531,10 @@ export class Game {
     this._updateDread(dt);       // eyes in the dark + intrusive whispers, escalating with depth
 
     // hold the world while the slash-wipe / plunge-fall covers the screen
+    // (the title camp is the exception: the knight finishes sinking into the
+    // pit UNDER the falling black — freezing him mid-leap reads as a hitch)
     if (this.transition && this.transition.t < this.transition.half) return;
-    if (this.plunge && this.plunge.t < this.plunge.half) return;
+    if (this.plunge && this.plunge.t < this.plunge.half && this.state !== 'title') return;
 
     if (this.state === 'playing' || this.state === 'camp' || this.state === 'shrine') this.runT = (this.runT || 0) + dt;
 

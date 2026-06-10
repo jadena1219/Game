@@ -2590,6 +2590,7 @@ export class Game {
       this.hpDisplay = this.hpGhost = this.player.maxHP;
       this.timeScale = 1; this.dying = 0;
       this.combo = 0; this.comboT = 0; this._comboTier = 0; this.zoom = 0; this.slowmo = 0;
+      this._furyTaught = false; this.furyIdleT = 0;   // re-teach the ultimate each run
       this._startLevel(1, true);
       if (!wiped) { this.intro = null; this.countdown = 1.5; }  // skip the LEVEL card; let the bloom breathe
     };
@@ -3492,9 +3493,12 @@ export class Game {
         else if (this.level >= 3 && Math.random() < Math.min(0.16, 0.015 + this.level * 0.008)) this._eliteify(e);
       }
       this.enemies.push(e);
-      // arrival tell: a brief soul-glow where the dark gives this one up, so foes
-      // never just MATERIALIZE out of the black
-      this.addEffect({ kind: 'spawnmark', x: e.x, y: e.y, r: e.r + 10, t: 0, dur: 0.6,
+      // arrival telegraph: the mark burns FIRST and the foe rises out of it —
+      // present and hittable, but unable to move or strike until it's fully
+      // here. Spawns read as an incoming wave, not a materialization ambush.
+      e.emergeDur = e.boss ? 0.9 : 0.55;
+      e.emergeT = e.emergeDur;
+      this.addEffect({ kind: 'spawnmark', x: e.x, y: e.y, r: e.r + 10, t: 0, dur: e.emergeDur + 0.1,
         color: e.elite ? (e.affix && e.affix.color) || '#ff7a2a' : (this.biome && this.biome.torch) || '#b06bff' });
       if (type === 'boss' || type === 'miniboss') break; // a boss is its own batch
     }
@@ -4069,13 +4073,34 @@ export class Game {
     // Fury no longer auto-fires — it arms a button the player taps to unleash.
     const wasFury = this.furyReady;
     this.furyReady = p.fury >= p.furyMax;
-    if (this.furyReady && !wasFury) Sound.play('furyready');
+    if (this.furyReady && !wasFury) {
+      Sound.play('furyready');
+      // the FIRST full bar of a run is a moment: time dips, the game says so —
+      // nobody should finish a run never knowing they had an ultimate
+      if (!this._furyTaught) {
+        this._furyTaught = true;
+        this.slowmo = Math.max(this.slowmo || 0, 0.55);
+        this.addEffect({ kind: 'banner', text: 'FURY READY — UNLEASH IT!', t: 0, dur: 1.5 });
+      }
+    }
+    // a full bar left to gather dust nags for attention (drives the button pulse)
+    this.furyIdleT = this.furyReady ? (this.furyIdleT || 0) + sdt : 0;
     this._updateFuryButton();
     if (this.furyReady && this.input.furyTapped) {
       this.input.furyTapped = false; p.fury = 0; this.furyReady = false; this._ultimate();
     } else if (this.input.furyTapped) { this.input.furyTapped = false; }
     this._dashTrail(p, sdt);
     this._spawn(sdt);
+    // the last stragglers turn RAVENOUS — they smell you and surge, so the end
+    // of a floor never decays into hide-and-seek with two slow skeletons
+    if (!this.spawnQueue.length && this.enemies.length > 0 && this.enemies.length <= 3) {
+      for (const e of this.enemies) {
+        if (e.ravenous || e.boss || e.emergeT > 0) continue;
+        e.ravenous = true;
+        e.speed *= 1.5;
+        this.addEffect({ kind: 'spawnmark', x: e.x, y: e.y, r: e.r + 8, t: 0, dur: 0.45, color: '#ff4040' });
+      }
+    }
     this._maybeSpawnNamed(sdt);                 // the floor's named elite herald
     this._maybeSpawnHusk(sdt);                  // the Revenant — your previous run, raised
     if (p.mods.dashFireTrail) this._emitDashFire(p);
@@ -4098,6 +4123,7 @@ export class Game {
 
     // collisions: enemy contact (threading one mid-dash = a PERFECT dodge)
     for (const e of this.enemies) {
+      if (e.emergeT > 0) continue;               // still rising — no teeth yet
       const dx = p.x - e.x, dy = p.y - e.y;
       if (Math.hypot(dx, dy) < p.r + e.r) {
         if (p.parryT > 0 && !p.dead) { this._perfectDodge(e.x, e.y - e.r * 0.4); continue; }
@@ -4483,7 +4509,9 @@ export class Game {
     } else {
       // "LEVEL CLEARED" sweep, then the camp shop
       this.player.hp = Math.min(this.player.maxHP, this.player.hp + CONFIG.hpRestorePerLevel);
-      { const b = 4 + Math.round(this.level * 1.5); this.gold += b; this.totalGold += b; }   // modest clear bonus
+      // clear bonus: front-loaded enough that the FIRST sorcerer visit can buy
+      // one cheap ware — window-shopping with an empty purse teaches nothing
+      { const b = 8 + Math.round(this.level * 1.5); this.gold += b; this.totalGold += b; }
       this.state = 'clearing';
       this.sweep = { t: 0, dur: 1.5 };
       Sound.play('clear');
@@ -4496,7 +4524,9 @@ export class Game {
   openCamp() {
     Sound.setScene('camp');
     this.shopStock = rollStock(this.player, this.shopSlots || 4);
-    this.rerollCost = 12;
+    // rerolls open cheap and climb steeply: early wallets can afford ONE second
+    // opinion, while late-game gold can't just spin the wheel forever
+    this.rerollCost = 6;
     this.shopOpen = false;
     this.enemies = []; this.projectiles = []; this.allyProjectiles = []; this.pickups = [];
     this.effects = [];                      // clear leftover swing arcs / damage numbers / death fx
@@ -5069,7 +5099,9 @@ export class Game {
     if (!b.visible) return;
     const t = this.time;
     const pulse = 0.5 + 0.5 * Math.sin(t * 5);
-    const cx = b.x, cy = b.y + Math.sin(t * 3) * 1.5;
+    // a bar left full too long DEMANDS attention: the button hops insistently
+    const nag = (this.furyIdleT || 0) > 5 ? Math.abs(Math.sin(t * 7)) * 6 : 0;
+    const cx = b.x, cy = b.y + Math.sin(t * 3) * 1.5 - nag;
     const PXS = 5, N = 9, half = N * PXS / 2;          // a 9x9 chunky-pixel rune tile
     const x0 = Math.round(cx - half), y0 = Math.round(cy - half);
     ctx.save();
@@ -6289,7 +6321,8 @@ export class Game {
       : e.burnT > 0 ? { color: '#ff7a2a', a: 0.32 + 0.12 * Math.sin(this.time * 18) }
       : (e.state === 'windup' || e.state === 'special' ? { color: '#ff4040', a: 0.5 }
       : (e.husk ? { color: '#16102a', a: 0.5 }            // the Revenant: a shade of what you were
-      : (e.elite ? { color: e.affix.color, a: 0.16 } : null)));
+      : (e.ravenous ? { color: '#ff4040', a: 0.16 + 0.1 * Math.sin(this.time * 9) }   // stragglers run hot
+      : (e.elite ? { color: e.affix.color, a: 0.16 } : null))));
     // BLADELIGHT: outside the light, foes live as silhouettes with burning eyes.
     // Hit-flash / telegraphs / burning override — those must read through the dark.
     // (Capped at 0.8 so a hint of body colour always survives — foes never strobe
@@ -6307,7 +6340,20 @@ export class Game {
     }
     // a gentle breathing bob when idle so foes never look frozen
     const bob = (!e.boss && !e.moving) ? Math.sin(this.time * 2.6 + e.x * 0.07) : 0;
-    drawSprite(ctx, e.sprite, frame, e.x, e.y - bob, e.faceLeft, 1, tint);
+    if (e.emergeT > 0 && e.emergeDur > 0) {
+      // EMERGING: the body rises out of the spawn mark, clipped at the ground
+      // line — climbing up out of the dark, not blinking into existence
+      const raw = 1 - e.emergeT / e.emergeDur;
+      const em = raw * raw * (3 - 2 * raw);                // smoothstep rise
+      const sh = Math.max(46, e.r * 3.4);
+      ctx.save();
+      ctx.beginPath(); ctx.rect(e.x - sh, e.y - sh, sh * 2, sh + 3); ctx.clip();
+      ctx.globalAlpha = 0.45 + 0.55 * em;
+      drawSprite(ctx, e.sprite, frame, e.x, e.y + (1 - em) * sh * 0.85, e.faceLeft, 1, tint);
+      ctx.restore(); ctx.globalAlpha = 1;
+    } else {
+      drawSprite(ctx, e.sprite, frame, e.x, e.y - bob, e.faceLeft, 1, tint);
+    }
     if (e.burnT > 0) this._drawBurning(ctx, e);   // real flames, drawn over the body
     // eyes in the dark: the only thing a swallowed silhouette gives away
     if (lit < 0.55) {

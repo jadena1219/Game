@@ -217,6 +217,9 @@ export class Enemy {
     this.burnT = 0; this.burnDmg = 0; this.burnTickT = 0;   // Emberbrand burn
     this.frost = 0; this.frozenT = 0;                       // Frostfang chill stacks / frozen-or-stunned
     this.elite = null; this.affix = null; this.armor = 0;
+    this.emergeT = 0;                  // >0 while rising out of the spawn telegraph
+    this.emergeDur = 0;                // full telegraph length (render ramps off this)
+    this.ravenous = false;             // last stragglers turn ravenous (no hide-and-seek)
 
     // ---- boss phase escalation ----
     this.phaseDefs = base.phases || null;
@@ -264,6 +267,10 @@ export class Enemy {
     // apply + decay knockback
     this.x += this.kbx * dt; this.y += this.kby * dt;
     this.kbx *= 0.86; this.kby *= 0.86;
+
+    // still EMERGING from the dark (spawn telegraph): visible, hittable, but
+    // it cannot move or strike until the dark finishes giving it up
+    if (this.emergeT > 0) { this.emergeT -= dt; this.moving = false; this.attackAnim = 0; return this._finish(game); }
 
     // frozen solid / stunned — cannot act
     if (this.frozenT > 0) { this.frozenT -= dt; this.moving = false; this.attackAnim = 0; return this._finish(game); }

@@ -72,15 +72,15 @@ export const CONFIG = {
   },
 
   spawn: {
-    interval: 0.52,         // s between spawn batches (tighter pressure)
-    batch: 4,               // enemies per batch (bosses ignore this)
+    interval: 0.44,         // s between spawn batches (tighter pressure)
+    batch: 5,               // enemies per batch (bosses ignore this)
   },
 };
 
 // Base enemy archetypes (level-1 values; scaled up each level).
 export const ENEMY_TYPES = {
-  chaser:  { sprite: 'skeleton', hp: 30,  speed: 72,  damage: 8,  radius: 13, touch: true },
-  swarmer: { sprite: 'imp',      hp: 16,  speed: 132, damage: 5,  radius: 10, touch: true },
+  chaser:  { sprite: 'skeleton', hp: 30,  speed: 84,  damage: 10, radius: 13, touch: true },
+  swarmer: { sprite: 'imp',      hp: 16,  speed: 140, damage: 6,  radius: 10, touch: true },
   tank:    { sprite: 'ogre',     hp: 130, speed: 42,  damage: 15, radius: 20, touch: true },
   caster:  { sprite: 'mage',     hp: 38,  speed: 58,  damage: 9,  radius: 13, touch: true,
              ranged: { range: 320, keep: 240, cooldown: 2.1, projSpeed: 185, projDmg: 9 } },
@@ -130,9 +130,9 @@ export const ELITE_AFFIXES = {
 // Level composition. Each entry: { type: count }. miniboss at L10, boss at L20.
 // Counts ramp up to match the player's snowballing ability kit.
 export const LEVELS = [
-  { chaser: 8 },                                              // 1  (gentle, but not a nap)
-  { chaser: 13, swarmer: 5 },                                 // 2
-  { chaser: 12, swarmer: 10 },                                // 3
+  { chaser: 10, swarmer: 3 },                                 // 1  (gentle, but not a nap)
+  { chaser: 13, swarmer: 8 },                                 // 2
+  { chaser: 13, swarmer: 12, bomber: 2 },                     // 3
   { chaser: 12, swarmer: 11, bomber: 3 },                     // 4
   { chaser: 11, swarmer: 12, bomber: 4, tank: 2 },            // 5
   { swarmer: 16, caster: 4, bomber: 5 },                      // 6

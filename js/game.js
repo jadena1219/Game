@@ -2482,7 +2482,7 @@ export class Game {
     // anchor at the torso, not the feet (sprites are feet-anchored) so the slash
     // radiates from the knight's body evenly in every facing direction
     this.effects.push({ kind: 'swing', t: 0, dur, style, blade: player.blade,
-      x: player.x, y: player.y - 16, angle: player.facingAngle });
+      x: player.x, y: player.y - 16, angle: player.facingAngle, seed: Math.random() * 6.28 });
     // each Living Blade throws its own elemental flourish off the cut
     if (player.blade) this._bladeSwingFx(player);
     // Trail of Cinders (Emberbrand evolution): the swing scorches the ground
@@ -5191,6 +5191,14 @@ export class Game {
     return path;
   }
 
+  // The swing. Each Living Blade has its OWN cut — not a recolour:
+  //   Emberbrand  → a burning cut: flame tongues lick off the arc, embers pop,
+  //                 and the path keeps a red afterburn as it fades.
+  //   Frostfang   → a crystallizing cut: a hard faceted rim and a fan of ice
+  //                 shards that shoot out and hang glinting in the cold.
+  //   Stormedge   → the cut IS lightning: a jagged crackling arc that re-rolls
+  //                 its jitter every frame, throwing micro-forks off the edge.
+  // No blade (shrine/camp) keeps the plain steel crescent.
   _drawSwing(ctx, fx) {
     const p = this.player;
     const style = fx.style || (p.hero && p.hero.swingStyle) || 'sweep';
@@ -5200,98 +5208,254 @@ export class Game {
     const life = fx.t / fx.dur;                          // 0..1 over the whole visual
     const sweep = Math.min(1, fx.t / (fx.dur * 0.42));   // leading edge wipes in fast
     const fade = life < 0.4 ? 1 : Math.max(0, 1 - (life - 0.4) / 0.6);
+    // shared geometry for all the renderers below
+    const G = {
+      a, a0, arc, reach, life, sweep, fade, seed: fx.seed || 0,
+      slam: style === 'slam',
+      rMid: reach * 0.68,
+      outer: reach * (style === 'slam' ? 0.46 : 0.4),
+      // point on the crescent spine/rim at sweep-fraction u (off = radial offset)
+      at: (u, off = 0) => {
+        const ang = a0 + u * arc;
+        const r = G.rMid + Math.sin(u * Math.PI) * G.outer * 0.5 + off;
+        return [Math.cos(ang) * r, Math.sin(ang) * r, ang];
+      },
+    };
     ctx.save();
     ctx.translate(fx.x, fx.y);                           // slash stays where it was swung
     ctx.lineCap = 'round';
     ctx.globalCompositeOperation = 'lighter';            // additive glow over the dark dungeon
 
-    if (style === 'stab') {
-      // Rogue: a pair of fast neon-green dagger streaks + a thin crescent flick
-      for (const off of [-0.16, 0.16]) {
-        const aa = a + off;
-        const grd = ctx.createLinearGradient(Math.cos(aa) * reach * 0.22, Math.sin(aa) * reach * 0.22,
-          Math.cos(aa) * reach * 0.92, Math.sin(aa) * reach * 0.92);
-        grd.addColorStop(0, 'rgba(120,255,190,0)');
-        grd.addColorStop(0.6, `rgba(150,255,200,${0.85 * fade})`);
-        grd.addColorStop(1, `rgba(255,255,255,${0.95 * fade})`);
-        ctx.strokeStyle = grd; ctx.lineWidth = 4.5;
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(aa) * reach * 0.22, Math.sin(aa) * reach * 0.22);
-        ctx.lineTo(Math.cos(aa) * reach * 0.92, Math.sin(aa) * reach * 0.92);
-        ctx.stroke();
-      }
-      ctx.fillStyle = `rgba(180,255,220,${0.5 * fade})`;
-      ctx.fill(this._crescentPath(a - 0.3, 0.6, reach * 0.8, reach * 0.13, 0, sweep));
+    if (style === 'stab') this._swingStab(ctx, G, fx.blade);
+    else if (fx.blade === 'ember') this._swingEmber(ctx, G);
+    else if (fx.blade === 'frost') this._swingFrost(ctx, G);
+    else if (fx.blade === 'storm') this._swingStorm(ctx, G);
+    else this._swingSteel(ctx, G);
 
-    } else {
-      // Knight (sweep) & Paladin (slam): a sharp, fast crescent slash. The bright
-      // edge runs ALONG the curve (the blade's edge catching light) — no radial
-      // shaft, so it reads as a sword cut, not a spear thrust.
-      const slam = style === 'slam';
-      const rMid = reach * 0.68;                            // sits inside the hitbox, not beyond it
-      // the Living Blade recolours the whole cut to its element
-      const ELSW = { ember: ['150,50,10', '255,140,40'], frost: ['50,120,190', '160,225,255'], storm: ['95,60,190', '190,160,255'] };
-      const elc = fx.blade && ELSW[fx.blade];
-      const bloom = elc ? elc[0] : (slam ? '150,90,25' : '60,150,255');
-      const body  = elc ? elc[1] : (slam ? '255,190,90' : '150,220,255');
-      const outer = reach * (slam ? 0.46 : 0.4);           // crescent thickness
-      // helper: trace the convex outer rim of the crescent from u=lo..hi
-      const rim = (lo, hi) => {
-        ctx.beginPath();
-        const segs = 22;
-        for (let i = 0; i <= segs; i++) {
-          const u = lo + (hi - lo) * (i / segs), ang = a0 + u * arc;
-          const r = rMid + Math.sin(u * Math.PI) * outer * 0.5;
-          const x = Math.cos(ang) * r, y = Math.sin(ang) * r;
-          i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-        }
-      };
-      // 1) origin flash — a quick radial pop where the swing begins
-      if (life < 0.26) {
-        const f = (1 - life / 0.26) * fade;
-        const rg = ctx.createRadialGradient(0, 0, 0, 0, 0, reach * 0.4);
-        rg.addColorStop(0, `rgba(${body},${0.5 * f})`);
-        rg.addColorStop(1, `rgba(${body},0)`);
-        ctx.fillStyle = rg;
-        ctx.beginPath(); ctx.arc(0, 0, reach * 0.4, 0, Math.PI * 2); ctx.fill();
-      }
-      // 2) soft bloom + 3) colored body + 4) white-hot core (thinner = sharper)
-      ctx.fillStyle = `rgba(${bloom},${0.20 * fade})`;
-      ctx.fill(this._crescentPath(a0, arc, rMid, outer, 0, sweep));
-      ctx.fillStyle = `rgba(${body},${0.42 * fade})`;
-      ctx.fill(this._crescentPath(a0, arc, rMid, outer * 0.5, 0, sweep));
-      ctx.fillStyle = `rgba(255,255,255,${0.7 * fade})`;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.restore();
+  }
+
+  // Rogue: a pair of fast dagger streaks + a thin crescent flick (tinted by blade).
+  _swingStab(ctx, G, blade) {
+    const { a, reach, sweep, fade } = G;
+    const tint = { ember: ['255,150,60', '255,220,150'], frost: ['150,225,255', '235,250,255'],
+      storm: ['185,150,255', '240,230,255'] }[blade] || ['150,255,200', '180,255,220'];
+    for (const off of [-0.16, 0.16]) {
+      const aa = a + off;
+      const grd = ctx.createLinearGradient(Math.cos(aa) * reach * 0.22, Math.sin(aa) * reach * 0.22,
+        Math.cos(aa) * reach * 0.92, Math.sin(aa) * reach * 0.92);
+      grd.addColorStop(0, `rgba(${tint[0]},0)`);
+      grd.addColorStop(0.6, `rgba(${tint[0]},${0.85 * fade})`);
+      grd.addColorStop(1, `rgba(255,255,255,${0.95 * fade})`);
+      ctx.strokeStyle = grd; ctx.lineWidth = 4.5;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(aa) * reach * 0.22, Math.sin(aa) * reach * 0.22);
+      ctx.lineTo(Math.cos(aa) * reach * 0.92, Math.sin(aa) * reach * 0.92);
+      ctx.stroke();
+    }
+    ctx.fillStyle = `rgba(${tint[1]},${0.5 * fade})`;
+    ctx.fill(this._crescentPath(a - 0.3, 0.6, reach * 0.8, reach * 0.13, 0, sweep));
+  }
+
+  // the shared crescent layers (bloom / body / core / rim glint / tip streaks)
+  _swingCrescentBase(ctx, G, bloom, body, opts = {}) {
+    const { a0, arc, reach, life, sweep, fade, slam, rMid, outer } = G;
+    const bodyA = opts.bodyA ?? 0.42, coreA = opts.coreA ?? 0.7;
+    if (life < 0.26 && (opts.flash ?? true)) {       // origin flash where the swing begins
+      const f = (1 - life / 0.26) * fade;
+      const rg = ctx.createRadialGradient(0, 0, 0, 0, 0, reach * 0.4);
+      rg.addColorStop(0, `rgba(${body},${0.5 * f})`);
+      rg.addColorStop(1, `rgba(${body},0)`);
+      ctx.fillStyle = rg;
+      ctx.beginPath(); ctx.arc(0, 0, reach * 0.4, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = `rgba(${bloom},${0.20 * fade})`;
+    ctx.fill(this._crescentPath(a0, arc, rMid, outer, 0, sweep));
+    ctx.fillStyle = `rgba(${body},${bodyA * fade})`;
+    ctx.fill(this._crescentPath(a0, arc, rMid, outer * 0.5, 0, sweep));
+    if (coreA > 0) {
+      ctx.fillStyle = `rgba(255,255,255,${coreA * fade})`;
       ctx.fill(this._crescentPath(a0, arc, rMid, outer * 0.22, 0, sweep));
-      // 5) bright blade-edge glint running ALONG the outer rim (tangential)
+    }
+    if (opts.rim ?? true) {                          // blade-edge glint along the outer rim
       ctx.strokeStyle = `rgba(255,255,255,${0.92 * fade})`; ctx.lineWidth = slam ? 3.5 : 2.5;
-      rim(0, sweep); ctx.stroke();
-      // 6) a short hot glint + speed-streaks flicking off the leading tip
-      const tu = sweep, ta = a0 + tu * arc, tr = rMid + Math.sin(tu * Math.PI) * outer * 0.5;
-      const tx = Math.cos(ta) * tr, ty = Math.sin(ta) * tr, tang = ta + Math.PI / 2;
+      ctx.beginPath();
+      const segs = 22;
+      for (let i = 0; i <= segs; i++) {
+        const [x, y] = G.at((i / segs) * sweep);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    if (opts.tip ?? true) {                          // hot glint flicking off the leading tip
+      const [tx, ty, ta] = G.at(sweep), tang = ta + Math.PI / 2;
       ctx.strokeStyle = `rgba(255,255,255,${0.95 * fade})`; ctx.lineWidth = slam ? 4 : 3;
       ctx.beginPath();
       ctx.moveTo(tx - Math.cos(tang) * reach * 0.05, ty - Math.sin(tang) * reach * 0.05);
       ctx.lineTo(tx + Math.cos(tang) * reach * 0.11, ty + Math.sin(tang) * reach * 0.11);
       ctx.stroke();
-      if (sweep < 1) {                       // thin speed lines trailing the edge
-        ctx.lineWidth = 1.5;
-        for (const k of [0.12, 0.24]) {
-          const u = Math.max(0, sweep - k), aa = a0 + u * arc;
-          const rr = rMid + Math.sin(u * Math.PI) * outer * 0.5;
-          ctx.strokeStyle = `rgba(${body},${0.5 * (1 - k * 3) * fade})`;
-          ctx.beginPath();
-          ctx.moveTo(Math.cos(aa) * (rr - 6), Math.sin(aa) * (rr - 6));
-          ctx.lineTo(Math.cos(aa) * (rr + 8), Math.sin(aa) * (rr + 8));
-          ctx.stroke();
-        }
-      }
-      if (slam && sweep >= 1) {              // crushing ground-flare at full extension
-        ctx.strokeStyle = `rgba(255,150,40,${0.7 * fade})`; ctx.lineWidth = 5;
-        ctx.beginPath(); ctx.arc(0, 0, reach * 1.05, a0 - 0.1, a + arc / 2 + 0.1); ctx.stroke();
+    }
+  }
+
+  // No blade chosen (shrine/camp): the plain steel cut, gold-warm for the Paladin.
+  _swingSteel(ctx, G) {
+    const { a0, a, arc, reach, sweep, fade, slam } = G;
+    this._swingCrescentBase(ctx, G, slam ? '150,90,25' : '60,150,255', slam ? '255,190,90' : '150,220,255');
+    if (sweep < 1) {                                 // thin speed lines trailing the edge
+      ctx.lineWidth = 1.5;
+      for (const k of [0.12, 0.24]) {
+        const [x1, y1, aa] = G.at(Math.max(0, sweep - k));
+        ctx.strokeStyle = `rgba(150,220,255,${0.5 * (1 - k * 3) * fade})`;
+        ctx.beginPath();
+        ctx.moveTo(x1 - Math.cos(aa) * 6, y1 - Math.sin(aa) * 6);
+        ctx.lineTo(x1 + Math.cos(aa) * 8, y1 + Math.sin(aa) * 8);
+        ctx.stroke();
       }
     }
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.restore();
+    if (slam && sweep >= 1) {                        // crushing ground-flare at full extension
+      ctx.strokeStyle = `rgba(255,150,40,${0.7 * fade})`; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.arc(0, 0, reach * 1.05, a0 - 0.1, a + arc / 2 + 0.1); ctx.stroke();
+    }
+  }
+
+  // 🔥 EMBERBRAND — the cut burns. Flame tongues lick up off the swept rim,
+  // ember motes pop along it, and the path holds a red afterburn while it fades.
+  _swingEmber(ctx, G) {
+    const { reach, life, sweep, fade, seed } = G;
+    this._swingCrescentBase(ctx, G, '150,50,10', '255,140,40', { coreA: 0.55 });
+    // flame tongues: short flickering licks pointing outward + biased upward
+    const tongues = 9;
+    for (let i = 0; i < tongues; i++) {
+      const u = (i + 0.5) / tongues;
+      if (u > sweep) break;
+      const flick = 0.55 + 0.45 * Math.sin(seed + i * 2.13 + this.time * 21);
+      const len = (5 + 11 * Math.sin(u * Math.PI)) * flick;
+      const [bx, by, ang] = G.at(u, 1);
+      const ox = Math.cos(ang), oy = Math.sin(ang);        // outward
+      const tipx = bx + ox * len * 0.7, tipy = by + oy * len * 0.7 - len * 0.55;  // heat rises
+      ctx.fillStyle = `rgba(255,130,35,${0.55 * fade * flick})`;
+      ctx.beginPath();
+      ctx.moveTo(bx - oy * 3.2, by + ox * 3.2);
+      ctx.lineTo(tipx, tipy);
+      ctx.lineTo(bx + oy * 3.2, by - ox * 3.2);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = `rgba(255,220,120,${0.5 * fade * flick})`;
+      ctx.beginPath();
+      ctx.moveTo(bx - oy * 1.4, by + ox * 1.4);
+      ctx.lineTo(bx + (tipx - bx) * 0.6, by + (tipy - by) * 0.6);
+      ctx.lineTo(bx + oy * 1.4, by - ox * 1.4);
+      ctx.closePath(); ctx.fill();
+    }
+    // ember pops along the path (deterministic per swing — no strobing)
+    for (let i = 0; i < 6; i++) {
+      const u = ((Math.sin(seed * 3.7 + i * 5.1) + 1) / 2) * sweep;
+      const rise = life * (10 + i * 4);
+      const [ex, ey] = G.at(u, 3 + (i % 3) * 2);
+      ctx.fillStyle = i % 2 ? `rgba(255,210,100,${0.8 * fade})` : `rgba(255,120,40,${0.8 * fade})`;
+      ctx.fillRect(ex - 1, ey - rise - 1, 2, 2);
+    }
+    // afterburn: once the slash lands, the path keeps a low red heat as it dies
+    if (life > 0.35) {
+      const cool = Math.max(0, 1 - (life - 0.35) / 0.65);
+      ctx.strokeStyle = `rgba(255,70,20,${0.5 * cool})`; ctx.lineWidth = 5;
+      ctx.beginPath();
+      const segs = 18;
+      for (let i = 0; i <= segs; i++) {
+        const [x, y] = G.at((i / segs) * sweep, -2);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+  }
+
+  // ❄️ FROSTFANG — the cut crystallizes. A hard faceted rim (no smooth curve)
+  // and a fan of ice shards that shoot outward and hang glinting; the cold lingers.
+  _swingFrost(ctx, G) {
+    const { reach, life, sweep, seed, slam } = G;
+    const fade = Math.pow(G.fade, 0.7);                    // the cold outlasts the cut
+    this._swingCrescentBase(ctx, { ...G, fade }, '50,120,190', '160,225,255', { coreA: 0.5, rim: false, tip: false });
+    // faceted crystalline rim: angular zig-zag instead of a smooth glint
+    ctx.strokeStyle = `rgba(240,252,255,${0.95 * fade})`; ctx.lineWidth = slam ? 3 : 2;
+    ctx.beginPath();
+    const segs = 16;
+    for (let i = 0; i <= segs; i++) {
+      const jag = i === 0 || i === segs ? 0 : (i % 2 ? 3.2 : -1.8);
+      const [x, y] = G.at((i / segs) * sweep, jag);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    // the shard fan: icicles fired out of the arc, growing fast then hanging
+    const shards = 6, grow = Math.min(1, life / 0.28);
+    for (let i = 0; i < shards; i++) {
+      const u = (i + 0.5) / shards;
+      if (u > sweep) continue;
+      const len = (7 + 13 * Math.sin(u * Math.PI)) * grow * (0.8 + 0.4 * Math.sin(seed + i * 2.7));
+      const [bx, by, ang] = G.at(u, 1);
+      const tilt = ang + Math.sin(seed * 2 + i * 4.1) * 0.18;        // each shard slightly skewed
+      const ox = Math.cos(tilt), oy = Math.sin(tilt);
+      const w = 2.4;
+      ctx.fillStyle = `rgba(190,233,255,${0.55 * fade})`;
+      ctx.beginPath();
+      ctx.moveTo(bx - oy * w, by + ox * w);
+      ctx.lineTo(bx + ox * len, by + oy * len);
+      ctx.lineTo(bx + oy * w, by - ox * w);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = `rgba(255,255,255,${0.8 * fade})`; ctx.lineWidth = 1;   // sun-catch edge
+      ctx.beginPath();
+      ctx.moveTo(bx - oy * w, by + ox * w);
+      ctx.lineTo(bx + ox * len, by + oy * len);
+      ctx.stroke();
+      // a glint star at the shard tip as it hangs
+      if (grow >= 1 && (i + Math.floor(this.time * 7)) % 3 === 0) {
+        const gx = bx + ox * len, gy = by + oy * len;
+        ctx.strokeStyle = `rgba(255,255,255,${0.9 * fade})`; ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(gx - 2.5, gy); ctx.lineTo(gx + 2.5, gy);
+        ctx.moveTo(gx, gy - 2.5); ctx.lineTo(gx, gy + 2.5);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // ⚡ STORMEDGE — the cut IS lightning: a jagged arc whose jitter re-rolls at
+  // ~40Hz (a real crackle), with micro-forks snapping off the swept edge.
+  _swingStorm(ctx, G) {
+    const { life, sweep, seed } = G;
+    const fade = Math.pow(G.fade, 1.5);                    // lightning dies FAST
+    // a dim violet body only — the bolt is the show
+    this._swingCrescentBase(ctx, { ...G, fade }, '95,60,190', '170,140,255',
+      { bodyA: 0.22, coreA: 0, rim: false, tip: false, flash: life < 0.14 });
+    const tick = Math.floor(this.time * 40);               // crackle clock
+    const boltR = (i, segs) => {                           // jittered radial offset
+      const m = i === 0 || i === segs ? 0 : 1;
+      return Math.sin(seed * 7.3 + i * 3.07 + tick * 1.93) * G.outer * 0.26 * m;
+    };
+    // glow pass + white-hot core pass over the same jagged path
+    const segs = 24;
+    for (const [col, lw] of [[`rgba(150,110,255,${0.55 * fade})`, 6], [`rgba(245,238,255,${0.95 * fade})`, 1.8]]) {
+      ctx.strokeStyle = col; ctx.lineWidth = lw;
+      ctx.beginPath();
+      for (let i = 0; i <= segs; i++) {
+        const [x, y] = G.at((i / segs) * sweep, boltR(i, segs));
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    // micro-forks: short two-segment bolts snapping outward off the edge
+    for (let i = 0; i < 3; i++) {
+      const u = ((Math.sin(seed * 5.1 + i * 7.7 + tick) + 1) / 2) * sweep;
+      const [bx, by, ang] = G.at(u, 2);
+      const f1 = 6 + ((tick + i) % 3) * 3, f2 = f1 * 0.7;
+      const va = ang + Math.sin(seed + i * 9 + tick) * 0.7;
+      const mx = bx + Math.cos(va) * f1, my = by + Math.sin(va) * f1;
+      const va2 = va + (i % 2 ? 0.6 : -0.6);
+      ctx.strokeStyle = `rgba(235,225,255,${0.85 * fade})`; ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(bx, by); ctx.lineTo(mx, my);
+      ctx.lineTo(mx + Math.cos(va2) * f2, my + Math.sin(va2) * f2);
+      ctx.stroke();
+    }
   }
 
   _drawHUD(ctx) {

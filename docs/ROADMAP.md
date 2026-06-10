@@ -8,6 +8,16 @@ pitched so nothing gets lost.
 
 ## 🚢 Shipped
 
+### Per-blade swing effects ✅
+- The three Living Blades no longer share one recoloured crescent — each has
+  its own cut: **Emberbrand** (flame tongues licking off the arc, popping
+  embers, red afterburn as it fades), **Frostfang** (hard faceted crystalline
+  rim, a fan of icicle shards that shoot out and hang glinting, cold that
+  lingers), **Stormedge** (the cut IS a jagged lightning bolt, jitter
+  re-rolling at ~40Hz with micro-forks snapping off the edge, dies fast).
+- Rogue's stab streaks now tint to the chosen blade. ART_SPEC gained prompts
+  for image-based effect sheets if we ever want to art them instead.
+
 ### The Black Knight — new hero sprite ✅
 - Hand-drawn pixel art (tools/gen-knight.js), pixel-by-pixel: blackened plate,
   crimson half-cape/crest/tabard, hot red visor slit. Flat cel-shading per

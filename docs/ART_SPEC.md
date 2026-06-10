@@ -123,6 +123,39 @@ EXPORT: exactly 4 frames in one horizontal row, equal square cells, the characte
 
 ---
 
+## 8. SWING EFFECTS (optional — code-drawn versions are already live)
+
+Each Living Blade has its own code-drawn cut (fire tongues / ice shards /
+lightning arc, `game.js _swingEmber/_swingFrost/_swingStorm`). If you'd rather
+art them, generate with these and we'll key + wire them the usual way. Note:
+effect sheets animate the SAME cut over 4 frames (birth → full → decay → gone),
+horizontal arc opening to the RIGHT, anchored at the swing origin (bottom-left
+of each cell).
+
+```
+Simple retro pixel-art EFFECT sprite sheet of a burning sword slash.
+A wide crescent-shaped fire slash arc, opening to the right: deep red outer glow, orange flame body, yellow-white hot leading edge, with a few small flame tongues licking upward off the curve and 2-3 tiny ember dots. NO character, NO sword — only the slash effect.
+Frames left to right: (1) the arc just beginning, short and bright; (2) the full crescent at maximum size and brightness; (3) the arc breaking up into flames and embers, dimmer; (4) only fading embers and a faint red afterglow trace of the curve.
+STYLE: simple, clean 16-bit retro pixel art. Limited palette of about 5 colors. FLAT cel-shading, no gradients, no soft blur, no painterly rendering. Chunky low-resolution pixels, bold readable shape.
+EXPORT: exactly 4 frames in one horizontal row, equal square cells, the arc anchored at the same origin in every cell. Flat solid magenta background #FF00FF. No anti-aliasing, no text, no borders.
+```
+
+```
+Simple retro pixel-art EFFECT sprite sheet of a freezing sword slash.
+A crescent-shaped ice slash arc, opening to the right: pale blue body, white crystalline JAGGED leading edge (angular facets, not a smooth curve), with 4-5 sharp icicle shards fanning outward from the curve and 1-2 tiny sparkle glints. NO character, NO sword — only the slash effect.
+Frames left to right: (1) the arc beginning, shards just emerging; (2) the full crescent with the shard fan fully extended; (3) the arc fading while the shards hang and glint; (4) only faint frost mist and one last sparkle.
+STYLE: simple, clean 16-bit retro pixel art. Limited palette of about 5 colors. FLAT cel-shading, no gradients, no soft blur, no painterly rendering. Chunky low-resolution pixels, bold readable shape.
+EXPORT: exactly 4 frames in one horizontal row, equal square cells, the arc anchored at the same origin in every cell. Flat solid magenta background #FF00FF. No anti-aliasing, no text, no borders.
+```
+
+```
+Simple retro pixel-art EFFECT sprite sheet of a lightning sword slash.
+A crescent-shaped electric slash arc, opening to the right: the arc itself drawn as one JAGGED lightning bolt bent along the curve — violet outer glow, white-hot zigzag core — with 2-3 tiny forked micro-bolts branching off the edge. NO character, NO sword — only the slash effect.
+Frames left to right: (1) the bolt-arc snapping into existence, thin; (2) the full jagged crescent at maximum brightness with forks; (3) the bolt re-jagged in a DIFFERENT zigzag pattern, starting to dim; (4) only 2-3 small residual sparks along the faded curve.
+STYLE: simple, clean 16-bit retro pixel art. Limited palette of about 5 colors. FLAT cel-shading, no gradients, no soft blur, no painterly rendering. Chunky low-resolution pixels, bold readable shape.
+EXPORT: exactly 4 frames in one horizontal row, equal square cells, the arc anchored at the same origin in every cell. Flat solid magenta background #FF00FF. No anti-aliasing, no text, no borders.
+```
+
 ## On the Demon Lord
 
 He's the exception — he already reads well because he's near-black, so his

@@ -2855,7 +2855,29 @@ export class Game {
     return out;
   }
 
-  addEffect(fx) { this.effects.push(fx); }
+  // Banners (FRENZY! / THUNDERSTORM / FURY READY …) go through a QUEUE: one at
+  // a time, deduped, held while the LEVEL CLEARED sweep owns the centre — the
+  // review footage caught three of them piled into the same pixels.
+  addEffect(fx) {
+    if (fx.kind === 'banner') {
+      const q = this.bannerQ || (this.bannerQ = []);
+      if ((this.activeBanner && this.activeBanner.text === fx.text) ||
+          q.some((b) => b.text === fx.text)) return;
+      q.push(fx);
+      return;
+    }
+    this.effects.push(fx);
+  }
+
+  _updateBanners(dt) {
+    const q = this.bannerQ || (this.bannerQ = []);
+    if (this.state !== 'playing' && this.state !== 'clearing' && q.length) q.length = 0;
+    if (this.activeBanner) {
+      this.activeBanner.t += dt;
+      if (this.activeBanner.t >= this.activeBanner.dur) this.activeBanner = null;
+    }
+    if (!this.activeBanner && q.length && !this.sweep) this.activeBanner = q.shift();
+  }
 
   hitEnemy(e, dmg, kx = 0, ky = 0, source = 'ability') {
     const wasAlive = !e.dead;
@@ -4139,6 +4161,7 @@ export class Game {
 
     this._updateCamera(dt);
     this._updateAmbient(dt);     // embers, transition, intro, sweep, hp bar — run in every state
+    this._updateBanners(dt);     // centre-screen announcements, one at a time
     this._updateDread(dt);       // eyes in the dark + intrusive whispers, escalating with depth
 
     // hold the world while the slash-wipe / plunge-fall covers the screen
@@ -5023,16 +5046,18 @@ export class Game {
       ctx.restore();
     }
 
-    // ultimate banner (screen-space)
-    for (const fx of this.effects) {
-      if (fx.kind !== 'banner') continue;
+    // the one active banner (screen-space; the queue feeds it one at a time)
+    if (this.activeBanner) {
+      const fx = this.activeBanner;
       const prog = fx.t / fx.dur;
       const a = prog < 0.15 ? prog / 0.15 : 1 - (prog - 0.15) / 0.85;
       ctx.save();
       ctx.globalAlpha = Math.max(0, a);
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      const size = 30 + prog * 14;
+      let size = 30 + prog * 14;
       ctx.font = `bold ${size}px "Silkscreen", sans-serif`;
+      const maxW = this.vw * 0.92, tw = ctx.measureText(fx.text).width;
+      if (tw > maxW) { size = Math.floor(size * maxW / tw); ctx.font = `bold ${size}px "Silkscreen", sans-serif`; }
       ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,0.65)';
       ctx.strokeText(fx.text, this.vw / 2, this.vh * 0.32);
       ctx.fillStyle = '#ffdd6a';
@@ -5989,14 +6014,31 @@ export class Game {
         ctx.font = 'italic 13px "Silkscreen", sans-serif'; ctx.fillStyle = 'rgba(220,160,150,0.85)';
         ctx.fillText(it.sub, this.vw / 2, y + size * 0.6 + 8);
       } else {
+        // floor title card: the ACT above, the floor in gold, the biome's name
+        // glowing in its own light, under a gilded rule — a card, not a label
         const x = this.vw / 2 + (1 - slide) * 80;
+        const act = (this.biome && this.biome.act) || '';
+        const col = (this.biome && this.biome.torch) || '#e9c84a';
+        if (act) {
+          ctx.font = 'bold 11px "Silkscreen", sans-serif'; ctx.fillStyle = 'rgba(214,205,230,0.6)';
+          ctx.fillText('— ACT ' + act + ' —', x, y - 34);
+        }
         ctx.font = '26px "Silkscreen", sans-serif';   // clear digits
         ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,0.6)';
         ctx.strokeText(it.text, x, y);
         ctx.fillStyle = '#e9c84a';
         ctx.fillText(it.text, x, y);
-        if (it.sub) { ctx.font = 'italic 15px "Silkscreen", sans-serif'; ctx.fillStyle = '#cfc6e6';
-          ctx.fillText(it.sub, x, y + 30); }
+        if (it.sub) {
+          ctx.font = 'italic 15px "Silkscreen", sans-serif';
+          ctx.shadowColor = col; ctx.shadowBlur = 9;
+          ctx.fillStyle = col;
+          ctx.fillText(it.sub, x, y + 30);
+          ctx.shadowBlur = 0;
+          const rule = ctx.createLinearGradient(x - 92, 0, x + 92, 0);
+          rule.addColorStop(0, 'rgba(0,0,0,0)'); rule.addColorStop(0.5, col); rule.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.globalAlpha = Math.max(0, a) * 0.75;
+          ctx.fillStyle = rule; ctx.fillRect(x - 92, y + 45, 184, 2);
+        }
       }
       ctx.restore();
     }
@@ -7005,8 +7047,8 @@ export class Game {
     const hit = Math.max(0, this.hpHitT || 0) / 0.32;
     const bx = 18 + (hit > 0 ? (Math.random() - 0.5) * 6 * hit : 0);
     const by = 20 + (hit > 0 ? (Math.random() - 0.5) * 5 * hit : 0);
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    ctx.fillRect(bx - 3, by - 3, bw + 6, bh + 6);
+    ctx.fillStyle = 'rgba(8,5,12,0.72)';
+    ctx.fillRect(bx - 4, by - 4, bw + 8, bh + 8);
     const hpf = Math.max(0, this.hpDisplay / p.maxHP);
     const ghostf = Math.max(hpf, this.hpGhost / p.maxHP);
     const col = hpf > 0.5 ? '#5ec860' : hpf > 0.25 ? '#e9c84a' : '#d8413a';
@@ -7014,10 +7056,13 @@ export class Game {
     ctx.fillStyle = 'rgba(232,120,120,0.65)'; ctx.fillRect(bx, by, bw * ghostf, bh); // ghost
     ctx.fillStyle = col; ctx.fillRect(bx, by, bw * hpf, bh);
     if (hit > 0) { ctx.fillStyle = `rgba(255,255,255,${0.5 * hit})`; ctx.fillRect(bx, by, bw * hpf, bh); }
-    // low-health danger pulse on the frame
+    // quarter ticks: how much trouble you're in, readable at a glance
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    for (let i = 1; i < 4; i++) ctx.fillRect(Math.round(bx + (bw * i) / 4), by + 2, 1, bh - 4);
+    // low-health danger pulse on the frame; otherwise the HUD wears the title's gilt
     const danger = hpf <= 0.3 ? 0.4 + 0.4 * Math.sin(this.time * 7) : 0;
-    ctx.strokeStyle = danger ? `rgba(216,65,58,${danger})` : 'rgba(255,255,255,0.25)';
-    ctx.lineWidth = danger ? 2 : 1; ctx.strokeRect(bx, by, bw, bh);
+    ctx.strokeStyle = danger ? `rgba(216,65,58,${danger})` : 'rgba(233,200,74,0.4)';
+    ctx.lineWidth = danger ? 2 : 1; ctx.strokeRect(bx - 0.5, by - 0.5, bw + 1, bh + 1);
     ctx.fillStyle = '#fff'; ctx.font = '9px "Silkscreen", sans-serif';
     ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
     ctx.fillText(`${Math.max(0, Math.ceil(p.hp))}/${p.maxHP}`, bx + 7, by + bh / 2 + 1);
@@ -7032,10 +7077,14 @@ export class Game {
       gg.addColorStop(0, 'rgba(255,180,40,0)'); gg.addColorStop(0.5, 'rgba(255,210,90,0.9)'); gg.addColorStop(1, 'rgba(255,180,40,0)');
       ctx.fillStyle = gg; ctx.fillRect(fbx - 6, fy - 6, bw + 12, fh + 12); ctx.restore();
     }
-    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(fbx - 3, fy - 3, bw + 6, fh + 6);
+    ctx.fillStyle = 'rgba(8,5,12,0.72)'; ctx.fillRect(fbx - 4, fy - 3, bw + 8, fh + 7);
     ctx.fillStyle = '#241830'; ctx.fillRect(fbx, fy, bw, fh);
-    ctx.fillStyle = ff >= 1 ? `rgba(255,220,90,${pulse})` : '#9a59e0';
+    // the bar charges in the LIVING BLADE's colour — fury and blade are one
+    const bladeCol = p.blade ? bladeById(p.blade).color : '#9a59e0';
+    ctx.fillStyle = ff >= 1 ? `rgba(255,220,90,${pulse})` : bladeCol;
     ctx.fillRect(fbx, fy, bw * ff, fh);
+    ctx.strokeStyle = 'rgba(233,200,74,0.3)'; ctx.lineWidth = 1;
+    ctx.strokeRect(fbx - 0.5, fy - 0.5, bw + 1, fh + 1);
     ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = 'bold 9px "Silkscreen", sans-serif';
     ctx.textAlign = 'left'; ctx.fillText(ff >= 1 ? 'ULTIMATE!' : 'FURY', fbx + 4, fy + fh / 2 + 1);
 

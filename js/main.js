@@ -492,9 +492,14 @@ async function boot() {
   game.godMode = godMode;
   const godBtn = document.getElementById('god-btn');
   const godSkip = document.getElementById('god-skip');
-  if (godBtn && !godMode && !/\bgod\b/.test(location.search + location.hash)) godBtn.classList.add('hidden');
+  const godAllowed = /\bgod\b/.test(location.search + location.hash);
   const syncGod = () => {
-    if (godBtn) { godBtn.textContent = 'God Mode: ' + (godMode ? 'On' : 'Off'); godBtn.classList.toggle('god-on', godMode); }
+    if (!godBtn) return;
+    godBtn.textContent = 'God Mode: ' + (godMode ? 'On' : 'Off');
+    godBtn.classList.toggle('god-on', godMode);
+    // visible only while ON (so it can always be turned off) or when summoned
+    // by ?god/#god — a leftover localStorage flag never ships it to players
+    godBtn.classList.toggle('hidden', !godAllowed && !godMode);
   };
   syncGod();
   if (godBtn) godBtn.addEventListener('click', (e) => {

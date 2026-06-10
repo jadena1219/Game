@@ -64,6 +64,12 @@ cursed relics, named elites, both bosses, 7 biomes, the Prologue, procedural aud
 and a **user-art pipeline** (drop a magenta-keyed PNG → it's cleaned and wired into
 the game — that's how the Demon Lord's art got in).
 
+Combat feel (new): **perfect dodge** (dash through an attack → slow-mo + Fury +
+dash refund), a **mechanized combo meter** (streaks grant damage/Fury, milestones
+at 10/25/50, broken by taking a hit), camera zoom-punch, haptics, loot-vacuum on
+clear — and **the Revenant**: die, and your next run must cut down your previous
+self (your hero, your blade) on the floor where you fell.
+
 ---
 
 ## What we're adding next
@@ -83,9 +89,9 @@ the game — that's how the Demon Lord's art got in).
   (beat a realm's boss → its sword is unlocked in the Shrine forever).
 - **The Throne + three endings.** Then **the Abyss** (endless mode + leaderboard).
 
-**Game-feel backlog:** perfect-dodge/parry, combo meter, hit-stop + screen-punch,
-loot magnetism, a run-summary-on-death screen, and finishing the Rogue & Paladin
-heroes. *(Full list + parked ideas: ROADMAP.md.)*
+**Game-feel backlog:** a held heavy swing, a combo audio layer, a
+run-summary-on-death screen, and finishing the Rogue & Paladin heroes.
+*(Full list + parked ideas: ROADMAP.md.)*
 
 ---
 

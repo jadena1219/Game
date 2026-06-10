@@ -8,6 +8,29 @@ pitched so nothing gets lost.
 
 ## 🚢 Shipped
 
+### The Revenant — fight your past self ✅
+- Die, and the Lord raises what you left: your run (hero, Living Blade, floor) is
+  banked, and the NEXT run meets it on the floor where you fell — a named duelist
+  wearing your sprite, dashing like you, fighting with your blade (Ember husks lay
+  hostile fire-trails, Frost husks chill on touch, Storm husks loose bolts).
+- Titled by death count — Garrick was the First Sacrifice, so yours number from
+  "The Second Sacrifice". Guaranteed relic drop; a unique Lord taunt follows the
+  floor ("I CAN RAISE AS MANY OF YOU AS YOU LEAVE ME"). Boss-floor deaths bank one
+  floor up; god-mode runs leave nothing.
+
+### Combat feel: perfect dodge, combos with teeth, juice ✅
+- **Perfect dodge**: dash THROUGH an attack (contact or projectile) → slow-mo
+  beat, cold shock-ring, "PERFECT", +Fury, and the dash refunds to 25% CD so the
+  dance chains. One per dash; parried projectiles shatter.
+- **Combo meter mechanized**: kill-streak now grants +1%/kill sword damage (cap
+  +30%, shown live) and up to +50% Fury gain; taking a hit breaks it. Milestones
+  at 10/25/50 (FRENZY / RAMPAGE / MASSACRE) with stinger + banner. HUD shows a
+  draining streak-clock bar.
+- **Juice pass**: camera zoom-punch on crits / big kills / ultimates / perfect
+  dodges; haptics (navigator.vibrate) on hurt, big kills, milestones, death;
+  level-clear now VACUUMS all uncollected loot (a herald's relic can no longer be
+  lost to the floor).
+
 ### The Sanctum is LIVE — souls, permanent upgrades, lore ✅
 - Souls bank at the end of every run (god-mode runs bank nothing) and spend in
   the Sanctum: 6 permanent upgrades now genuinely apply at run start.
@@ -95,10 +118,8 @@ pitched so nothing gets lost.
 ## 🗃️ Backlog (pitched, not yet greenlit)
 
 ### Combat depth — make the blade a language
-- **Perfect-dodge / parry**: dash through an attack at the last beat → brief
-  slow-mo + free Fury. (Biggest feel upgrade, cheap.)
-- **Combo meter**: chain kills without a hit → escalating damage + rising audio
-  layer + bigger gold. (`_drawComboCounter` stub already exists.)
+- ~~**Perfect-dodge / parry**~~ ✅ shipped.
+- ~~**Combo meter**~~ ✅ shipped (damage + fury scaling; audio layer still open).
 - **Held heavy swing**: a slower knockback cleave.
 
 ### The descent & narrative
@@ -110,8 +131,8 @@ pitched so nothing gets lost.
   between-run unlocks → "one more run."
 
 ### Juice & game-feel
-- Hit-stop scaling + screen-zoom punch on kills/crits.
-- Gold/soul magnetism + a satisfying pickup sound.
+- ~~Hit-stop scaling + screen-zoom punch on kills/crits.~~ ✅ shipped.
+- ~~Gold/soul magnetism + a satisfying pickup sound.~~ ✅ (magnet existed; clears now vacuum the rest).
 - Run-summary screen on death (floors, kills, best combo, defining relic).
 
 ### Heroes

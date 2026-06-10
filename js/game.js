@@ -39,6 +39,25 @@ const DEMON_LINES = {
   19: 'THE LAST DOOR IS OPEN, LITTLE KNIGHT.\nI SET TWO CHAIRS. YOU WILL NOT SIT.',
 };
 
+// ---- the Revenant ("husk") — your previous run, raised against you ----
+// On death, the run's shape (floor, blade, hero) is banked; the next run meets
+// it on the floor where you fell, wearing your sprite and your blade's tricks.
+// Lore: Garrick was the First Sacrifice, so your husks number from the Second.
+const HUSK_KEY = 'kls_husk_v1';
+function loadHusk() { try { return JSON.parse(localStorage.getItem(HUSK_KEY)); } catch (e) { return null; } }
+function saveHusk(h) { try { localStorage.setItem(HUSK_KEY, JSON.stringify(h)); } catch (e) { /* ignore */ } }
+function clearHusk() { try { localStorage.removeItem(HUSK_KEY); } catch (e) { /* ignore */ } }
+const ORDINALS = ['First', 'Second', 'Third', 'Fourth', 'Fifth', 'Sixth', 'Seventh', 'Eighth',
+  'Ninth', 'Tenth', 'Eleventh', 'Twelfth', 'Thirteenth', 'Fourteenth', 'Fifteenth'];
+const ordinal = (n) => ORDINALS[n - 1] || `${n}th`;
+
+// Kill-streak milestones: reach the count, get the title (and the stinger).
+const COMBO_TIERS = [
+  { at: 10, name: 'FRENZY' },
+  { at: 25, name: 'RAMPAGE' },
+  { at: 50, name: 'MASSACRE' },
+];
+
 export class Game {
   constructor(canvas, ui) {
     this.canvas = canvas;
@@ -95,6 +114,11 @@ export class Game {
     this.combo = 0;            // kill streak
     this.comboT = 0;           // time left before the streak lapses
     this.comboPop = 0;         // scale-pop on each new kill
+    this._comboTier = 0;       // highest COMBO_TIERS milestone hit this streak
+    this.zoom = 0;             // camera zoom-punch impulse (decays; big kills/crits)
+    this.slowmo = 0;           // seconds of perfect-dodge slow-motion left
+    this._huskDef = null;      // a Revenant (your previous run) queued for this floor
+    this._huskTimer = 0;
     this.goldPop = 0;          // scale-pop when gold is picked up
     this.titleT = 0;           // title-scene animation clock
     this.tunnelScroll = 0;     // how far the title corridor has scrolled past
@@ -1433,6 +1457,7 @@ export class Game {
       this._campsSinceEvent = 0; this._eventsRecent = [];   // event pacing (see openCamp)
       this.hpDisplay = this.hpGhost = this.player.maxHP;
       this.timeScale = 1; this.dying = 0;
+      this.combo = 0; this.comboT = 0; this._comboTier = 0; this.zoom = 0; this.slowmo = 0;
       this._startLevel(1, true);
       if (!wiped) { this.intro = null; this.countdown = 1.5; }  // skip the LEVEL card; let the bloom breathe
     };
@@ -1504,6 +1529,15 @@ export class Game {
     this._namedDef = (!isBoss && level >= 3 && Math.random() < 0.55) ? NAMED_FOES[(Math.random() * NAMED_FOES.length) | 0] : null;
     this._namedTimer = 5 + Math.random() * 7;
     this.namedToast = null;
+    // your previous self waits where you fell — the Lord raised what you left
+    this._huskDef = null;
+    const husk = (!isBoss && level >= 2) ? loadHusk() : null;
+    if (husk && husk.floor === level) {
+      clearHusk();                               // one encounter per death
+      this._huskDef = husk;
+      this._huskTimer = 3.5 + Math.random() * 3;
+      this._namedDef = null;                     // the floor belongs to the Revenant
+    }
     // swap to this level's art. Rebuild when the biome changes — and ALWAYS for a
     // boss level (its room is special) or right after one (restore the normal room),
     // even when the biome itself didn't change (e.g. L5 shares the crypt with L4/L6).
@@ -1691,17 +1725,33 @@ export class Game {
   onEnemyKilled(e, source) {
     const p = this.player;
     Sound.play(e.boss ? 'die_tank' : ('die_' + e.type) , { vol: e.elite ? 1.2 : 1 });
-    // Fury charges slowly — the ultimate should be a rare payoff (~every few levels)
-    p.fury = Math.min(p.furyMax, p.fury + (e.boss ? 16 : 1.4) * p.mods.furyMult);
+    // Fury charges slowly — the ultimate should be a rare payoff (~every few
+    // levels). A hot streak feeds it faster (up to +50%).
+    p.fury = Math.min(p.furyMax, p.fury + (e.boss ? 16 : 1.4) * p.mods.furyMult
+      * (1 + Math.min(0.5, this.combo * 0.02)));
     if (source === 'sword' && p.mods.lifestealHeal > 0 && !p.mods.noHeal) {
       p.hp = Math.min(p.maxHP, p.hp + p.mods.lifestealHeal);
     }
     this.kills++;
     this.combo++; this.comboT = 2.6; this.comboPop = 1;     // feed the kill streak
     if (this.combo > (this.bestCombo || 0)) this.bestCombo = this.combo;
+    // streak milestones: a stinger + banner as the slaughter escalates
+    for (let i = COMBO_TIERS.length - 1; i >= 0; i--) {
+      if (this.combo >= COMBO_TIERS[i].at && this._comboTier < i + 1) {
+        this._comboTier = i + 1;
+        this.addEffect({ kind: 'banner', text: COMBO_TIERS[i].name + '!', t: 0, dur: 1.1 });
+        Sound.play('combo', { tier: i + 1 });
+        this.zoom = Math.max(this.zoom, 0.7);
+        this.shake = Math.max(this.shake, 5);
+        this._buzz(40);
+        break;
+      }
+    }
+    // a slain Revenant earns the Lord's next taunt (delivered after the floor)
+    if (e.husk) this._huskTauntDue = true;
     // hit-pause on meaningful kills (skip trash so swarms stay fluid)
-    if (e.boss) this.hitStop = Math.max(this.hitStop, 0.14);
-    else if (e.type === 'tank' || e.elite) this.hitStop = Math.max(this.hitStop, 0.06);
+    if (e.boss) { this.hitStop = Math.max(this.hitStop, 0.14); this.zoom = Math.max(this.zoom, 1); this._buzz(90); }
+    else if (e.type === 'tank' || e.elite) { this.hitStop = Math.max(this.hitStop, 0.06); this.zoom = Math.max(this.zoom, 0.55); this._buzz(25); }
     this._spawnDeathFx(e);
     this._dropLoot(e);
     // bombers + Explosive elites detonate when slain
@@ -2117,6 +2167,8 @@ export class Game {
     Sound.play('ultimate');
     this.shake = Math.max(this.shake, 13);
     this.hitStop = Math.max(this.hitStop, 0.12);
+    this.zoom = Math.max(this.zoom, 1);
+    this._buzz(120);
     if (p.blade === 'ember') this._ultEruption();
     else if (p.blade === 'frost') this._ultAbsoluteZero();
     else if (p.blade === 'storm') this._ultThunderstorm();
@@ -2295,17 +2347,78 @@ export class Game {
     this.namedToast = { name: def.name.toUpperCase(), sub: 'bears a relic', color: def.color, t: 0, dur: 2.6 };
   }
 
+  // The Revenant strides in: your previous run, wearing your hero's body and the
+  // Living Blade it died with. Slay it and it yields a relic — what you were,
+  // returned to you.
+  _maybeSpawnHusk(sdt) {
+    if (!this._huskDef) return;
+    this._huskTimer -= sdt;
+    if (this._huskTimer > 0) return;
+    const def = this._huskDef; this._huskDef = null;
+    const pos = this._spawnPos();
+    const e = new Enemy('revenant', pos[0], pos[1], this.level);
+    const hero = CONFIG.heroes[def.hero] || CONFIG.heroes.knight;
+    e.sprite = hero.sprite;
+    const bd = def.blade ? bladeById(def.blade) : null;
+    const col = bd ? bd.color : '#9aa6c0';
+    e.named = { name: `The ${ordinal(def.n)} Sacrifice`, color: col };
+    e.husk = def.blade || 'none';
+    e.elite = 'husk'; e.affix = { name: 'Husk', color: col };  // elite dressing: ground ring + orbit motes
+    e.auraT = Math.random() * 6.28;
+    e.dropsRelic = true;
+    // a Stormedge husk keeps its arc — a slow bolt loosed on the move
+    if (def.blade === 'storm') {
+      e.spec = { ...e.spec, ranged: { range: 300, keep: 0, cooldown: 3.6, projSpeed: 215, projDmg: 11 } };
+      e.fireCD = 2.4;
+    }
+    this.enemies.push(e);
+    this.shake = Math.max(this.shake, 8);
+    Sound.play('bossroar', { vol: 0.5 });
+    Sound.play('whisper', { vol: 1.4 });
+    this.namedToast = { name: e.named.name.toUpperCase(), sub: 'what you were, raised against you', color: col, t: 0, dur: 3.2 };
+  }
+
   // Cinderstep: damage everything standing in the burning dash-trail.
+  // (Hostile trails — laid by an Emberbrand husk — burn YOU instead.)
   _burnTrails(sdt) {
     for (const fx of this.effects) {
       if (fx.kind !== 'firetrail') continue;
       fx.dmgT = (fx.dmgT || 0) - sdt;
       if (fx.dmgT <= 0) {
         fx.dmgT = 0.22;
+        if (fx.hostile) {
+          const p = this.player;
+          if (p && !p.dead && Math.hypot(p.x - fx.x, p.y - fx.y) < fx.r + p.r * 0.6) {
+            if (p.takeHit(fx.hdmg, 'the cinders of what you were')) this.shake = Math.max(this.shake, 4);
+          }
+          continue;
+        }
         const dmg = 9 * (1 + 0.5 * (this.level - 1) / 19) * this.player.mods.abilityDmgMult;
         for (const o of this.enemiesInRadius(fx.x, fx.y, fx.r)) this.hitEnemy(o, dmg, 0, 0, 'ability');
       }
     }
+  }
+
+  // ---------- perfect dodge ----------
+  // Dash THROUGH an attack and the world holds its breath: slow-mo, a cold shock
+  // ring, a burst of Fury, and your dash comes back almost at once so the dance
+  // can continue. One per dash (the window is consumed on trigger).
+  _perfectDodge(x, y) {
+    const p = this.player;
+    p.parryT = 0;
+    p.dashCD = Math.min(p.dashCD, p.dashCooldown0 * 0.25);
+    p.fury = Math.min(p.furyMax, p.fury + 8 * p.mods.furyMult);
+    this.slowmo = 0.4;
+    this.hitStop = Math.max(this.hitStop, 0.045);
+    this.shake = Math.max(this.shake, 5);
+    this.zoom = Math.max(this.zoom, 0.9);
+    this.addEffect({ kind: 'ring', x, y, r: 64, color: '#bfe9ff', t: 0, dur: 0.34 });
+    this.addEffect({ kind: 'hitring', x, y, r: 34, t: 0, dur: 0.2 });
+    this.effects.push({ kind: 'dmg', x: p.x, y: p.y - 44, text: 'PERFECT', vy: -36,
+      color: '#9fe8ff', big: true, t: 0, dur: 0.7 });
+    this._hitBurst(x, y, Math.atan2(y - (p.y - 16), x - p.x), 1.2);
+    Sound.play('parry');
+    this._buzz(45);
   }
 
   // ---------- dash ----------
@@ -2399,6 +2512,8 @@ export class Game {
         // bosses are heavy — barely shoved (stops perma-knockback cheese)
         const kb = kbStrength * this._kbResist(e);
         let dmg = p.swordDamage * berserk;
+        // a running kill-streak sharpens the blade (+1%/kill, capped at +30%)
+        dmg *= 1 + Math.min(0.30, this.combo * 0.01);
         if (p.relics.has('exec') && e.hp < e.maxHP * 0.35) dmg *= 1.7;
         // Rogue: chance to crit
         let crit = false;
@@ -2409,6 +2524,7 @@ export class Game {
         // --- the "fuck yeah" impact: directional sparks, a flash ring, a slash
         // mark across the foe, crunchy hitstop + shake scaled to the blow ---
         const ix = e.x, iy = e.y - e.r * 0.35, power = crit ? 1.7 : 1;
+        if (crit) this.zoom = Math.max(this.zoom, 0.45);   // crits punch the camera in
         this._hitBurst(ix, iy, p.facingAngle, power);
         this.addEffect({ kind: 'hitring', x: ix, y: iy, r: (e.boss ? 40 : 24) * power, t: 0, dur: 0.18 });
         this.addEffect({ kind: 'slash', x: ix, y: iy, angle: p.facingAngle + Math.PI / 2, len: e.r * 2.0 + 14, t: 0, dur: 0.14 });
@@ -2534,6 +2650,13 @@ export class Game {
               vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, dur: 0.18 + Math.random() * 0.12, streak: true, col: '#bfffff' }); }
           break;
         }
+        case 'husk': {                           // the unmade — cold ash rising off a hollow body
+          if (rate(0.7)) this._mote(x + (Math.random() - 0.5) * r * 1.6, y + (Math.random() - 0.5) * r,
+            Math.random() < 0.6 ? '#3a3346' : e.affix.color,
+            { vx: (Math.random() - 0.5) * 10, vy: -(16 + Math.random() * 26), g: -14,
+              r: 1.3 + Math.random() * 1.5, twinkle: 1, dur: 0.6 + Math.random() * 0.5 });
+          break;
+        }
         case 'armored': {                        // heavy — occasional grinding spark + dust
           if (rate(0.35)) { const a = Math.random() * 6.28, s = 30 + Math.random() * 60;
             this.effects.push({ kind: 'spark', x: x + Math.cos(a) * r, y: y + Math.sin(a) * r,
@@ -2555,6 +2678,16 @@ export class Game {
   }
 
   _smooth(x) { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); }
+
+  // Haptic tick (mobile): a tiny vibration on the big beats. Throttled so swarm
+  // kills don't rattle the phone; silently unsupported on iOS Safari.
+  _buzz(ms) {
+    if (!navigator.vibrate) return;
+    const now = performance.now();
+    if (now - (this._buzzT || 0) < 90) return;
+    this._buzzT = now;
+    try { navigator.vibrate(ms); } catch (e) { /* ignore */ }
+  }
 
   // The boss-entrance cutscene: the knight stands at the chamber mouth, scanning
   // the dark and breathing, then the altar wakes and the boss drags itself up
@@ -2651,6 +2784,10 @@ export class Game {
     // brief hit-pause freezes the simulation for weight
     if (this.hitStop > 0) { this.hitStop -= dt; return; }
 
+    // perfect-dodge slow-mo: the world holds its breath, then eases back up
+    if (this.slowmo > 0) { this.slowmo -= dt; this.timeScale = 0.35; }
+    else if (this.timeScale < 1) this.timeScale = Math.min(1, this.timeScale + dt * 5);
+
     const sdt = dt * this.timeScale;
     this.input.poll();
     const p = this.player;
@@ -2682,10 +2819,18 @@ export class Game {
     this._dashTrail(p, sdt);
     this._spawn(sdt);
     this._maybeSpawnNamed(sdt);                 // the floor's named elite herald
+    this._maybeSpawnHusk(sdt);                  // the Revenant — your previous run, raised
     if (p.mods.dashFireTrail) this._emitDashFire(p);
     this._burnTrails(sdt);                      // dash + Cinderstep + ember-swing flames
 
     for (const e of this.enemies) e.update(sdt, this);
+    // an Emberbrand husk scorches the ground in its rush — your Cinderstep, turned on you
+    for (const e of this.enemies) {
+      if (e.husk === 'ember' && e.state === 'charging' && Math.random() < sdt * 26) {
+        this.effects.push({ kind: 'firetrail', hostile: true, x: e.x, y: e.y + 2, r: 22, t: 0, dur: 1.1,
+          dmgT: 0.1, hdmg: 7 * (1 + CONFIG.scaling.dmgPerLevel * (this.level - 1)), seed: Math.random() * 6.28 });
+      }
+    }
     this._updateStatuses(sdt);                  // blade burn DoT / permafrost
     this._updateUltFx(sdt);                     // lava field / thunderstorm strikes
     this._emitAuras(sdt);
@@ -2693,13 +2838,14 @@ export class Game {
     this._updatePickups(sdt);
     this._separate();
 
-    // collisions: enemy contact
+    // collisions: enemy contact (threading one mid-dash = a PERFECT dodge)
     for (const e of this.enemies) {
       const dx = p.x - e.x, dy = p.y - e.y;
       if (Math.hypot(dx, dy) < p.r + e.r) {
+        if (p.parryT > 0 && !p.dead) { this._perfectDodge(e.x, e.y - e.r * 0.4); continue; }
         if (p.takeHit(e.cdmg || e.damage, this._foeName(e))) {
           this.shake = Math.max(this.shake, 6);
-          if (e.elite === 'icy') p.slowT = 1.3;                 // Frostbound chills you
+          if (e.elite === 'icy' || e.husk === 'frost') p.slowT = 1.3;   // Frostbound chills you
           if (e.type === 'bomber') { e.dead = true; this._explodeEnemy(e); } // detonates on contact
         }
       }
@@ -2708,7 +2854,11 @@ export class Game {
     for (const pr of this.projectiles) {
       if (pr.dead) continue;
       const dx = p.x - pr.x, dy = p.y - pr.y;
-      if (Math.hypot(dx, dy) < p.r + pr.r) { if (p.takeHit(pr.dmg * (p.mods.projDamageMult || 1), pr.srcName || 'a dark bolt')) this.shake = 5; pr.dead = true; }
+      if (Math.hypot(dx, dy) < p.r + pr.r) {
+        if (p.parryT > 0 && !p.dead) { pr.dead = true; this._spark(pr.x, pr.y); this._perfectDodge(pr.x, pr.y); continue; }
+        if (p.takeHit(pr.dmg * (p.mods.projDamageMult || 1), pr.srcName || 'a dark bolt')) this.shake = 5;
+        pr.dead = true;
+      }
     }
 
     this.enemies = this.enemies.filter((e) => !e.dead);
@@ -2718,6 +2868,7 @@ export class Game {
     if (p.dead) return this._lose();
     if (this.spawnQueue.length === 0 && this.enemies.length === 0) {
       if (this._namedDef) { this._namedTimer = 0; this._maybeSpawnNamed(0); }  // don't end before the herald arrives
+      else if (this._huskDef) { this._huskTimer = 0; this._maybeSpawnHusk(0); } // …or before your past self does
       else this._win();
     }
   }
@@ -2776,7 +2927,11 @@ export class Game {
     // smoothed health bar (+ detect damage for the HP-bar punch)
     if (this.player) {
       const hp = Math.max(0, this.player.hp);
-      if (this._hpWas != null && hp < this._hpWas - 0.01) { this.hpHitT = 0.32; Sound.play('hurt'); }
+      if (this._hpWas != null && hp < this._hpWas - 0.01) {
+        this.hpHitT = 0.32; Sound.play('hurt'); this._buzz(60);
+        // pain breaks the rhythm: taking a hit ends the kill-streak
+        if (this.state === 'playing' && this.combo > 0) { this.combo = 0; this.comboT = 0; this._comboTier = 0; }
+      }
       this._hpWas = hp;
       this.hpDisplay += (hp - this.hpDisplay) * Math.min(1, dt * 14);
       if (this.hpGhost < this.hpDisplay) this.hpGhost = this.hpDisplay;
@@ -2786,7 +2941,8 @@ export class Game {
     if (this.hpHitT > 0) this.hpHitT -= dt;
     if (this.goldPop > 0) this.goldPop -= dt * 4;
     if (this.comboPop > 0) this.comboPop -= dt * 4;
-    if (this.comboT > 0) { this.comboT -= dt; if (this.comboT <= 0) this.combo = 0; }
+    if (this.comboT > 0) { this.comboT -= dt; if (this.comboT <= 0) { this.combo = 0; this._comboTier = 0; } }
+    if (this.zoom > 0) this.zoom = Math.max(0, this.zoom - dt * 3.2);   // zoom-punch eases back out
     // floating embers (used for death fx, title & victory celebration) — spawned
     // in world space around the current view
     const want = (this.state === 'victory') ? 60 : 0;   // title now uses the corridor scene
@@ -2837,7 +2993,11 @@ export class Game {
       if (this.sweep.t >= this.sweep.dur) {
         this.sweep = null;
         this.pendingReward = null;
-        const taunt = DEMON_LINES[this.level];    // the Demon Lord speaks on odd floors
+        // the Demon Lord speaks on odd floors — and always after you cut down a husk
+        const taunt = this._huskTauntDue
+          ? 'YOU CUT DOWN WHAT YOU WERE.\nI CAN RAISE AS MANY OF YOU AS YOU LEAVE ME.'
+          : DEMON_LINES[this.level];
+        this._huskTauntDue = false;
         if (taunt) this._beginInterlude(taunt);
         else this._slashWipe(() => this.openCamp());   // wipe into the camp room
       }
@@ -2993,6 +3153,18 @@ export class Game {
     this.state = 'dying';
     this.dying = 1.5;
     this.shake = Math.max(this.shake, 9);
+    this._buzz(220);
+    // the Lord raises what you leave: bank this run as a husk on the floor where
+    // you fell — the next run will have to cut it down. (Boss floors shift up one;
+    // god-mode runs leave nothing.)
+    if (!this.godMode && this.level >= 2 && this.player) {
+      let floor = this.level;
+      while (floor > 2 && (LEVELS[floor - 1].boss || LEVELS[floor - 1].miniboss)) floor--;
+      this.meta.deaths = (this.meta.deaths || 0) + 1;
+      saveMeta(this.meta);
+      // Garrick was the First Sacrifice — your husks number from the Second
+      saveHusk({ floor, n: this.meta.deaths + 1, blade: this.player.blade || null, hero: this.heroId || 'knight' });
+    }
     this._awardSouls(false);
     Sound.setScene('gameover'); Sound.play('lose');
   }
@@ -3021,6 +3193,10 @@ export class Game {
   }
 
   _win() {
+    // nothing earned stays behind: sweep all uncollected loot into your pack
+    // (a herald's relic must never be lost to the floor when the level ends)
+    for (const pk of this.pickups) if (!pk.dead) this._collect(pk);
+    this.pickups = [];
     if (this.level >= LEVELS.length) {
       // epic celebration sequence, then the victory screen
       this.state = 'won';
@@ -3308,6 +3484,14 @@ export class Game {
     if (this.state === 'shrine') { this._renderShrine(ctx); return; }
 
     ctx.clearRect(0, 0, this.vw, this.vh);
+    // zoom-punch: big kills/crits/perfect dodges shove the camera in for a beat.
+    // Wraps the world AND the lighting overlays so they stay registered.
+    const zp = 1 + 0.05 * Math.min(1, this.zoom || 0);
+    const zoomed = zp > 1.001;
+    if (zoomed) {
+      ctx.save();
+      ctx.translate(this.vw / 2, this.vh / 2); ctx.scale(zp, zp); ctx.translate(-this.vw / 2, -this.vh / 2);
+    }
     ctx.save();
     if (this.shake > 0) {
       ctx.translate((Math.random() - 0.5) * this.shake, (Math.random() - 0.5) * this.shake);
@@ -3391,6 +3575,7 @@ export class Game {
     this._drawInterludeFade(ctx);   // black fading out of a Demon Lord taunt into the camp
     this._drawDeathOverlay(ctx);    // desaturate + "YOU FELL" during dying/gameover lead-in
     this._drawVictory(ctx);         // golden celebration during the 'won' sequence
+    if (zoomed) ctx.restore();      // end zoom-punch (HUD/banners stay unscaled)
 
     // full-screen flash (ultimate)
     if (this.flashScreen > 0) {
@@ -4774,7 +4959,8 @@ export class Game {
       : e.frozenT > 0 ? { color: '#9fd8ff', a: 0.5 }
       : e.burnT > 0 ? { color: '#ff7a2a', a: 0.32 + 0.12 * Math.sin(this.time * 18) }
       : (e.state === 'windup' || e.state === 'special' ? { color: '#ff4040', a: 0.5 }
-      : (e.elite ? { color: e.affix.color, a: 0.16 } : null));
+      : (e.husk ? { color: '#16102a', a: 0.5 }            // the Revenant: a shade of what you were
+      : (e.elite ? { color: e.affix.color, a: 0.16 } : null)));
     // BLADELIGHT: outside the light, foes live as silhouettes with burning eyes.
     // Hit-flash / telegraphs / burning override — those must read through the dark.
     const lit = (e.boss || tint) ? 1 : this._litAt(e.x, e.y);
@@ -5179,15 +5365,17 @@ export class Game {
     }
   }
 
-  // Kill-streak counter — pops on each kill, drifts up and fades when it lapses.
+  // Kill-streak counter — pops on each kill, shows the live damage bonus, and a
+  // draining ring tells you exactly how long the streak has left to live.
   _drawComboCounter(ctx) {
     if (this.state !== 'playing' || this.combo < 3) return;
     const fade = Math.min(1, this.comboT / 0.7);
     const pop = Math.max(0, this.comboPop || 0);
     const scale = 1 + 0.28 * pop;
     const cx = this.vw / 2, cy = 92;
-    // hotter colour the longer the streak runs
-    const col = this.combo >= 25 ? '#ff5a3a' : this.combo >= 12 ? '#ffae3a' : '#ffd86a';
+    // hotter colour the longer the streak runs (matches COMBO_TIERS)
+    const col = this.combo >= 50 ? '#ff3a6a' : this.combo >= 25 ? '#ff5a3a' : this.combo >= 10 ? '#ffae3a' : '#ffd86a';
+    const tierName = this.combo >= 50 ? 'MASSACRE' : this.combo >= 25 ? 'RAMPAGE' : this.combo >= 10 ? 'FRENZY' : 'COMBO';
     ctx.save();
     ctx.globalAlpha = fade;
     ctx.translate(cx, cy); ctx.scale(scale, scale);
@@ -5198,8 +5386,20 @@ export class Game {
     ctx.fillStyle = col; ctx.fillText('' + this.combo, 0, 0);
     ctx.font = '8px "Silkscreen", sans-serif';
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.8)';
-    ctx.strokeText('COMBO', 0, 16); ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    ctx.fillText('COMBO', 0, 16);
+    ctx.strokeText(tierName, 0, 16); ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fillText(tierName, 0, 16);
+    // the streak clock: a thin bar draining left as the window closes
+    const frac = Math.max(0, Math.min(1, this.comboT / 2.6));
+    ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(-27, 23, 54, 4);
+    ctx.fillStyle = col; ctx.fillRect(-26, 24, 52 * frac, 2);
+    // the streak is power: surface the live sword-damage bonus
+    const bonus = Math.min(30, this.combo);
+    if (bonus >= 3) {
+      ctx.font = '7px "Silkscreen", sans-serif';
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+      ctx.strokeText(`+${bonus}% DMG`, 0, 35);
+      ctx.fillStyle = col; ctx.fillText(`+${bonus}% DMG`, 0, 35);
+    }
     ctx.restore();
   }
 

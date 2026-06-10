@@ -81,6 +81,11 @@ export const ENEMY_TYPES = {
   // Bomber: rushes you and detonates on death — keep your distance or kill from afar.
   bomber:  { sprite: 'bomber',   hp: 24,  speed: 116, damage: 6,  radius: 12, touch: true,
              explode: { r: 70, dmg: 26 } },
+  // The Revenant: your own previous run, raised as a husk on the floor where you
+  // fell. Duelist stats — quick, with a dash-like rush. game.js dresses it in the
+  // hero sprite + Living Blade of the run that died there.
+  revenant:{ sprite: 'knight',   hp: 290, speed: 104, damage: 15, radius: 14, touch: true,
+             charge: { windup: 0.5, dur: 0.34, speed: 620, cooldown: 3.4 } },
   // Mini-boss (Dark Knight, L10): a GIGANTIC dread-knight — telegraphed CHARGE that rushes
   // you down, and a SLAM that cracks the floor into molten fissures you must not stand in.
   // Phase 2 (WRATH, <=50% HP): enrages into a triple-charge that erupts a shockwave nova.

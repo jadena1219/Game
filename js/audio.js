@@ -214,6 +214,12 @@ class GameAudio {
         this._noise({ filter: 'highpass', cutoff: 2000, cutoff1: 400, dur: 0.2, gain: 0.1 * v });
         break;
       }
+      case 'die_revenant': {            // a husk unmade — a hollow exhale, almost a voice
+        this._tone({ type: 'sawtooth', f0: 300, f1: 60, exp: true, dur: 0.5, gain: 0.12 * v, filter: 'bandpass', cutoff: 800, q: 2 });
+        this._tone({ type: 'sine', f0: 100, f1: 40, exp: true, dur: 0.4, gain: 0.2 * v });
+        this._noise({ filter: 'bandpass', cutoff: 900, cutoff1: 200, q: 3, dur: 0.6, gain: 0.1 * v });
+        break;
+      }
       case 'die': {                     // default
         this._tone({ type: 'sine', f0: 120, f1: 50, exp: true, dur: 0.16, gain: 0.18 * v });
         this._noise({ filter: 'bandpass', cutoff: 900, q: 1, dur: 0.14, gain: 0.12 * v });
@@ -233,6 +239,22 @@ class GameAudio {
       }
       case 'dash': {
         this._noise({ filter: 'bandpass', cutoff: 500, cutoff1: 1800, q: 0.8, dur: 0.2, gain: 0.12 * v });
+        break;
+      }
+      case 'parry': {                   // a PERFECT dodge — a cold bell as time holds its breath
+        const t = this._now();
+        this._noise({ filter: 'bandpass', cutoff: 2600, cutoff1: 700, q: 1.4, dur: 0.3, gain: 0.16 * v });
+        this._tone({ type: 'triangle', f0: 1760, dur: 0.5, gain: 0.12 * v });
+        this._tone({ t0: t + 0.05, type: 'triangle', f0: 2640, dur: 0.45, gain: 0.08 * v });
+        this._tone({ type: 'sine', f0: 130, f1: 60, exp: true, dur: 0.18, gain: 0.2 * v });
+        this._duck(0.35, 0.6);
+        break;
+      }
+      case 'combo': {                   // streak milestone — a hot rising stinger
+        const t = this._now(), tier = opts.tier || 1;
+        [0, 7, 12, 12 + 7 * (tier - 1)].forEach((n, i) =>
+          this._tone({ t0: t + i * 0.05, type: 'triangle', f0: 392 * semis(n), dur: 0.5, gain: 0.09 * v }));
+        this._noise({ filter: 'highpass', cutoff: 2200, dur: 0.2, gain: 0.06 * v });
         break;
       }
       case 'furyready': {               // a rising shimmer cue

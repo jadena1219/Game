@@ -8,6 +8,7 @@ const TAU = Math.PI * 2;
 export const FOE_NAMES = {
   chaser: 'a Skeleton', swarmer: 'an Imp', tank: 'an Ogre', caster: 'a Dark Mage',
   bomber: 'a Bomber', miniboss: 'the Dark Knight', boss: 'the Demon Lord',
+  revenant: 'your former self',
 };
 
 function norm(x, y) { const l = Math.hypot(x, y) || 1; return [x / l, y / l]; }
@@ -38,6 +39,7 @@ export class Player {
     this.dashTimer = 0;                // >0 while dashing
     this.dashCD = 0;
     this.dashDirX = 1; this.dashDirY = 0;
+    this.parryT = 0;                   // perfect-dodge window: open while a dash can "thread" a hit
     // progression
     this.forge = {};                   // forge id -> level
     this.relics = new Set();           // owned relic ids
@@ -84,6 +86,8 @@ export class Player {
     this.dashTimer = h.dashDur;
     this.dashCD = this.dashCooldown0;
     this.invuln = Math.max(this.invuln, h.dashDur + h.dashInvuln + this.mods.dashInvulnBonus);
+    // anything that would have connected in this window is a PERFECT dodge
+    this.parryT = h.dashDur + h.dashInvuln * 0.5;
     game.onDash(this);
   }
 
@@ -126,6 +130,7 @@ export class Player {
     if (this.swingCD > 0) this.swingCD -= dt;
     if (this.attackAnim > 0) this.attackAnim -= dt;
     if (this.invuln > 0) this.invuln -= dt;
+    if (this.parryT > 0) this.parryT -= dt;
     if (this.slowT > 0) this.slowT -= dt;
     if (this.flash > 0) this.flash -= dt;
     if (this.swingTimer > 0) {
@@ -345,8 +350,9 @@ export class Enemy {
         this.fireCD = ranged.cooldown * this.cdMul;
         this.attackAnim = 0.25;
       }
-      // kiting behaviour for non-boss casters
-      if (!this.boss) {
+      // kiting behaviour for non-boss casters (the husk doesn't kite — it fires
+      // its stolen blade-arc on the move and keeps coming for you)
+      if (!this.boss && !this.husk) {
         if (dist > ranged.range) { this._step(nx, ny, dt); this.moving = true; }
         else if (dist < ranged.keep) { this._step(-nx, -ny, dt * 0.9); this.moving = true; }
         else this.moving = false;

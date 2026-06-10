@@ -53,6 +53,8 @@ html, body {
   z-index: 10;
 }
 .screen.hidden { display: none; }
+/* generic utility — anything tagged .hidden is GONE (beats ID display rules) */
+.hidden { display: none !important; }
 #camp-prompt.hidden { display: none; }
 
 h1, h2 { font-family: 'Pixelify Sans', 'Silkscreen', sans-serif; }
@@ -420,6 +422,13 @@ p { max-width: 30ch; line-height: 1.5; }
 #event-modal {
   gap: 10px; padding: 6vh 18px 4vh; overflow-y: auto;
   background: radial-gradient(ellipse at 50% 30%, rgba(20,10,30,0.72), rgba(6,4,10,0.97) 72%);
+}
+.event-scene {
+  width: min(276px, 76vw); image-rendering: pixelated;
+  border: 1px solid rgba(233,200,74,0.28); border-radius: 6px;
+  background: #0d0a14;
+  box-shadow: 0 6px 26px rgba(0,0,0,0.7), 0 0 22px -4px var(--ev, #b06bff);
+  animation: cardIn 0.35s ease both;
 }
 .event-icon {
   width: 60px; height: 60px; image-rendering: pixelated;

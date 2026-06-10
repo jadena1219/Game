@@ -8,6 +8,7 @@ import { RELICS } from './abilities.js';
 import { Sound } from './audio.js';
 import { registerGeneratedSprites, buildKeystoneIcons, buildBladeIcons } from './spritegen.js';
 import { BLADES } from './blades.js';
+import { drawEventScene } from './vignettes.js';
 
 const screens = {
   title: document.getElementById('title-screen'),
@@ -269,6 +270,8 @@ const ui = {
   showBladeEvolve(g, blade, tier) {
     const m = document.getElementById('event-modal');
     m.style.setProperty('--ev', blade.color);
+    const sc = document.getElementById('event-scene');
+    if (sc) sc.classList.add('hidden');
     const ico = document.getElementById('event-icon');
     if (BLADE_ICONS[blade.id]) { ico.src = BLADE_ICONS[blade.id]; ico.classList.remove('hidden'); } else ico.classList.add('hidden');
     document.getElementById('event-title').textContent = `${blade.name} Awakens`;
@@ -291,7 +294,14 @@ const ui = {
   showEvent(g, ev) {
     const m = document.getElementById('event-modal');
     m.style.setProperty('--ev', ev.color || '#b06bff');
-    document.getElementById('event-icon').src = `assets/icons/${ev.icon}.png`;
+    // the painted scene replaces the bare icon — every event opens on a stage
+    const scene = document.getElementById('event-scene');
+    const icon = document.getElementById('event-icon');
+    let painted = false;
+    if (scene) { try { painted = drawEventScene(scene.getContext('2d'), ev.id); } catch (e) { painted = false; } }
+    if (scene) scene.classList.toggle('hidden', !painted);
+    icon.classList.toggle('hidden', painted);
+    icon.src = `assets/icons/${ev.icon}.png`;
     document.getElementById('event-title').textContent = ev.title;
     const flavor = document.getElementById('event-flavor');
     flavor.textContent = ev.flavor; flavor.classList.remove('hidden');

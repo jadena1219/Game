@@ -39,6 +39,19 @@ const DEMON_LINES = {
   19: 'THE LAST DOOR IS OPEN, LITTLE KNIGHT.\nI SET TWO CHAIRS. YOU WILL NOT SIT.',
 };
 
+// The Lord REMEMBERS: certain camp choices provoke a personal interlude at the
+// next floor's end — keyed 'eventId:choiceIndex'. He saw. He always sees.
+const LORD_REACTIONS = {
+  'pact:0': 'YOU SEALED MY SERVANT\'S PACT WITHOUT ASKING\nWHOSE HAND HELD THE PEN. THE PRICE COMPOUNDS.',
+  'pact:1': 'YOU SPAT AT MY SHADOW, LITTLE KNIGHT.\nPRIDE. I WILL ENJOY TAKING THAT FIRST.',
+  'idol:1': 'THAT IDOL SANG MY PRAISES FOR A THOUSAND YEARS.\nYOU OWE ME A SONG.',
+  'champion:0': 'YOU STRIP MY DEAD AND CALL IT COURAGE.\nHE WILL REMEMBER. SO WILL I.',
+  'champion:1': 'TENDERNESS? HERE? FOR A CORPSE?\nI WILL TEACH YOU WHAT MERCY COSTS.',
+  'fountain:1': 'YOU OPENED A VEIN AND SOLD THE BLOOD.\nWE ARE NOT SO DIFFERENT, YOU AND I.',
+  'altar:0': 'THE ALTAR KEEPS WHAT IT DRINKS.\nTHAT PIECE OF YOU LIVES WITH ME NOW.',
+  'souleater:0': 'YOU FED MY HOUND YOUR CHARMS AND CALLED IT TRADE.\nEVERYTHING IT SWALLOWS, I TASTE.',
+};
+
 // ---- the Revenant ("husk") — your previous run, raised against you ----
 // On death, the run's shape (floor, blade, hero) is banked; the next run meets
 // it on the floor where you fell, wearing your sprite and your blade's tricks.
@@ -2709,6 +2722,7 @@ export class Game {
       this.timeScale = 1; this.dying = 0;
       this.combo = 0; this.comboT = 0; this._comboTier = 0; this.zoom = 0; this.slowmo = 0;
       this._furyTaught = false; this.furyIdleT = 0;   // re-teach the ultimate each run
+      this._lordQueue = [];                            // his grudges don't cross runs
       this._startLevel(1, true);
       if (!wiped) { this.intro = null; this.countdown = 1.5; }  // skip the LEVEL card; let the bloom breathe
     };
@@ -3665,7 +3679,12 @@ export class Game {
     e.maxHP = Math.round(e.maxHP * 1.7); e.hp = e.maxHP;     // a true mini-threat
     e.dropsRelic = true;
     this.enemies.push(e);
-    this.addEffect({ kind: 'spawnmark', x: e.x, y: e.y, r: e.r + 18, t: 0, dur: 0.8, color: def.color });
+    // the STINGER: it rises slowly out of its mark while time dips and the
+    // camera leans in — a named thing arriving is a sentence, not a footnote
+    e.emergeDur = 0.85; e.emergeT = 0.85;
+    this.zoom = Math.max(this.zoom, 0.8);
+    this.slowmo = Math.max(this.slowmo || 0, 0.35);
+    this.addEffect({ kind: 'spawnmark', x: e.x, y: e.y, r: e.r + 18, t: 0, dur: 0.95, color: def.color });
     this.shake = Math.max(this.shake, 7);
     Sound.play('bossroar', { vol: 0.55 });
     this.namedToast = { name: def.name.toUpperCase(), sub: 'bears a relic', color: def.color, t: 0, dur: 2.6 };
@@ -4429,10 +4448,12 @@ export class Game {
       if (this.sweep.t >= this.sweep.dur) {
         this.sweep = null;
         this.pendingReward = null;
-        // the Demon Lord speaks on odd floors — and always after you cut down a husk
+        // the Demon Lord speaks on odd floors, always after you cut down a
+        // husk — and PERSONALLY when a camp choice provoked him (he remembers)
         const taunt = this._huskTauntDue
           ? 'YOU CUT DOWN WHAT YOU WERE.\nI CAN RAISE AS MANY OF YOU AS YOU LEAVE ME.'
-          : DEMON_LINES[this.level];
+          : (this._lordQueue && this._lordQueue.length ? this._lordQueue.shift()
+          : DEMON_LINES[this.level]);
         this._huskTauntDue = false;
         if (taunt) this._beginInterlude(taunt);
         else this._slashWipe(() => this.openCamp());   // wipe into the camp room
@@ -4840,6 +4861,11 @@ export class Game {
     this.shopOpen = false;
     this.ui.hideEvent(); this.ui.setCampPrompt(null);
     this.campToast = { text: res, t: 0, dur: 4.2 };
+    // THE LORD WAS WATCHING: choices with his fingerprints on them earn a
+    // personal word at the next interlude — he remembers what you did
+    const key = ev.id + ':' + idx;
+    const line = LORD_REACTIONS[key];
+    if (line) (this._lordQueue || (this._lordQueue = [])).push(line);
   }
 
   buyWare(ware) {
@@ -5799,6 +5825,43 @@ export class Game {
     const rg = ctx.createRadialGradient(W / 2, H * 0.46, 10, W / 2, H * 0.46, W * 0.7);
     rg.addColorStop(0, 'rgba(60,4,4,0.5)'); rg.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H);
+
+    // HE IS NEARER EVERY ACT: the eyes above his words begin as distant embers
+    // and end wide and lidless — and past the half, his horns shade into view
+    {
+      const depth = Math.min(1, Math.max(0, (this.level || 1) / 20));
+      const br = 0.7 + 0.3 * Math.sin(this.time * 1.6);
+      const ew = 5 + 22 * depth;
+      const gap = ew * 2.4, eyY = H * 0.2, tilt = 0.3;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (const s of [-1, 1]) {
+        const ex = W / 2 + s * gap;
+        const gr = ctx.createRadialGradient(ex, eyY, 1, ex, eyY, ew * 3.2);
+        gr.addColorStop(0, `rgba(255,40,24,${((0.14 + 0.3 * depth) * br).toFixed(3)})`);
+        gr.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(ex, eyY, ew * 3.2, 0, Math.PI * 2); ctx.fill();
+        ctx.save();
+        ctx.translate(ex, eyY); ctx.rotate(s * tilt);   // outer corners raised: malice
+        ctx.fillStyle = `rgba(255,70,40,${((0.45 + 0.5 * depth) * br).toFixed(3)})`;
+        ctx.beginPath(); ctx.ellipse(0, 0, ew, ew * 0.34, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = `rgba(255,200,150,${(0.5 * br).toFixed(3)})`;
+        ctx.beginPath(); ctx.ellipse(s * ew * 0.2, 0, ew * 0.3, ew * 0.16, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
+      if (depth > 0.45) {
+        const ha = ((depth - 0.45) / 0.55) * 0.5 * br;
+        ctx.strokeStyle = `rgba(120,10,8,${ha.toFixed(3)})`;
+        ctx.lineWidth = ew * 0.5; ctx.lineCap = 'round';
+        for (const s of [-1, 1]) {
+          ctx.beginPath();
+          ctx.moveTo(W / 2 + s * gap * 1.7, eyY + ew);
+          ctx.quadraticCurveTo(W / 2 + s * gap * 2.6, eyY - ew * 3.4, W / 2 + s * gap * 1.9, eyY - ew * 5);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
 
     // readable type — longer wrapped lines, sized to fit the width
     const lines = il.wrapped;

@@ -226,6 +226,7 @@ export class Game {
     }
 
     this._last = performance.now();
+    if (typeof window !== 'undefined') window.__KLS = this;   // debug/profiling handle
     requestAnimationFrame((t) => this._frame(t));
   }
 
@@ -1117,25 +1118,38 @@ export class Game {
       ctx.lineTo(x0 + Math.cos(a) * 30 - 3, y0 + Math.sin(a) * 19 + 2);
       ctx.stroke();
     }
-    // the black throat, falling to embers
-    trace();
-    const vg = ctx.createLinearGradient(0, cy - 48, 0, cy + 44);
-    vg.addColorStop(0, '#020108'); vg.addColorStop(0.55, '#0a0306'); vg.addColorStop(1, '#2e0c06');
-    ctx.fillStyle = vg; ctx.fill();
+    // the black throat, falling to embers — gradients cached origin-relative
+    // (per-frame gradient creation was a Chrome jank source)
+    ctx.translate(cx, cy);
+    const traceR = (dy = 0) => {
+      ctx.beginPath();
+      rim.forEach(([x2, y2], i) => (i ? ctx.lineTo(x2 - cx, y2 - cy + dy) : ctx.moveTo(x2 - cx, y2 - cy + dy)));
+      ctx.closePath();
+    };
+    traceR();
+    ctx.fillStyle = this._tGrad('pit_vg', () => {
+      const gg = ctx.createLinearGradient(0, -48, 0, 44);
+      gg.addColorStop(0, '#020108'); gg.addColorStop(0.55, '#0a0306'); gg.addColorStop(1, '#2e0c06');
+      return gg;
+    });
+    ctx.fill();
     ctx.clip();
     // a ledge of stone catching light just inside the rim — the depth read
     ctx.strokeStyle = 'rgba(200,190,230,0.10)'; ctx.lineWidth = 2;
-    ctx.beginPath(); rim.forEach(([x2, y2], i) => (i ? ctx.lineTo(x2, y2 - 5) : ctx.moveTo(x2, y2 - 5))); ctx.closePath(); ctx.stroke();
-    // the ember glow far below, swelling as you draw near
-    const eg = ctx.createRadialGradient(cx, cy + 30, 2, cx, cy + 30, 66);
-    eg.addColorStop(0, `rgba(255,110,40,${0.26 + 0.22 * near + 0.07 * Math.sin(t * 2.4)})`);
-    eg.addColorStop(1, 'rgba(120,30,8,0)');
-    ctx.fillStyle = eg; ctx.fillRect(cx - 84, cy - 30, 168, 84);
+    traceR(-5); ctx.stroke();
+    // the ember glow far below, swelling as you draw near (alpha-driven)
+    ctx.globalAlpha = 0.26 + 0.22 * near + 0.07 * Math.sin(t * 2.4);
+    ctx.fillStyle = this._tGrad('pit_eg', () => {
+      const gg = ctx.createRadialGradient(0, 30, 2, 0, 30, 66);
+      gg.addColorStop(0, 'rgba(255,110,40,1)'); gg.addColorStop(1, 'rgba(120,30,8,0)');
+      return gg;
+    });
+    ctx.fillRect(-84, -30, 168, 84);
     // sparks rising out of the throat
     for (let i = 0; i < 8; i++) {
       const ph = (t * 0.4 + i * 0.125) % 1;
-      const ex = cx + Math.sin(t * 1.3 + i * 2.4) * (34 - ph * 12);
-      const ey = cy + 26 - ph * 60;
+      const ex = Math.sin(t * 1.3 + i * 2.4) * (34 - ph * 12);
+      const ey = 26 - ph * 60;
       ctx.globalAlpha = (1 - ph) * (0.4 + 0.6 * near);
       ctx.fillStyle = i % 2 ? '#ff9a4a' : '#ffd36b';
       ctx.fillRect(ex, ey, 2, 2);
@@ -1399,6 +1413,16 @@ export class Game {
     v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.5)');
     g.fillStyle = v; g.fillRect(0, 0, W, H);
     this.titleBg = c;
+    // pre-scale the bake ONCE: the per-frame background cost becomes a flat 1:1
+    // blit (Chrome re-rasterizes a transform-scaled blit every frame — that was
+    // leap jank #1)
+    const bs = document.createElement('canvas');
+    bs.width = Math.max(1, this.vw); bs.height = Math.max(1, this.vh);
+    const bg2 = bs.getContext('2d');
+    bg2.imageSmoothingEnabled = false;
+    bg2.drawImage(c, 0, 0, W, H, 0, 0, bs.width, bs.height);
+    this.titleBgScreen = bs;
+    this._titleGrads = new Map();          // per-frame gradients, created ONCE (jank #2)
 
     this.titleCamp = {
       ox, oy, t: 0, sizeKey: this.vw + 'x' + this.vh, scale: SC,
@@ -1582,6 +1606,16 @@ export class Game {
     if (prompt !== tc.prompt) { tc.prompt = prompt; this.ui.setTitlePrompt(prompt, this.meta.souls); }
   }
 
+  // Per-frame canvas gradients are expensive on Chrome (Safari shrugs). These
+  // are created once — origin-relative where reused at many positions — and
+  // intensity/flicker rides globalAlpha instead of re-baked colour stops.
+  _tGrad(key, make) {
+    const m = this._titleGrads || (this._titleGrads = new Map());
+    let g2 = m.get(key);
+    if (!g2) { g2 = make(); m.set(key, g2); }
+    return g2;
+  }
+
   _renderTitleCamp(ctx) {
     const tc = this.titleCamp;
     ctx.clearRect(0, 0, this.vw, this.vh);
@@ -1598,27 +1632,32 @@ export class Game {
       ctx.translate(px2, py2); ctx.scale(z, z); ctx.translate(-px2, -py2);
     }
     ctx.save();
-    // the camp's own camera: the logical stage scaled up to fill the screen,
-    // crisp (no smoothing — chunky pixels are the look)
     ctx.imageSmoothingEnabled = false;
+    // the deep's tremor shudders the whole scene (screen units, around everything)
+    if (tc.rumble > 0) ctx.translate(Math.sin(t * 60) * 1.6 * tc.rumble * tc.scale, Math.sin(t * 47 + 2) * 1.2 * tc.rumble * tc.scale);
+    ctx.drawImage(this.titleBgScreen, 0, 0);   // pre-scaled: a flat 1:1 blit
+    // the camp's own camera for the DYNAMIC layers: the logical stage scaled up
     ctx.scale(tc.scale, tc.scale);
     ctx.translate(-tc.ox, -tc.oy);
-    // the deep's tremor shudders the whole scene
-    if (tc.rumble > 0) ctx.translate(Math.sin(t * 60) * 1.6 * tc.rumble, Math.sin(t * 47 + 2) * 1.2 * tc.rumble);
-    ctx.drawImage(this.titleBg, tc.ox, tc.oy);
     // the pit — a torn mouth in the stone, breathing ember-light from below
     this._drawPitMouth(ctx, tc, t);
     // warm + violet + cold light pools (additive, flickering)
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    // cached origin-relative gradients; flicker rides ALPHA (radius stays fixed)
     const pool = (x, y, r, col, a) => {
-      const g2 = ctx.createRadialGradient(x, y, 2, x, y, r);
-      g2.addColorStop(0, this._rgba(col, a)); g2.addColorStop(1, this._rgba(col, 0));
-      ctx.fillStyle = g2; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      const g2 = this._tGrad(`pool|${col}|${r}`, () => {
+        const gg = ctx.createRadialGradient(0, 0, 2, 0, 0, r);
+        gg.addColorStop(0, this._rgba(col, 1)); gg.addColorStop(1, this._rgba(col, 0));
+        return gg;
+      });
+      ctx.globalAlpha = a; ctx.fillStyle = g2;
+      ctx.translate(x, y); ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill(); ctx.translate(-x, -y);
+      ctx.globalAlpha = 1;
     };
     const iv = tc.intro;
     const lit = !iv || iv.t >= iv.IGNITE;
     const flick = 0.85 + 0.15 * Math.sin(t * 11) + 0.06 * Math.sin(t * 27);
-    if (lit) pool(tc.fire.x, tc.fire.y - 6, 150 * flick, '#ff9a4a', 0.20);
+    if (lit) pool(tc.fire.x, tc.fire.y - 6, 150, '#ff9a4a', 0.20 * flick);
     pool(tc.brazier.x, tc.brazier.y - 14, 90, '#b06bff', 0.16 + 0.05 * Math.sin(t * 3));
     pool(tc.banner.x, tc.banner.y, 64, '#d8413a', 0.07 + 0.03 * Math.sin(t * 2.2));
     ctx.restore();
@@ -1669,17 +1708,23 @@ export class Game {
       ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
     }
     ctx.globalAlpha = 1;
-    // violet soulfire on the brazier
+    // violet soulfire on the brazier (cached gradient; the flicker is a vertical scale)
     {
-      const bx = tc.brazier.x, by = tc.brazier.y - 12, h = 11 + Math.sin(t * 10 + 2) * 2.5;
-      const g1 = ctx.createRadialGradient(bx, by - h * 0.3, 1, bx, by, h);
-      g1.addColorStop(0, '#efe0ff'); g1.addColorStop(0.55, '#b06bff'); g1.addColorStop(1, 'rgba(120,60,200,0)');
+      const bx = tc.brazier.x, by = tc.brazier.y - 12, hf = 1 + Math.sin(t * 10 + 2) * 0.22;
+      const g1 = this._tGrad('soulfire', () => {
+        const gg = ctx.createRadialGradient(0, -3.5, 1, 0, 0, 11);
+        gg.addColorStop(0, '#efe0ff'); gg.addColorStop(0.55, '#b06bff'); gg.addColorStop(1, 'rgba(120,60,200,0)');
+        return gg;
+      });
+      ctx.save();
+      ctx.translate(bx, by); ctx.scale(1, hf);
       ctx.fillStyle = g1;
       ctx.beginPath();
-      ctx.moveTo(bx - 5, by + 2);
-      ctx.quadraticCurveTo(bx - 4, by - h * 0.6, bx, by - h);
-      ctx.quadraticCurveTo(bx + 4, by - h * 0.6, bx + 5, by + 2);
+      ctx.moveTo(-5, 2);
+      ctx.quadraticCurveTo(-4, -6.6, 0, -11);
+      ctx.quadraticCurveTo(4, -6.6, 5, 2);
       ctx.closePath(); ctx.fill();
+      ctx.restore();
     }
     // the knight (shadow + sprite) — teetering toward the mouth as the pit
     // claims him, fading as he sinks. Drawn SMOOTH (no pixel-snap): the stage's
@@ -1723,9 +1768,22 @@ export class Game {
         ctx.beginPath(); ctx.ellipse(0, 0, 96, 56, 0, -Math.PI / 2, -Math.PI / 2 + c * Math.PI * 2); ctx.stroke();
         ctx.restore();
       }
-      // the way down teaches itself: BEGIN at rest, STEP IN ▾ at the brink
+      // the way down teaches itself: BEGIN at rest, STEP IN at the brink.
+      // (the down-arrow is GEOMETRY, not a glyph — '▾' isn't in Silkscreen and
+      // Chrome's per-frame missing-glyph fallback scan cost a whole frame)
       const atBrink = tc.atBrink && !tc.jump && !tc.sunk;
-      label(atBrink ? 'STEP IN ▾' : 'BEGIN', tc.pit.x, tc.pit.y - 92, '#ffd86a', atBrink);
+      label(atBrink ? 'STEP IN' : 'BEGIN', tc.pit.x, tc.pit.y - 92, '#ffd86a', atBrink);
+      {
+        const bob2 = Math.sin(t * 2.2 + tc.pit.x * 0.05) * 2;
+        const ay = tc.pit.y - 82 + bob2, aw = atBrink ? 5 : 4;
+        ctx.save();
+        ctx.globalAlpha = atBrink ? 0.95 : 0.55;
+        ctx.fillStyle = '#ffd86a';
+        ctx.beginPath();
+        ctx.moveTo(tc.pit.x - aw, ay); ctx.lineTo(tc.pit.x + aw, ay); ctx.lineTo(tc.pit.x, ay + aw + 2);
+        ctx.closePath(); ctx.fill();
+        ctx.restore();
+      }
       label(`SANCTUM ◆${this.meta.souls || 0}`, tc.brazier.x, tc.brazier.y - 58, '#c89aff', tc.prompt === 'sanctum');
       label('THE BARGAIN', tc.banner.x, tc.banner.y - 102, '#e08a7a', tc.prompt === 'prologue');
     }
@@ -1834,10 +1892,16 @@ export class Game {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     const flick = 0.8 + 0.2 * Math.sin(t * 13);
-    const g2 = ctx.createRadialGradient(x, y - h * s * 0.4, 2, x, y - h * s * 0.4, 34 * flick);
-    g2.addColorStop(0, 'rgba(255,170,70,0.40)'); g2.addColorStop(1, 'rgba(255,110,30,0)');
-    ctx.fillStyle = g2; ctx.beginPath(); ctx.arc(x, y - h * s * 0.4, 34 * flick, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
+    const g2 = this._tGrad('fireglow', () => {
+      const gg = ctx.createRadialGradient(0, 0, 2, 0, 0, 34);
+      gg.addColorStop(0, 'rgba(255,170,70,0.40)'); gg.addColorStop(1, 'rgba(255,110,30,0)');
+      return gg;
+    });
+    const gs = s / 2;                                  // the roar swells the glow with the flame
+    ctx.globalAlpha = flick;
+    ctx.translate(x, y - h * s * 0.4); ctx.scale(gs, gs);
+    ctx.fillStyle = g2; ctx.beginPath(); ctx.arc(0, 0, 34, 0, Math.PI * 2); ctx.fill();
+    ctx.restore(); ctx.globalAlpha = 1;
     const x0 = Math.round(x - (w * s) / 2), y0 = Math.round(y - h * s);
     for (let ry = 0; ry < h; ry++) {
       const row = F[ry];
@@ -4670,17 +4734,26 @@ export class Game {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     if (pl.t < pl.half) {                          // FALLING
       const f = pl.t / pl.half;
-      // darkness welling up from the bottom of the screen
-      const grd = ctx.createLinearGradient(0, H, 0, H * (1 - f * 1.15) - 20);
-      grd.addColorStop(0, 'rgba(0,0,0,1)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
+      // darkness welling up from the bottom of the screen (bucketed + cached —
+      // per-frame full-screen gradients were a Chrome jank source mid-leap)
+      const fb = Math.min(20, Math.round(f * 20));
+      const grd = this._tGrad(`plungefall|${fb}|${H}`, () => {
+        const gg = ctx.createLinearGradient(0, H, 0, H * (1 - (fb / 20) * 1.15) - 20);
+        gg.addColorStop(0, 'rgba(0,0,0,1)'); gg.addColorStop(1, 'rgba(0,0,0,0)');
+        return gg;
+      });
       ctx.fillStyle = grd; ctx.fillRect(0, 0, W, H);
       // hold off full black until the very end so the red has room to breathe
       ctx.fillStyle = `rgba(0,0,0,${Math.max(0, (f - 0.82) / 0.18)})`; ctx.fillRect(0, 0, W, H);
       // red abyss glow swelling from below — comes up early (pow<1) and lingers
-      const ra = 0.62 * Math.pow(f, 0.7);
-      const rg = ctx.createRadialGradient(W / 2, H + 30, 8, W / 2, H + 30, H);
-      rg.addColorStop(0, `rgba(210,34,16,${ra})`); rg.addColorStop(1, 'rgba(0,0,0,0)');
+      const rg = this._tGrad(`plungered|${W}x${H}`, () => {
+        const gg = ctx.createRadialGradient(W / 2, H + 30, 8, W / 2, H + 30, H);
+        gg.addColorStop(0, 'rgba(210,34,16,1)'); gg.addColorStop(1, 'rgba(0,0,0,0)');
+        return gg;
+      });
+      ctx.globalAlpha = 0.62 * Math.pow(f, 0.7);
       ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = 1;
       // slow, languid downward streaks (not action speed-lines)
       ctx.globalAlpha = 0.4 * f; ctx.strokeStyle = 'rgba(190,200,220,0.6)'; ctx.lineWidth = 2;
       for (let i = 0; i < 16; i++) {
@@ -4702,9 +4775,14 @@ export class Game {
       ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
       // a red afterglow clinging to the dark as the new floor emerges
       if (r < 0.6) {
-        const rg = ctx.createRadialGradient(W / 2, H * 0.5, 10, W / 2, H * 0.5, Math.max(W, H) * 0.7);
-        rg.addColorStop(0, `rgba(150,18,10,${(1 - r / 0.6) * 0.5})`); rg.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.globalAlpha = 1; ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H);
+        const rg = this._tGrad(`plungemid|${W}x${H}`, () => {
+          const gg = ctx.createRadialGradient(W / 2, H * 0.5, 10, W / 2, H * 0.5, Math.max(W, H) * 0.7);
+          gg.addColorStop(0, 'rgba(150,18,10,1)'); gg.addColorStop(1, 'rgba(0,0,0,0)');
+          return gg;
+        });
+        ctx.globalAlpha = (1 - r / 0.6) * 0.5;
+        ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H);
+        ctx.globalAlpha = 1 - r;
       }
       if (pl.whisper && r < 0.5) {
         ctx.globalAlpha = (1 - r / 0.5) * 0.8;

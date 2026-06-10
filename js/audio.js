@@ -43,9 +43,14 @@ class GameAudio {
 
     this.dry = ctx.createGain(); this.dry.gain.value = 0.82;
     this.dry.connect(this.master);
-    this.reverb = ctx.createConvolver(); this.reverb.buffer = this._makeIR(3.0, 2.4);
+    this.reverb = ctx.createConvolver();
     this.wet = ctx.createGain(); this.wet.gain.value = 0.5;
     this.reverb.connect(this.wet).connect(this.master);
+    // The stone-hall impulse is ~260k generated samples — building it inline
+    // stalled the FIRST input (the unlock gesture) by ~80ms, which read as a
+    // hitch right as you start moving. It attaches a beat later instead; until
+    // then the dry path carries everything (you can't hear one dry second).
+    setTimeout(() => { try { this.reverb.buffer = this._makeIR(3.0, 2.4); } catch (e) { /* dry-only */ } }, 80);
 
     // sound bus (dry + reverb send) and a separate, duckable music bus
     this.bus = ctx.createGain(); this.bus.gain.value = 1;
@@ -57,17 +62,21 @@ class GameAudio {
     this.music.connect(this.dry); this.music.connect(this.musicSend).connect(this.reverb);
 
     // reusable white-noise buffer
-    this._noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
-    const nd = this._noiseBuf.getChannelData(0);
-    for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
-
-    this.ready = true;
-    this._buildMusic();
-    this.setScene(this.scene);
-    // fade the score in
-    this.music.gain.setValueAtTime(0.0001, ctx.currentTime);
-    this.music.gain.exponentialRampToValueAtTime(this.muted ? 0.0001 : 0.5, ctx.currentTime + 4);
-    this._scheduler = setInterval(() => this._tick(), 110);
+    // The rest of the build (noise buffer, drone graph, scheduler) runs a beat
+    // AFTER the gesture returns: doing it inline stalled the player's very
+    // first input by ~70ms — a hitch right as they start moving.
+    setTimeout(() => {
+      this._noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+      const nd = this._noiseBuf.getChannelData(0);
+      for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+      this.ready = true;
+      this._buildMusic();
+      this.setScene(this.scene);
+      // fade the score in
+      this.music.gain.setValueAtTime(0.0001, ctx.currentTime);
+      this.music.gain.exponentialRampToValueAtTime(this.muted ? 0.0001 : 0.5, ctx.currentTime + 4);
+      this._scheduler = setInterval(() => this._tick(), 110);
+    }, 40);
   }
 
   toggleMute() {

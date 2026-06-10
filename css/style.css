@@ -81,6 +81,13 @@ h1 {
   letter-spacing: 4px; text-transform: uppercase; font-size: clamp(11px, 2.6vw, 14px);
   color: #b9aed1; text-shadow: 0 0 14px rgba(120,100,180,0.45);
 }
+/* a gilded rule under the words — quiet chrome, like a real box cover */
+#title-screen .tag::after {
+  content: ''; display: block; margin: 16px auto 0;
+  width: 138px; height: 2px;
+  background: linear-gradient(90deg, transparent, #e9c84a 22%, #fff3c0 50%, #e9c84a 78%, transparent);
+  box-shadow: 0 0 9px rgba(233,200,74,0.5);
+}
 
 /* The title is a WALKABLE CAMP on the canvas: this overlay is only the logo,
    the hint and the (dev-only) god toggle — it must never eat the touches that
@@ -92,7 +99,6 @@ h1 {
   padding-top: 7vh;
   pointer-events: none;
 }
-#title-screen .hint { margin-top: auto; margin-bottom: 3vh; letter-spacing: 1px; }
 #title-screen .btn { pointer-events: auto; }
 #god-btn {
   position: absolute; right: 12px; bottom: 12px;
@@ -100,7 +106,7 @@ h1 {
 }
 
 /* THE COLD OPEN: the title waits in the dark while the fire is struck… */
-#title-screen.pre h1, #title-screen.pre .tag, #title-screen.pre .hint, #title-screen.pre .btn {
+#title-screen.pre h1, #title-screen.pre .tag, #title-screen.pre .btn {
   opacity: 0; pointer-events: none;
 }
 /* …then DROPS from above, slams through its mark, springs back and LOCKS. */
@@ -114,7 +120,6 @@ h1 {
   100% { transform: translateY(0); }
 }
 #title-screen.enter .tag { animation: fadeRise 0.5s ease 0.7s both; }
-#title-screen.enter .hint { animation: fadeRise 0.6s ease 1.05s both; }
 #title-screen.enter #god-btn { animation: godFade 0.6s ease 1.25s both; }
 @keyframes fadeRise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes godFade { from { opacity: 0; } to { opacity: 0.45; } }

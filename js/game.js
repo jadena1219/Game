@@ -1307,6 +1307,34 @@ export class Game {
     }
     g.fillStyle = 'rgba(190,170,220,0.10)'; g.fillRect(0, wallH - 2, W, 2);   // the lip catches light
     g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(0, wallH, W, 7);              // its cast shadow
+    // roots hang from the ceiling of the world above — the weight overhead
+    {
+      let rs = 31;
+      const RR = () => (rs = (rs * 1664525 + 1013904223) >>> 0) / 4294967296;
+      for (let i = 0; i < 7; i++) {
+        const rx = 20 + RR() * (W - 40), len = 8 + RR() * 18, sway = RR() < 0.5 ? -1 : 1;
+        g.strokeStyle = 'rgba(6,4,10,0.85)'; g.lineWidth = 2 + RR() * 1.5; g.lineCap = 'round';
+        g.beginPath(); g.moveTo(rx, wallH - 2);
+        g.quadraticCurveTo(rx + sway * 3, wallH + len * 0.6, rx + sway * (2 + RR() * 4), wallH + len);
+        g.stroke();
+        if (RR() < 0.5) { g.beginPath(); g.moveTo(rx + sway, wallH + len * 0.4); g.lineTo(rx + sway * 6, wallH + len * 0.7); g.stroke(); }
+      }
+    }
+    // THE WALL REMEMBERS: a tally scratched into the stone for every death —
+    // groups of five, like a prisoner counting. No label. Those who notice, feel it.
+    {
+      const deaths = Math.min(40, (this.meta && this.meta.deaths) || 0);
+      const tx0 = 26, ty0 = wallH - 26;
+      g.strokeStyle = 'rgba(196,186,214,0.30)'; g.lineWidth = 1.5; g.lineCap = 'round';
+      for (let i = 0; i < deaths; i++) {
+        const grp = (i / 5) | 0, k2 = i % 5;
+        const gx = tx0 + grp * 24, gy = ty0 + (grp % 2) * 1.5;
+        g.beginPath();
+        if (k2 < 4) { g.moveTo(gx + k2 * 4, gy); g.lineTo(gx + k2 * 4 + 1, gy + 11); }
+        else { g.moveTo(gx - 2, gy + 9); g.lineTo(gx + 14, gy + 2); }   // the fifth slashes the four
+        g.stroke();
+      }
+    }
     // side + bottom walls (thin frame)
     g.fillStyle = '#120d1a';
     g.fillRect(0, wallH, 14, H - wallH); g.fillRect(W - 14, wallH, 14, H - wallH); g.fillRect(0, H - 16, W, 16);
@@ -1377,6 +1405,10 @@ export class Game {
       fire, pit, brazier, banner,
       pitRim,                              // already world coords (see _pitRim)
       parts: [],                           // live fire embers
+      smoke: [],                           // woodsmoke puffs climbing off the flame
+      rumbleT: 7 + Math.random() * 6,      // the deep below breathes (periodic tremor)
+      rumble: 0,
+      glanceT: 4 + Math.random() * 4,      // the knight looks around while idle
       prompt: null, jump: null, sink: 0, sunk: false,
       bounds: { minX: ox + 44, maxX: ox + W - 44, minY: oy + wallH + 30, maxY: oy + H - 42 },
       // THE COLD OPEN (first boot only): the knight alone in the black; flint is
@@ -1461,9 +1493,10 @@ export class Game {
       }
       k2.moving = true;
       if (raw >= 1) { tc.jump = null; tc.sunk = true; }
-      // embers keep animating through the leap
+      // embers + smoke keep animating through the leap
       for (const p2 of tc.parts) { p2.life += dt; p2.x += p2.vx * dt; p2.y += p2.vy * dt; }
       tc.parts = tc.parts.filter((p2) => p2.life < p2.dur);
+      this._titleSmoke(tc, dt);
       return;
     }
     if (tc.sunk) return;                   // falling through the dark
@@ -1493,8 +1526,34 @@ export class Game {
       vx: (Math.random() - 0.5) * 12, vy: -(26 + Math.random() * 34),
       life: 0, dur: 0.8 + Math.random() * 0.7, hot: Math.random() < 0.5,
     });
+    // …and a slow ambient dust mote now and then, drifting through the firelight
+    if (Math.random() < dt * 1.2) tc.parts.push({
+      x: tc.ox + 30 + Math.random() * (tc.bounds.maxX - tc.ox - 60), y: tc.bounds.minY + Math.random() * 200,
+      vx: (Math.random() - 0.5) * 8, vy: 4 + Math.random() * 7,
+      life: 0, dur: 2.5 + Math.random() * 2, col: 'rgba(120,112,140,0.5)',
+    });
     for (const p2 of tc.parts) { p2.life += dt; p2.x += p2.vx * dt; p2.y += p2.vy * dt; }
     tc.parts = tc.parts.filter((p2) => p2.life < p2.dur);
+    this._titleSmoke(tc, dt);
+    // THE DEEP BELOW BREATHES: a periodic tremor — a muffled boom, the scene
+    // shudders, dust shakes loose from the wall and falls
+    tc.rumbleT -= dt;
+    if (tc.rumbleT <= 0) {
+      tc.rumbleT = 9 + Math.random() * 8;
+      tc.rumble = 0.8;
+      Sound.play('die_tank', { vol: 0.2 });
+      for (let i = 0; i < 6; i++) tc.parts.push({
+        x: tc.ox + 24 + Math.random() * (tc.bounds.maxX - tc.ox - 48), y: tc.bounds.minY - 22,
+        vx: (Math.random() - 0.5) * 6, vy: 30 + Math.random() * 36,
+        life: 0, dur: 0.5 + Math.random() * 0.4, col: '#5a5266',
+      });
+    }
+    if (tc.rumble > 0) tc.rumble -= dt;
+    // the knight is a person: idle long enough and he glances about
+    if (!k.moving) {
+      tc.glanceT -= dt;
+      if (tc.glanceT <= 0) { tc.glanceT = 3.5 + Math.random() * 4.5; k.faceLeft = !k.faceLeft; }
+    } else tc.glanceT = 3.5 + Math.random() * 4.5;
     // BEGIN is the threshold itself: come to the brink and the pit CLAIMS you —
     // a ring sweeps closed while you stand there (step back to refuse). No
     // direction-holding, no dexterity: the solid rim parks you in exactly the
@@ -1544,6 +1603,8 @@ export class Game {
     ctx.imageSmoothingEnabled = false;
     ctx.scale(tc.scale, tc.scale);
     ctx.translate(-tc.ox, -tc.oy);
+    // the deep's tremor shudders the whole scene
+    if (tc.rumble > 0) ctx.translate(Math.sin(t * 60) * 1.6 * tc.rumble, Math.sin(t * 47 + 2) * 1.2 * tc.rumble);
     ctx.drawImage(this.titleBg, tc.ox, tc.oy);
     // the pit — a torn mouth in the stone, breathing ember-light from below
     this._drawPitMouth(ctx, tc, t);
@@ -1600,6 +1661,14 @@ export class Game {
       ctx.fillRect(p2.x - 1, p2.y - 1, 2, 2);
     }
     ctx.restore(); ctx.globalAlpha = 1;
+    // woodsmoke climbing off the flame, thinning into the dark
+    for (const s of tc.smoke) {
+      const sa = Math.sin((s.life / s.dur) * Math.PI) * 0.14;
+      ctx.globalAlpha = sa;
+      ctx.fillStyle = '#9a93a8';
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
     // violet soulfire on the brazier
     {
       const bx = tc.brazier.x, by = tc.brazier.y - 12, h = 11 + Math.sin(t * 10 + 2) * 2.5;
@@ -1613,18 +1682,22 @@ export class Game {
       ctx.closePath(); ctx.fill();
     }
     // the knight (shadow + sprite) — teetering toward the mouth as the pit
-    // claims him, fading as he sinks
+    // claims him, fading as he sinks. Drawn SMOOTH (no pixel-snap): the stage's
+    // zoom turned snapped coords into visible stepping during the leap.
     if (!tc.sunk) {
       const sink = Math.max(0, Math.min(1, tc.sink || 0));
       const c2 = (!tc.jump && tc.commit) || 0;
       const pd = Math.hypot(tc.pit.x - k.x, tc.pit.y - k.y) || 1;
-      const kx = k.x + ((tc.pit.x - k.x) / pd) * 4 * c2 + (Math.random() - 0.5) * 1.6 * c2;
+      const kx = k.x + ((tc.pit.x - k.x) / pd) * 4 * c2 + Math.sin(t * 31) * 1.4 * c2;   // a smooth tremble, not noise
       const ky2 = k.y + ((tc.pit.y - k.y) / pd) * 2 * c2;
       ctx.save(); ctx.fillStyle = '#03020a';
       ctx.globalAlpha = 0.3 * (1 - sink); ctx.beginPath(); ctx.ellipse(kx, ky2 + 2, 16, 6, 0, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
       ctx.globalAlpha = Math.max(0, 1 - sink * 1.15);
-      drawSprite(ctx, 'knight', pickFrame(k, t), kx, ky2 - (k.moving ? 0 : Math.sin(t * 2.6) * 1), k.faceLeft, 1);
+      // close to the flame, his armor catches its warmth
+      const fireD = Math.hypot(k.x - tc.fire.x, k.y - tc.fire.y);
+      const warm = fireD < 130 ? { color: '#ff9a4a', a: 0.13 * (1 - fireD / 130) + 0.04 } : null;
+      drawSprite(ctx, 'knight', pickFrame(k, t), kx, ky2 - (k.moving ? 0 : Math.sin(t * 2.6) * 1), k.faceLeft, 1, warm, true);
       ctx.globalAlpha = 1;
     }
     // floating labels — quiet names, bobbing, brighter as you draw near
@@ -1729,8 +1802,28 @@ export class Game {
       vx: (Math.random() - 0.5) * 50, vy: -(6 + Math.random() * 16),
       life: 0, dur: 0.35 + Math.random() * 0.25, col: '#9a93a8',
     });
-    tc.jump = { t: 0, dur: 0.72, x0: k.x, y0: k.y, tx: tc.pit.x, ty: tc.pit.y - 4, h: 52 };
+    tc.jump = { t: 0, dur: 0.8, x0: k.x, y0: k.y, tx: tc.pit.x, ty: tc.pit.y - 4, h: 54 };
+    k.attackAnim = 1;          // he LEAPS in the lunging pose, not mid-shuffle
     if (tc.pit.x < k.x - 1) k.faceLeft = true; else if (tc.pit.x > k.x + 1) k.faceLeft = false;
+  }
+
+  // Woodsmoke: soft gray puffs that swell, sway and thin as they climb off the
+  // flame toward the dark — drawn in _renderTitleCamp above the fire.
+  _titleSmoke(tc, dt) {
+    tc.smokeT = (tc.smokeT || 0) - dt;
+    if (tc.smokeT <= 0 && !tc.sunk) {
+      tc.smokeT = 0.22 + Math.random() * 0.14;
+      tc.smoke.push({ x: tc.fire.x + (Math.random() - 0.5) * 8, y: tc.fire.y - 26,
+        r: 2.5 + Math.random() * 2, sway: Math.random() * 6.28,
+        life: 0, dur: 2.2 + Math.random() * 1.2 });
+    }
+    for (const s of tc.smoke) {
+      s.life += dt;
+      s.y -= (16 + s.r * 2) * dt;
+      s.x += Math.sin(tc.t * 1.6 + s.sway) * 7 * dt;
+      s.r += 3.2 * dt;
+    }
+    tc.smoke = tc.smoke.filter((s) => s.life < s.dur);
   }
 
   // The animated pixel campfire: four hand-placed frames, stepped at ~9fps,

@@ -28,7 +28,9 @@ export function pickFrame(entity, time) {
 let _tintCv = null, _tintCx = null;
 
 // Draw a sprite centred at world (x, y), anchored at the feet.
-export function drawSprite(ctx, name, frameLabel, x, y, faceLeft, extraScale = 1, tint = null) {
+// `smooth` skips the pixel-snap: scenes that SCALE the canvas (the title camp)
+// would otherwise turn each 1px world step into a visible multi-pixel jump.
+export function drawSprite(ctx, name, frameLabel, x, y, faceLeft, extraScale = 1, tint = null, smooth = false) {
   const m = Assets.manifest;
   const img = Assets.images[name];
   if (!m || !img || (img.tagName === 'IMG' && !img.complete)) return;
@@ -39,7 +41,7 @@ export function drawSprite(ctx, name, frameLabel, x, y, faceLeft, extraScale = 1
   const dw = fw * scale, dh = fh * scale;
 
   ctx.save();
-  ctx.translate(Math.round(x), Math.round(y));
+  ctx.translate(smooth ? x : Math.round(x), smooth ? y : Math.round(y));
   if (faceLeft) ctx.scale(-1, 1);
   // anchor: horizontally centred, vertically at the feet (bottom)
   const dx = -dw / 2, dy = -dh + scale * 1.5;

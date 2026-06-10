@@ -1,5 +1,5 @@
 // Entry point: load sprites, wire up the menus, run the game.
-import { loadAssets } from './assets.js';
+import { loadAssets, Assets } from './assets.js';
 import { Game } from './game.js';
 import { CONFIG, LEVELS } from './config.js';
 import { drawSprite } from './sprite.js';
@@ -446,6 +446,11 @@ async function boot() {
   const note = document.createElement('div');
   note.className = 'boot-note'; note.textContent = 'kindling…';
   document.getElementById('app').appendChild(note);
+  // the note exists ONLY for the gap before the cold open can start — the
+  // moment the hero's sheet arrives (not all eleven), it gets out of the way
+  const noteWatch = setInterval(() => {
+    if (Assets.images.knight) { note.remove(); clearInterval(noteWatch); }
+  }, 120);
 
   // Cold loads (esp. mobile Safari) can drop a request; retry a couple of times.
   let loaded = false;

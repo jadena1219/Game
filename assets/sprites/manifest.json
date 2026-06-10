@@ -10,7 +10,20 @@
   "sprites": {
     "knight": {
       "file": "knight2.png",
-      "scale": 1
+      "scale": 1,
+      "anim": {
+        "walk": [
+          "walkA",
+          "idle",
+          "walkB",
+          "idle"
+        ],
+        "walkFps": 9,
+        "idle": [
+          "idle"
+        ],
+        "idleFps": 2
+      }
     },
     "rogue": {
       "file": "rogue.png",

@@ -395,7 +395,13 @@ function main() {
     // art needs a new PATH to bust CDN caches (see gen-knight.js)
     const file = name === 'knight' ? 'knight2.png' : `${name}.png`;
     fs.writeFileSync(path.join(outDir, file), png);
-    manifest.sprites[name] = { file, scale: spec.scale || 1.0 };
+    // The hero walks a proper 4-phase gait: contact → passing → contact →
+    // passing (idle doubles as the legs-together passing pose). Two frames
+    // flipped at 6fps read as a shuffle; this reads as a stride.
+    manifest.sprites[name] = name === 'knight'
+      ? { file, scale: spec.scale || 1.0,
+          anim: { walk: ['walkA', 'idle', 'walkB', 'idle'], walkFps: 9, idle: ['idle'], idleFps: 2 } }
+      : { file, scale: spec.scale || 1.0 };
     console.log(`  ✓ ${file} (${sheet.w}x${sheet.h})`);
   }
 

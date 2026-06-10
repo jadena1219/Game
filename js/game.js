@@ -1566,10 +1566,10 @@ export class Game {
       glanceT: 4 + Math.random() * 4,      // the knight looks around while idle
       prompt: null, jump: null, sink: 0, sunk: false,
       bounds: { minX: ox + 44, maxX: ox + W - 44, minY: oy + wallH + 30, maxY: oy + H - 42 },
-      // where he boots up (and crash-lands): dead-centre on the fire, tight
-      // enough that the flint-kneel puts his hands in the stone ring, loose
-      // enough that the lit flame still crowns above his helmet when he stands
-      spawn: { x: fire.x, y: fire.y + 50 },
+      // where he boots up (and crash-lands): dead-centre ABOVE the fire, so
+      // the flint-kneel leans him over the stone ring — and once it's lit the
+      // flame burns in FRONT of his boots (depth-sorted in the render)
+      spawn: { x: fire.x, y: fire.y - 9 },
       // THE COLD OPEN (first boot only): the knight alone in the black FALLS in
       // from above, eats dirt, picks himself up frame by frame; flint is struck;
       // the fire catches, ROARS, and its light reveals the camp — then the
@@ -1580,7 +1580,7 @@ export class Game {
     this._titleIntroPlayed = true;
     this._tapped = false;
     // he boots up at the fire's edge (the pratfall's landing spot)
-    this.titleKnight = { x: fire.x, y: fire.y + 50, sprite: 'knight',
+    this.titleKnight = { x: fire.x, y: fire.y - 9, sprite: 'knight',
       moving: false, faceLeft: false, attackAnim: 0 };
   }
 
@@ -1733,7 +1733,9 @@ export class Game {
       if (dl < 1 && dl > 1e-4) { k.x = ecx + (nx / dl) * erx; k.y = ecy + (ny / dl) * ery; }
     };
     solid(tc.pit.x, tc.pit.y, 84, 48);
-    solid(tc.fire.x, tc.fire.y + 2, 32, 18);
+    // the fire's solid is biased SOUTH: the north rim is standable, so his
+    // boot spot behind the flame (the campfire shot) stays reachable
+    solid(tc.fire.x, tc.fire.y + 6, 30, 14);
     // the campfire breathes embers
     if (Math.random() < dt * 16) tc.parts.push({
       x: tc.fire.x + (Math.random() - 0.5) * 16, y: tc.fire.y - 8,
@@ -1851,6 +1853,37 @@ export class Game {
     pool(tc.brazier.x, tc.brazier.y - 14, 90, '#b06bff', 0.16 + 0.05 * Math.sin(t * 3));
     pool(tc.banner.x, tc.banner.y, 64, '#d8413a', 0.07 + 0.03 * Math.sin(t * 2.2));
     ctx.restore();
+    // the knight (shadow + sprite) — teetering toward the mouth as the pit
+    // claims him, fading as he sinks. Drawn SMOOTH (no pixel-snap): the stage's
+    // zoom turned snapped coords into visible stepping during the leap.
+    const drawKnight = () => {
+      const sink = Math.max(0, Math.min(1, tc.sink || 0));
+      const c2 = (!tc.jump && tc.commit) || 0;
+      const pd = Math.hypot(tc.pit.x - k.x, tc.pit.y - k.y) || 1;
+      const kx = k.x + ((tc.pit.x - k.x) / pd) * 4 * c2 + Math.sin(t * 31) * 1.4 * c2;   // a smooth tremble, not noise
+      const ky2 = k.y + ((tc.pit.y - k.y) / pd) * 2 * c2;
+      // mid-pratfall his shadow waits AT THE LANDING SPOT, swelling as he drops
+      const falling = iv && !iv.landed && iv.t < iv.LAND;
+      const shY = falling ? tc.spawn.y : ky2;
+      const shF = falling ? Math.max(0.3, 1 - (tc.spawn.y - k.y) / 360) : 1;
+      ctx.save(); ctx.fillStyle = '#03020a';
+      ctx.globalAlpha = 0.3 * (1 - sink) * shF;
+      ctx.beginPath(); ctx.ellipse(kx, shY + 2, 16 * shF, 6 * shF, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      ctx.globalAlpha = Math.max(0, 1 - sink * 1.15);
+      // close to the flame, his armor catches its warmth
+      const fireD = Math.hypot(k.x - tc.fire.x, k.y - tc.fire.y);
+      const warm = fireD < 130 ? { color: '#ff9a4a', a: 0.13 * (1 - fireD / 130) + 0.04 } : null;
+      // a forced pose (the pratfall's prone/pushup/kneel) overrides the
+      // walk-cycle picker, and the idle breathing bob sits out while it plays
+      drawSprite(ctx, 'knight', k.pose || pickFrame(k, t), kx,
+        ky2 - ((k.moving || k.pose) ? 0 : Math.sin(t * 2.6) * 1), k.faceLeft, 1, warm, true);
+      ctx.globalAlpha = 1;
+    };
+    // depth: north of the flame is BEHIND it — he goes down first and the
+    // fire paints over his boots (the classic campfire shot)
+    const kBehind = k.y < tc.fire.y + 10;
+    if (!tc.sunk && kBehind) drawKnight();
     // the campfire itself — animated pixel art — and its embers.
     // During the cold open it ROARS on ignition (tall, wild) and settles.
     if (lit) {
@@ -1916,33 +1949,7 @@ export class Game {
       ctx.closePath(); ctx.fill();
       ctx.restore();
     }
-    // the knight (shadow + sprite) — teetering toward the mouth as the pit
-    // claims him, fading as he sinks. Drawn SMOOTH (no pixel-snap): the stage's
-    // zoom turned snapped coords into visible stepping during the leap.
-    if (!tc.sunk) {
-      const sink = Math.max(0, Math.min(1, tc.sink || 0));
-      const c2 = (!tc.jump && tc.commit) || 0;
-      const pd = Math.hypot(tc.pit.x - k.x, tc.pit.y - k.y) || 1;
-      const kx = k.x + ((tc.pit.x - k.x) / pd) * 4 * c2 + Math.sin(t * 31) * 1.4 * c2;   // a smooth tremble, not noise
-      const ky2 = k.y + ((tc.pit.y - k.y) / pd) * 2 * c2;
-      // mid-pratfall his shadow waits AT THE LANDING SPOT, swelling as he drops
-      const falling = iv && !iv.landed && iv.t < iv.LAND;
-      const shY = falling ? tc.spawn.y : ky2;
-      const shF = falling ? Math.max(0.3, 1 - (tc.spawn.y - k.y) / 360) : 1;
-      ctx.save(); ctx.fillStyle = '#03020a';
-      ctx.globalAlpha = 0.3 * (1 - sink) * shF;
-      ctx.beginPath(); ctx.ellipse(kx, shY + 2, 16 * shF, 6 * shF, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.restore();
-      ctx.globalAlpha = Math.max(0, 1 - sink * 1.15);
-      // close to the flame, his armor catches its warmth
-      const fireD = Math.hypot(k.x - tc.fire.x, k.y - tc.fire.y);
-      const warm = fireD < 130 ? { color: '#ff9a4a', a: 0.13 * (1 - fireD / 130) + 0.04 } : null;
-      // a forced pose (the pratfall's prone/pushup/kneel) overrides the
-      // walk-cycle picker, and the idle breathing bob sits out while it plays
-      drawSprite(ctx, 'knight', k.pose || pickFrame(k, t), kx,
-        ky2 - ((k.moving || k.pose) ? 0 : Math.sin(t * 2.6) * 1), k.faceLeft, 1, warm, true);
-      ctx.globalAlpha = 1;
-    }
+    if (!tc.sunk && !kBehind) drawKnight();
     // floating labels — quiet names, bobbing, brighter as you draw near
     const label = (text, x, y, col, near) => {
       const bob = Math.sin(t * 2.2 + x * 0.05) * 2;

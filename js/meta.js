@@ -47,6 +47,10 @@ export function loadMeta() {
     // one-time rebase: souls banked under the old economy (~8x too generous)
     // are scaled into the new one. Idempotent until the save is next written.
     if (!m.econ) { m.souls = Math.round(m.souls / 8); m.econ = 2; }
+    // econ 3: full Sanctum reset — upgrades bought at the old broken prices
+    // (and the souls that bought them) are wiped so progression starts honest
+    // on the new curve. Death count / deepest-fall survive (the lore remembers).
+    if (m.econ < 3) { m.up = {}; m.relics = []; m.souls = 0; m.econ = 3; }
     return m;
   } catch { return fresh(); }
 }

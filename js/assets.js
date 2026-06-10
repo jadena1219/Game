@@ -2,6 +2,9 @@
 // Safari is picky about loading many images at once (and about transient image
 // errors), so we load in small batches with per-image retries + cache-busting.
 const BASE = 'assets/sprites/';
+// Bump when any sprite ART changes: it busts every browser's cached copies
+// (images otherwise load cache-first and players keep seeing the old art).
+const ART_V = '?v=2';
 
 export const Assets = {
   manifest: null,
@@ -23,7 +26,7 @@ function loadImage(src, tries = 3) {
         if (attempt < tries) setTimeout(go, 180 * attempt);
         else reject(new Error('Failed to load ' + src));
       };
-      img.src = attempt > 0 ? src + '?r=' + attempt : src;   // dodge a stuck cache entry on retry
+      img.src = attempt > 0 ? src + (src.includes('?') ? '&' : '?') + 'r=' + attempt : src;   // dodge a stuck cache entry on retry
     };
     go();
   });
@@ -41,12 +44,12 @@ export async function loadAssets() {
   const manifest = await fetch(BASE + 'manifest.json', { cache: 'no-cache' }).then((r) => r.json());
   Assets.manifest = manifest;
   await loadBatched(
-    Object.keys(manifest.sprites).map((name) => [name, BASE + manifest.sprites[name].file]),
+    Object.keys(manifest.sprites).map((name) => [name, BASE + manifest.sprites[name].file + ART_V]),
     Assets.images);
 
   const iconManifest = await fetch(Assets.iconBase + 'manifest.json', { cache: 'no-cache' }).then((r) => r.json());
   await loadBatched(
-    Object.entries(iconManifest.icons).map(([id, file]) => [id, Assets.iconBase + file]),
+    Object.entries(iconManifest.icons).map(([id, file]) => [id, Assets.iconBase + file + ART_V]),
     Assets.icons);
 
   Assets.ready = true;

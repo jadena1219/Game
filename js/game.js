@@ -1403,10 +1403,13 @@ export class Game {
     }
     // the cold open: no control until the fire has spoken
     if (tc.intro) {
-      // …and the fire waits for the HERO: the canvas is alive while a cold CDN
-      // streams the sprite sheets in, and the open begins the moment he exists
-      if (!Assets.images.knight) return;
-      const iv = tc.intro; iv.t += dt;
+      const iv = tc.intro;
+      // The open WANTS the hero's sheet for his big reveal, so it holds while a
+      // cold CDN streams it in — but NEVER forever: after a short wait (or any
+      // tap) it plays regardless, so a slow/failed sprite can't brick the menu.
+      iv.wait = (iv.wait || 0) + dt;
+      if (!Assets.images.knight && iv.wait < 3 && !this._tapped) return;
+      iv.t += dt;
       if (this._tapped) { this._tapped = false; iv.t = Math.max(iv.t, 99); }   // tap = skip
       if (iv.t >= iv.IGNITE && !iv.burst) {
         iv.burst = true;

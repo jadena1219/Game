@@ -14,8 +14,11 @@ export const Assets = {
   ready: false,
 };
 
-function loadImage(src, tries = 3) {
-  return new Promise((resolve, reject) => {
+// Resolves with the Image, or null on persistent failure — NEVER rejects, so
+// one bad/slow sprite can never brick boot. Missing images just don't draw
+// (drawSprite guards null); they'll fill in if a later load succeeds.
+function loadImage(src, tries = 4) {
+  return new Promise((resolve) => {
     let attempt = 0;
     const go = () => {
       const img = new Image();
@@ -23,8 +26,8 @@ function loadImage(src, tries = 3) {
       img.onload = () => resolve(img);
       img.onerror = () => {
         attempt++;
-        if (attempt < tries) setTimeout(go, 180 * attempt);
-        else reject(new Error('Failed to load ' + src));
+        if (attempt < tries) setTimeout(go, 200 * attempt);
+        else { console.warn('sprite failed to load (non-fatal):', src); resolve(null); }
       };
       img.src = attempt > 0 ? src + (src.includes('?') ? '&' : '?') + 'r=' + attempt : src;   // dodge a stuck cache entry on retry
     };
@@ -42,7 +45,8 @@ export async function loadAssets() {
   Assets.manifest = manifest;
   // the HERO first — the title's cold open holds until his sheet exists,
   // so the one sprite the menu needs never waits behind the other ten
-  Assets.images.knight = await loadImage(BASE + manifest.sprites.knight.file + ART_V);
+  const knightFile = (manifest.sprites.knight && manifest.sprites.knight.file) || 'knight2.png';
+  Assets.images.knight = await loadImage(BASE + knightFile + ART_V);
   // the rest of the cast in parallel
   await loadAll(
     Object.keys(manifest.sprites).filter((n) => n !== 'knight')

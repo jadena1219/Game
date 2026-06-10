@@ -8,6 +8,15 @@ pitched so nothing gets lost.
 
 ## 🚢 Shipped
 
+### The Black Knight — new hero sprite ✅
+- Hand-drawn pixel art (tools/gen-knight.js), pixel-by-pixel: blackened plate,
+  crimson half-cape/crest/tabard, hot red visor slit. Flat cel-shading per
+  ART_SPEC, true alternating stride (planted leg lit, lifted leg dark, swapped
+  between walk frames), and **weaponless** — the Living Blade drawn in code is
+  his only sword (no more doubled blade; fixes the shrine pose too).
+- `npm run sprites` now routes the knight through the hand-drawn sheet; the
+  parametric generator still does the rest of the cast.
+
 ### The Revenant — fight your past self ✅
 - The Lord keeps only your FINEST corpse: a husk banks **only when a death sets a
   new deepest-fall record**, so the Revenant is a rare, earned event — not a tax
@@ -85,8 +94,8 @@ pitched so nothing gets lost.
 - Swords redrawn as long, curved, rune-etched fairytale blades (ornateBlade in
   spritegen). Each blade has its own **elemental swing effect** (fire embers /
   ice shards / violet sparks + recoloured slash).
-- TODO polish: a truly weaponless knight pose for the shrine (uses the normal
-  sprite for now).
+- ~~TODO polish: a truly weaponless knight pose for the shrine~~ ✅ the hero
+  sprite is now weaponless everywhere (the Living Blade is the only sword).
 
 ### Build variety — runs with identity ✅
 - **Keystones**: Cinderstep (dash fire-trail), Mirror Aegis (no dash, reflect

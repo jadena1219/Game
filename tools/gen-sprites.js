@@ -304,6 +304,9 @@ function drawWeapon(g, spec, skin, oy, attack) {
 // ---- character roster ----
 const CHARACTERS = {
   knight: {
+    // NOTE: the knight's ART is hand-drawn in gen-knight.js (black/crimson,
+    // weaponless — the Living Blade is drawn in code). This spec only keeps
+    // his manifest entry; the sheet below is overridden in main().
     skin: '#e8b894', body: '#5d6b7d', detail: '#3a4350', legs: '#4a5563',
     arms: '#5d6b7d', belt: '#7a5230', head: 'helmet', crest: '#c83737',
     emblem: '#d8c24a', weapon: 'greatsword', blade: '#bfe9ff', guard: '#d8c24a',
@@ -383,7 +386,10 @@ function main() {
   };
 
   for (const [name, spec] of Object.entries(CHARACTERS)) {
-    const sheet = buildSheet(spec);
+    // the hero is hand-drawn pixel art, not a parametric humanoid
+    const sheet = name === 'knight'
+      ? require('./gen-knight').buildKnightSheetRGBA()
+      : buildSheet(spec);
     const png = encodePNG(sheet.w, sheet.h, sheet.d);
     const file = `${name}.png`;
     fs.writeFileSync(path.join(outDir, file), png);

@@ -1264,7 +1264,11 @@ export class Game {
   // The PIT is Begin; a violet SOUL BRAZIER is the Sanctum; a torn BANNER is
   // the Bargain (prologue). Walk close and the choice offers itself.
   _buildTitleCamp() {
-    const W = this.vw, H = this.vh;
+    // The camp is COMPOSED for a phone-sized stage. On big viewports (desktop)
+    // we build the same stage at logical size and scale it up — otherwise the
+    // knight is a 38px black speck lost in a 2000px window.
+    const SC = Math.max(1, Math.min(2.2, this.vh / 700));
+    const W = Math.round(this.vw / SC), H = Math.round(this.vh / SC);
     const ox = Math.round(this.world.w / 2 - W / 2);
     const oy = Math.round(this.world.h / 2 - H / 2);
     const wallH = Math.round(H * 0.24);                  // the logo hangs over this dark wall
@@ -1391,7 +1395,7 @@ export class Game {
     this.titleBg = c;
 
     this.titleCamp = {
-      ox, oy, t: 0, sizeKey: W + 'x' + H,
+      ox, oy, t: 0, sizeKey: this.vw + 'x' + this.vh, scale: SC,
       fire, pit, brazier, banner,
       pitRim: pitRim.map(([x2, y2]) => [x2 + ox, y2 + oy]),
       parts: [],                           // live fire embers
@@ -1495,12 +1499,16 @@ export class Game {
     const leaned = lean > 0.001;
     if (leaned) {
       const z = 1 + 0.22 * lean * lean;
-      const px2 = tc.pit.x - this.cam.x, py2 = tc.pit.y - this.cam.y;
+      const px2 = (tc.pit.x - tc.ox) * tc.scale, py2 = (tc.pit.y - tc.oy) * tc.scale;
       ctx.save();
       ctx.translate(px2, py2); ctx.scale(z, z); ctx.translate(-px2, -py2);
     }
     ctx.save();
-    ctx.translate(-this.cam.x, -this.cam.y);
+    // the camp's own camera: the logical stage scaled up to fill the screen,
+    // crisp (no smoothing — chunky pixels are the look)
+    ctx.imageSmoothingEnabled = false;
+    ctx.scale(tc.scale, tc.scale);
+    ctx.translate(-tc.ox, -tc.oy);
     ctx.drawImage(this.titleBg, tc.ox, tc.oy);
     // the pit — a torn mouth in the stone, breathing ember-light from below
     this._drawPitMouth(ctx, tc, t);

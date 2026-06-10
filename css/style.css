@@ -408,6 +408,156 @@ p { max-width: 30ch; line-height: 1.5; }
 #camp-prompt.shrine { background: #b06bff; border-color: #5a2fa0; color: #160a26;
   box-shadow: inset 0 2px 0 rgba(255,255,255,0.3), 0 5px 0 #5a2fa0; }
 
+/* ============ dungeon dressing for the menu screens ============ */
+
+/* wall sconces: an iron bracket with a live, flickering flame + light pool */
+.sconce {
+  position: absolute; top: 13%; width: 10px; height: 34px;
+  background: linear-gradient(#3a2c1a, #241809);
+  border: 2px solid #120c06; border-radius: 1px;
+  z-index: 0; pointer-events: none;
+}
+.sconce.l { left: 7%; } .sconce.r { right: 7%; }
+.sconce::before {
+  content: ''; position: absolute; left: 50%; top: -17px;
+  width: 14px; height: 19px; transform: translateX(-50%);
+  background:
+    radial-gradient(circle at 50% 78%, #fff3c0 0 2px, transparent 3px),
+    radial-gradient(ellipse 46% 60% at 50% 70%, #ffd36b 0 60%, transparent 65%),
+    radial-gradient(ellipse 60% 80% at 50% 64%, #ff7a2a 0 60%, rgba(216,60,20,0.5) 75%, transparent 85%);
+  filter: drop-shadow(0 0 9px rgba(255,150,50,0.8));
+  animation: flameFlick 0.46s steps(3) infinite alternate;
+}
+.sconce::after {
+  content: ''; position: absolute; left: 50%; top: -60px;
+  width: 170px; height: 170px; transform: translateX(-50%);
+  background: radial-gradient(circle, rgba(255,150,60,0.14), transparent 62%);
+  animation: torchGlow 1.4s ease-in-out infinite alternate;
+}
+@keyframes flameFlick {
+  from { transform: translateX(-50%) scaleY(1); }
+  to { transform: translateX(-54%) scaleY(1.28) skewX(-5deg); }
+}
+@keyframes torchGlow { from { opacity: 0.7; } to { opacity: 1; } }
+
+/* drifting ash/ember motes (pure CSS particles) for the end screens */
+.ash { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+.ash::before, .ash::after {
+  content: ''; position: absolute; left: 0; top: 0; width: 4px; height: 4px;
+  border-radius: 50%; background: transparent;
+  box-shadow:
+    12vw 108vh 0 rgba(216,80,58,0.55),  31vw 104vh 0 rgba(170,50,40,0.5),
+    47vw 112vh 0 rgba(216,80,58,0.4),   63vw 102vh 0 rgba(255,110,80,0.5),
+    78vw 110vh 0 rgba(170,50,40,0.55),  91vw 106vh 0 rgba(216,80,58,0.45),
+    22vw 115vh 0 rgba(255,110,80,0.35), 70vw 118vh 0 rgba(216,80,58,0.4);
+  animation: ashRise 9s linear infinite;
+}
+.ash::after { width: 3px; height: 3px; animation-duration: 13s; animation-delay: -5s; }
+.ash.gold::before, .ash.gold::after {
+  box-shadow:
+    12vw 108vh 0 rgba(255,216,106,0.6),  31vw 104vh 0 rgba(233,200,74,0.5),
+    47vw 112vh 0 rgba(255,243,192,0.45), 63vw 102vh 0 rgba(255,216,106,0.55),
+    78vw 110vh 0 rgba(233,200,74,0.5),   91vw 106vh 0 rgba(255,216,106,0.45),
+    22vw 115vh 0 rgba(255,243,192,0.4),  70vw 118vh 0 rgba(233,200,74,0.45);
+}
+@keyframes ashRise { to { transform: translateY(-130vh); } }
+
+/* a runic gold divider under the big golden headers */
+#blade-select h2::after, #hero-select h2::after, #sanctum h2::after, #shop-modal h2::after {
+  content: ''; display: block; margin: 10px auto 0;
+  width: min(280px, 58%); height: 4px;
+  background: repeating-linear-gradient(90deg, var(--gold) 0 7px, transparent 7px 13px);
+  box-shadow: 0 0 10px rgba(233,200,74,0.35);
+  opacity: 0.55;
+}
+
+/* the Demon Lord's word for the fallen */
+.lord-line {
+  font-family: 'Press Start 2P', monospace; font-size: 10px; letter-spacing: 2px;
+  color: #ff5a4a; text-shadow: 0 0 14px rgba(255,60,40,0.6), 0 2px 0 #000;
+  opacity: 0; animation: lordIn 1.2s ease 0.9s forwards;
+}
+@keyframes lordIn { to { opacity: 0.85; } }
+
+/* the death screen: blood vignette + the verdict SLAMS in */
+#game-over { background: radial-gradient(ellipse at 50% 30%, rgba(70,10,14,0.55), rgba(6,4,10,0.95) 72%); }
+#game-over h2 { animation: deathSlam 0.7s cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes deathSlam {
+  0% { transform: scale(2.6); opacity: 0; }
+  40% { transform: scale(0.96); opacity: 1; }
+  55% { transform: scale(1.05) translateX(-3px); }
+  70% { transform: scale(1) translateX(3px); }
+  100% { transform: scale(1) translateX(0); }
+}
+
+/* victory: slow golden god-rays turning behind the crown */
+#victory::before {
+  content: ''; position: absolute; inset: -30%; pointer-events: none;
+  background: repeating-conic-gradient(rgba(255,210,100,0.06) 0 9deg, transparent 9deg 24deg);
+  -webkit-mask-image: radial-gradient(circle at 50% 38%, #000, transparent 52%);
+  mask-image: radial-gradient(circle at 50% 38%, #000, transparent 52%);
+  animation: raysTurn 46s linear infinite;
+}
+@keyframes raysTurn { to { transform: rotate(360deg); } }
+
+/* end-screen stat rows deal in one by one */
+.vstat { animation: cardIn 0.34s cubic-bezier(0.2, 1.25, 0.35, 1) both; }
+
+/* the Begin button smoulders */
+#start-btn { animation: beginPulse 2.6s ease-in-out infinite; }
+@keyframes beginPulse {
+  0%, 100% { box-shadow: inset 0 2px 0 rgba(255,255,255,0.35), inset 0 -3px 0 rgba(0,0,0,0.2), 0 5px 0 #6b5212; }
+  50% { box-shadow: inset 0 2px 0 rgba(255,255,255,0.35), inset 0 -3px 0 rgba(0,0,0,0.2), 0 5px 0 #6b5212, 0 0 26px rgba(255,170,60,0.5); }
+}
+
+/* blade cards: element tag, playstyle line, feel-pips */
+.tagchip.element {
+  background: color-mix(in srgb, var(--bc, #9a6ce0) 16%, #120c1e);
+  color: var(--bc, #cdbfff); border: 2px solid var(--bc, #9a6ce0);
+  box-shadow: inset 0 0 0 1px #0c0814, 0 0 7px color-mix(in srgb, var(--bc, #9a6ce0) 50%, transparent);
+  text-shadow: 0 1px 0 #000;
+}
+.blade-name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.blade-style {
+  font-family: 'Press Start 2P', monospace; font-size: 7.5px; letter-spacing: 0.5px;
+  color: #cdbfe0; opacity: 0.85; margin: 2px 0 6px;
+}
+.blade-pips { margin: 7px 0 2px; gap: 3px; }
+.blade-pips .hstat span { width: 62px; }
+
+/* sorcerer's shop: the man himself + grouped wares */
+.sorcerer-stage {
+  width: 86px; height: 94px; flex-shrink: 0;
+  display: flex; align-items: flex-end; justify-content: center;
+  background: radial-gradient(circle at 50% 72%, rgba(31,110,122,0.35), transparent 70%);
+  animation: evFloat 3.4s ease-in-out infinite;
+}
+.sorcerer-stage canvas { width: 64px; height: 80px; image-rendering: pixelated; }
+.shop-sec {
+  width: 100%; max-width: 460px; margin: 10px 0 -2px;
+  display: flex; align-items: center; gap: 10px;
+  font-family: 'Press Start 2P', monospace; font-size: 8px; letter-spacing: 2px;
+  color: #9a8bb8; text-shadow: 0 1px 0 #000;
+}
+.shop-sec::before, .shop-sec::after {
+  content: ''; flex: 1; height: 2px;
+  background: linear-gradient(90deg, transparent, #4a3d63);
+}
+.shop-sec::after { background: linear-gradient(90deg, #4a3d63, transparent); }
+
+/* desktop hover states: cards lift toward the torchlight */
+@media (hover: hover) {
+  .btn:hover { filter: brightness(1.1); }
+  .ware:not(.sold):not(.broke):hover,
+  .blade-card:hover, .event-choice:hover, .soul-item:not(.maxed):not(.broke):hover {
+    transform: translateY(-2px); filter: brightness(1.1);
+  }
+  .blade-card:hover {
+    box-shadow: inset 0 2px 0 rgba(255,255,255,0.06), 0 6px 0 #120c1e,
+      0 0 26px color-mix(in srgb, var(--bc, #9a6ce0) 55%, transparent);
+  }
+}
+
 /* corner mute toggle */
 #mute-btn {
   position: fixed; top: 10px; right: 10px; z-index: 50;

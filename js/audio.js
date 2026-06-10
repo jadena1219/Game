@@ -156,7 +156,8 @@ class GameAudio {
   play(name, opts = {}) {
     if (!this.ready || this.muted) return;
     // throttle the spammy combat sounds so swarm-kills / coin piles don't machine-gun
-    const TH = { hit: 28, crit: 28, die_chaser: 45, die_swarmer: 45, die_caster: 45, die_tank: 60, die: 45, gold: 45, hurt: 80 };
+    const TH = { hit: 28, crit: 28, die_chaser: 45, die_swarmer: 45, die_caster: 45, die_tank: 60, die: 45, gold: 45, hurt: 80,
+      hit_ember: 60, hit_frost: 60, hit_storm: 60 };
     if (TH[name]) {
       const now = performance.now(); this._t = this._t || {};
       if (now - (this._t[name] || 0) < TH[name]) return;
@@ -168,6 +169,41 @@ class GameAudio {
       case 'swing': {                   // an airy blade whoosh
         this._noise({ filter: 'bandpass', cutoff: R(900, 1300), cutoff1: 380, q: 1.1, dur: 0.22, gain: 0.12 * v });
         this._tone({ type: 'sawtooth', f0: R(420, 520), f1: 160, exp: true, dur: 0.16, gain: 0.05 * v, filter: 'lowpass', cutoff: 1400 });
+        break;
+      }
+      case 'swing_ember': {             // a heavier whoosh that catches fire
+        const t = this._now();
+        this._noise({ filter: 'bandpass', cutoff: R(700, 1000), cutoff1: 300, q: 1.0, dur: 0.26, gain: 0.13 * v });
+        this._tone({ type: 'sawtooth', f0: R(300, 380), f1: 110, exp: true, dur: 0.2, gain: 0.06 * v, filter: 'lowpass', cutoff: 1200 });
+        for (let i = 0; i < 3; i++) this._noise({ t0: t + 0.04 + i * 0.05, filter: 'highpass', cutoff: R(2400, 4200), q: 2, dur: 0.03, gain: 0.05 * v });
+        break;
+      }
+      case 'swing_frost': {             // a crisp icy shing
+        this._noise({ filter: 'bandpass', cutoff: R(1800, 2400), cutoff1: 700, q: 1.6, dur: 0.2, gain: 0.1 * v });
+        this._tone({ type: 'triangle', f0: R(1900, 2200), f1: 900, exp: true, dur: 0.18, gain: 0.06 * v });
+        this._tone({ type: 'sine', f0: 2800, dur: 0.12, gain: 0.04 * v });
+        break;
+      }
+      case 'swing_storm': {             // an electric rip
+        this._noise({ filter: 'bandpass', cutoff: R(900, 1300), cutoff1: 2600, q: 1.2, dur: 0.18, gain: 0.1 * v });
+        this._tone({ type: 'square', f0: R(120, 160), f1: 60, exp: true, dur: 0.14, gain: 0.05 * v, filter: 'bandpass', cutoff: 1800, q: 3 });
+        this._tone({ type: 'sawtooth', f0: R(2400, 3200), f1: 800, exp: true, dur: 0.1, gain: 0.045 * v });
+        break;
+      }
+      case 'hit_ember': {               // fire answers the connect
+        this._noise({ filter: 'highpass', cutoff: 2600, dur: 0.08, gain: 0.1 * v });
+        this._tone({ type: 'square', f0: 220, f1: 90, exp: true, dur: 0.1, gain: 0.06 * v, filter: 'lowpass', cutoff: 1400 });
+        break;
+      }
+      case 'hit_frost': {               // a glassy crack
+        const f = R(0.95, 1.06);
+        this._tone({ type: 'triangle', f0: 2100 * f, dur: 0.14, gain: 0.07 * v });
+        this._tone({ t0: this._now() + 0.02, type: 'triangle', f0: 3150 * f, dur: 0.1, gain: 0.04 * v });
+        break;
+      }
+      case 'hit_storm': {               // a snapping jolt
+        this._noise({ filter: 'bandpass', cutoff: R(2800, 3600), q: 4, dur: 0.06, gain: 0.12 * v });
+        this._tone({ type: 'square', f0: R(700, 900), f1: 200, exp: true, dur: 0.07, gain: 0.05 * v });
         break;
       }
       case 'hit': {                     // meaty sword impact: thud + metallic crunch

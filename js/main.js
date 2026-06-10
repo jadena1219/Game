@@ -214,15 +214,23 @@ const ui = {
       const el = document.createElement('button');
       el.className = 'blade-card';
       el.style.setProperty('--bc', b.color);
+      el.style.setProperty('--accent', b.color);     // pips share the hero-card system
       el.style.animationDelay = (i * 0.08) + 's';
       const icon = BLADE_ICONS[b.id]
         ? `<img class="blade-ico" src="${BLADE_ICONS[b.id]}" alt="">`
         : `<span class="blade-ico">🗡️</span>`;
+      const pip = (n) => Array.from({ length: 5 }, (_, k) => `<i class="${k < n ? 'on' : ''}"></i>`).join('');
       el.innerHTML = icon +
         `<div class="blade-body">` +
-          `<div class="blade-name">${b.name}</div>` +
+          `<div class="blade-name">${b.name}<span class="tagchip element">${b.element || ''}</span></div>` +
+          `<div class="blade-style">${b.style || ''}</div>` +
           `<div class="blade-sig">${b.sig}</div>` +
-          `<div class="blade-flavor">${b.flavor}</div>` +
+          (b.pips ? `<div class="hero-stats blade-pips">` +
+            `<div class="hstat"><span>FEROCITY</span><div class="pips">${pip(b.pips.fer)}</div></div>` +
+            `<div class="hstat"><span>CONTROL</span><div class="pips">${pip(b.pips.ctl)}</div></div>` +
+            `<div class="hstat"><span>TEMPO</span><div class="pips">${pip(b.pips.tmp)}</div></div>` +
+          `</div>` : '') +
+          `<div class="blade-flavor">${b.flavor} Evolves on floors 5 · 10 · 15.</div>` +
         `</div>`;
       el.onclick = () => { Sound.unlock(); Sound.play('relic'); game.setBlade(b.id); this.showScreen(null); game.beginIntro('knight'); };
       wrap.appendChild(el);
@@ -284,12 +292,25 @@ const ui = {
       : level + 1 === 20 ? 'The Sorcerer — the Demon Lord stirs'
       : 'The Sorcerer';
 
+    // the sorcerer himself presides over his wares (drawn from the cast sprite)
+    const stage = document.getElementById('shop-sorcerer');
+    if (stage) {
+      const sx = stage.getContext('2d');
+      sx.clearRect(0, 0, stage.width, stage.height);
+      drawSprite(sx, 'sorcerer', 'idle', 32, 76, false, 1.1);
+    }
+
     const render = () => {
       document.getElementById('camp-gold-n').textContent = g.gold;
       document.getElementById('reroll-cost').textContent = g.rerollCost;
       const wrap = document.getElementById('camp-wares');
       wrap.innerHTML = '';
-      g.shopStock.forEach((w, i) => {
+      // group the wares: honest steel first, then the stranger things
+      const sec = (label) => { const d = document.createElement('div'); d.className = 'shop-sec'; d.textContent = label; wrap.appendChild(d); };
+      const forge = g.shopStock.filter((w) => w.kind !== 'relic');
+      const curios = g.shopStock.filter((w) => w.kind === 'relic');
+      if (forge.length) sec('THE FORGE');
+      const addWare = (w, i) => {
         const owned = w.sold;
         const afford = g.gold >= w.cost;
         const sub = w.kind === 'relic' ? (w.item.keystone ? 'keystone' : w.item.cursed ? 'cursed' : 'relic') : w.kind;
@@ -314,7 +335,10 @@ const ui = {
           else this._campMsg('Not enough gold.');
         });
         wrap.appendChild(el);
-      });
+      };
+      forge.forEach(addWare);
+      if (curios.length) sec('CURIOS — power, for a price');
+      curios.forEach((w, i) => addWare(w, forge.length + i));
     };
     render();
 
@@ -333,17 +357,18 @@ const ui = {
   // m:ss for the run clock
   _fmtTime(s) { s = Math.max(0, Math.round(s || 0)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; },
 
-  // The shared end-of-run stat rows (death + victory): the run told as numbers.
+  // The shared end-of-run stat rows (death + victory): the run told as numbers,
+  // dealt onto the table one by one.
   _runRows(s) {
     const tier = (n) => '◆'.repeat(n || 0) + '◇'.repeat(Math.max(0, 3 - (n || 0)));
-    let h = '';
-    if (s.blade) h += `<div class="vstat">${s.blade}<span class="num bladetier">${tier(s.bladeTier)}</span></div>`;
-    h += `<div class="vstat">Run time<span class="num">${this._fmtTime(s.time)}</span></div>`;
-    h += `<div class="vstat">Foes slain<span class="num">${s.kills}</span></div>`;
-    if (s.bestCombo >= 3) h += `<div class="vstat">Best combo<span class="num">${s.bestCombo}</span></div>`;
-    h += `<div class="vstat">Gold gathered<span class="num">${s.gold}</span></div>`;
-    h += `<div class="vstat">Relics claimed<span class="num">${s.relics}</span></div>`;
-    return h;
+    const rows = [];
+    if (s.blade) rows.push(`${s.blade}<span class="num bladetier">${tier(s.bladeTier)}</span>`);
+    rows.push(`Run time<span class="num">${this._fmtTime(s.time)}</span>`);
+    rows.push(`Foes slain<span class="num">${s.kills}</span>`);
+    if (s.bestCombo >= 3) rows.push(`Best combo<span class="num">${s.bestCombo}</span>`);
+    rows.push(`Gold gathered<span class="num">${s.gold}</span>`);
+    rows.push(`Relics claimed<span class="num">${s.relics}</span>`);
+    return rows.map((r, i) => `<div class="vstat" style="animation-delay:${0.25 + i * 0.09}s">${r}</div>`).join('');
   },
   _soulsLine(el, n) {
     el.classList.toggle('hidden', !(n > 0));
@@ -355,6 +380,19 @@ const ui = {
     document.getElementById('go-sub').innerHTML = numWrap(
       s.killedBy ? `Slain by ${s.killedBy} — Floor ${level} of ${LEVELS.length}`
                  : `You reached Floor ${level} of ${LEVELS.length}`);
+    // the Lord always has a word for the fallen
+    const whisper = document.getElementById('go-whisper');
+    if (whisper) {
+      const LINES = [
+        'AGAIN, LITTLE KNIGHT.',
+        'YOUR KING IS STILL WAITING.',
+        'I WILL RAISE YOU AS OFTEN AS IT TAKES.',
+        'KNEEL, AND THIS ENDS.',
+        'THE DARK KEEPS WHAT IT KILLS.',
+        'EVERY DEATH TEACHES YOU NOTHING.',
+      ];
+      whisper.textContent = '"' + LINES[(Math.random() * LINES.length) | 0] + '"';
+    }
     document.getElementById('go-stats').innerHTML = stats ? this._runRows(s) : '';
     this._soulsLine(document.getElementById('go-souls'), s.souls);
     this.showScreen('gameover');

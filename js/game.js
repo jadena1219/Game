@@ -2475,10 +2475,16 @@ export class Game {
   // ---------- swing ----------
   onSwing(player) {
     this.shake = Math.max(this.shake, 3.5);
-    Sound.play('swing');
+    // each blade sounds like its element (fire roars, ice shings, storm rips)
+    Sound.play(player.blade ? 'swing_' + player.blade : 'swing');
     const style = (player.hero && player.hero.swingStyle) || 'sweep';
-    // visual lives LONGER than the hit window so the slash actually reads on screen
-    const dur = style === 'stab' ? 0.2 : 0.32;
+    // visual lives LONGER than the hit window so the slash actually reads on
+    // screen — and each element keeps its own time: storm SNAPS, fire rolls,
+    // frost stands frozen a beat
+    const dur = style === 'stab' ? 0.2
+      : player.blade === 'storm' ? 0.22
+      : player.blade === 'ember' ? 0.5
+      : player.blade === 'frost' ? 0.55 : 0.32;
     // anchor at the torso, not the feet (sprites are feet-anchored) so the slash
     // radiates from the knight's body evenly in every facing direction
     this.effects.push({ kind: 'swing', t: 0, dur, style, blade: player.blade,
@@ -2528,6 +2534,27 @@ export class Game {
         this._hitBurst(ix, iy, p.facingAngle, power);
         this.addEffect({ kind: 'hitring', x: ix, y: iy, r: (e.boss ? 40 : 24) * power, t: 0, dur: 0.18 });
         this.addEffect({ kind: 'slash', x: ix, y: iy, angle: p.facingAngle + Math.PI / 2, len: e.r * 2.0 + 14, t: 0, dur: 0.14 });
+        // the element answers every connect — fire pops, ice cracks, storm jolts
+        if (p.blade === 'ember') {
+          for (let i = 0; i < 4; i++) this._mote(ix + (Math.random() - 0.5) * 10, iy + (Math.random() - 0.5) * 8,
+            Math.random() < 0.5 ? '#ffd36b' : '#ff7a2a',
+            { vx: (Math.random() - 0.5) * 40, vy: -(30 + Math.random() * 50), g: -40, r: 1.4 + Math.random() * 1.6, twinkle: 1, dur: 0.4 + Math.random() * 0.3 });
+          this.addEffect({ kind: 'ring', x: ix, y: iy, r: 18, color: '#ff7a2a', t: 0, dur: 0.22 });
+          Sound.play('hit_ember', { vol: 0.7 });
+        } else if (p.blade === 'frost') {
+          this._gib(ix, iy, '#cdeeff', 4, 100, { size: 2 });
+          for (let i = 0; i < 3; i++) {
+            const aa = p.facingAngle + (Math.random() - 0.5) * 1.6, s = 120 + Math.random() * 120;
+            this.effects.push({ kind: 'spark', x: ix, y: iy, vx: Math.cos(aa) * s, vy: Math.sin(aa) * s, t: 0, dur: 0.26, streak: true, col: '#dffaff' });
+          }
+          Sound.play('hit_frost', { vol: 0.6 });
+        } else if (p.blade === 'storm') {
+          const ja = Math.random() * 6.28;
+          this.addEffect({ kind: 'bolt', pts: [{ x: ix, y: iy },
+            { x: ix + Math.cos(ja) * 14, y: iy + Math.sin(ja) * 14 },
+            { x: ix + Math.cos(ja + 0.5) * 24, y: iy + Math.sin(ja + 0.5) * 24 }], t: 0, dur: 0.12 });
+          Sound.play('hit_storm', { vol: 0.55 });
+        }
         this.hitStop = Math.max(this.hitStop, e.boss ? 0.08 : (e.type === 'tank' || e.elite) ? 0.06 : (crit ? 0.06 : 0.035));
         this.shake = Math.max(this.shake, e.boss ? 7 : (crit ? 7 : 4.5));
         // Paladin: crushing blows ripple out a shockwave
@@ -5319,142 +5346,186 @@ export class Game {
     }
   }
 
-  // 🔥 EMBERBRAND — the cut burns. Flame tongues lick up off the swept rim,
-  // ember motes pop along it, and the path holds a red afterburn while it fades.
+  // 🔥 EMBERBRAND — no crescent at all: a white-hot lash wipes through, and a
+  // WAVE OF REAL FLAME erupts along the cut — tongues billow, curl, lift and
+  // break apart as they die (the flame releases WITH the slash, Rengoku-style).
   _swingEmber(ctx, G) {
     const { reach, life, sweep, fade, seed } = G;
-    this._swingCrescentBase(ctx, G, '150,50,10', '255,140,40', { coreA: 0.55 });
-    // flame tongues: short flickering licks pointing outward + biased upward
-    const tongues = 9;
-    for (let i = 0; i < tongues; i++) {
-      const u = (i + 0.5) / tongues;
-      if (u > sweep) break;
-      const flick = 0.55 + 0.45 * Math.sin(seed + i * 2.13 + this.time * 21);
-      const len = (5 + 11 * Math.sin(u * Math.PI)) * flick;
-      const [bx, by, ang] = G.at(u, 1);
-      const ox = Math.cos(ang), oy = Math.sin(ang);        // outward
-      const tipx = bx + ox * len * 0.7, tipy = by + oy * len * 0.7 - len * 0.55;  // heat rises
-      ctx.fillStyle = `rgba(255,130,35,${0.55 * fade * flick})`;
+    // 1) the cut itself: thin, white-hot, gone in a blink
+    if (life < 0.3) {
+      const ca = 1 - life / 0.3;
+      ctx.strokeStyle = `rgba(255,240,200,${0.95 * ca})`; ctx.lineWidth = 3; ctx.lineJoin = 'round';
       ctx.beginPath();
-      ctx.moveTo(bx - oy * 3.2, by + ox * 3.2);
-      ctx.lineTo(tipx, tipy);
-      ctx.lineTo(bx + oy * 3.2, by - ox * 3.2);
-      ctx.closePath(); ctx.fill();
-      ctx.fillStyle = `rgba(255,220,120,${0.5 * fade * flick})`;
-      ctx.beginPath();
-      ctx.moveTo(bx - oy * 1.4, by + ox * 1.4);
-      ctx.lineTo(bx + (tipx - bx) * 0.6, by + (tipy - by) * 0.6);
-      ctx.lineTo(bx + oy * 1.4, by - ox * 1.4);
-      ctx.closePath(); ctx.fill();
-    }
-    // ember pops along the path (deterministic per swing — no strobing)
-    for (let i = 0; i < 6; i++) {
-      const u = ((Math.sin(seed * 3.7 + i * 5.1) + 1) / 2) * sweep;
-      const rise = life * (10 + i * 4);
-      const [ex, ey] = G.at(u, 3 + (i % 3) * 2);
-      ctx.fillStyle = i % 2 ? `rgba(255,210,100,${0.8 * fade})` : `rgba(255,120,40,${0.8 * fade})`;
-      ctx.fillRect(ex - 1, ey - rise - 1, 2, 2);
-    }
-    // afterburn: once the slash lands, the path keeps a low red heat as it dies
-    if (life > 0.35) {
-      const cool = Math.max(0, 1 - (life - 0.35) / 0.65);
-      ctx.strokeStyle = `rgba(255,70,20,${0.5 * cool})`; ctx.lineWidth = 5;
-      ctx.beginPath();
-      const segs = 18;
-      for (let i = 0; i <= segs; i++) {
-        const [x, y] = G.at((i / segs) * sweep, -2);
-        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-      }
+      for (let i = 0; i <= 20; i++) { const [x, y] = G.at((i / 20) * sweep); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
       ctx.stroke();
+    }
+    // 2) the flame wave: tongues are born as the edge passes (the wave ROLLS),
+    //    each one growing, curling sideways, lifting off and dying upward
+    const N = 13;
+    for (let i = 0; i < N; i++) {
+      const u = (i + 0.5) / N;
+      if (u > sweep) break;
+      const born = u * 0.22;
+      const tl = Math.max(0, Math.min(1, (life - born) / 0.72));
+      if (tl <= 0) continue;
+      const env = Math.sin(tl * Math.PI);                  // swell → gutter out
+      const [bx, by, ang] = G.at(u, -2);
+      const ox = Math.cos(ang), oy = Math.sin(ang);
+      const tx = -oy, ty = ox;                             // tangent (sideways curl)
+      const flick = 0.75 + 0.25 * Math.sin(seed + i * 2.7 + this.time * 19);
+      const len = reach * (0.30 + 0.34 * Math.sin(u * Math.PI)) * env * flick;
+      const w = (6.5 + 2 * Math.sin(seed + i * 1.7)) * env;
+      const drift = tl * tl * 16;                          // dying flames LIFT
+      const cx1 = bx + ox * len * 0.5 + tx * Math.sin(seed * 2 + i) * 5;
+      const cy1 = by + oy * len * 0.5 - drift * 0.5;
+      const tipx = bx + ox * len + tx * Math.sin(this.time * 13 + i * 2) * 4;
+      const tipy = by + oy * len - drift;
+      // three layered licks: deep red body → orange → a yellow core
+      for (const [col, k] of [
+        [`rgba(190,40,10,${0.50 * fade})`, 1.25],
+        [`rgba(255,120,30,${0.62 * fade})`, 1.0],
+        [`rgba(255,220,110,${0.60 * fade})`, 0.55],
+      ]) {
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.moveTo(bx - tx * w * k, by - ty * w * k);
+        ctx.quadraticCurveTo(cx1, cy1, tipx, tipy);
+        ctx.quadraticCurveTo(cx1 + tx * w * k * 0.7, cy1 + ty * w * k * 0.7, bx + tx * w * k, by + ty * w * k);
+        ctx.closePath(); ctx.fill();
+      }
+    }
+    // 3) ignition flash at the hand as the wave is loosed
+    if (life < 0.2) {
+      const f = (1 - life / 0.2) * fade;
+      const rg = ctx.createRadialGradient(0, 0, 0, 0, 0, reach * 0.5);
+      rg.addColorStop(0, `rgba(255,230,170,${0.7 * f})`);
+      rg.addColorStop(0.4, `rgba(255,140,40,${0.45 * f})`);
+      rg.addColorStop(1, 'rgba(255,80,20,0)');
+      ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(0, 0, reach * 0.5, 0, Math.PI * 2); ctx.fill();
+    }
+    // 4) embers spat up off the burning arc
+    for (let i = 0; i < 8; i++) {
+      const u = ((Math.sin(seed * 3.3 + i * 4.7) + 1) / 2) * sweep;
+      const [ex, ey] = G.at(u, 2);
+      const rise = life * (26 + (i % 4) * 12), wob = Math.sin(this.time * 9 + i * 2.4) * 3;
+      const s2 = i % 3 === 0 ? 2.5 : 1.6;
+      ctx.fillStyle = i % 2 ? `rgba(255,220,120,${0.85 * fade})` : `rgba(255,110,30,${0.85 * fade})`;
+      ctx.fillRect(ex + wob - s2 / 2, ey - rise - s2 / 2, s2, s2);
     }
   }
 
-  // ❄️ FROSTFANG — the cut crystallizes. A hard faceted rim (no smooth curve)
-  // and a fan of ice shards that shoot outward and hang glinting; the cold lingers.
+  // ❄️ FROSTFANG — no crescent: one razor-thin cut-line, and then the slash
+  // CRYSTALLIZES — a fan of big faceted ice spikes erupts out of the cut with
+  // an overshoot pop and stands frozen, glinting, while the cold mists off it.
   _swingFrost(ctx, G) {
-    const { reach, life, sweep, seed, slam } = G;
-    const fade = Math.pow(G.fade, 0.7);                    // the cold outlasts the cut
-    this._swingCrescentBase(ctx, { ...G, fade }, '50,120,190', '160,225,255', { coreA: 0.5, rim: false, tip: false });
-    // faceted crystalline rim: angular zig-zag instead of a smooth glint
-    ctx.strokeStyle = `rgba(240,252,255,${0.95 * fade})`; ctx.lineWidth = slam ? 3 : 2;
-    ctx.beginPath();
-    const segs = 16;
-    for (let i = 0; i <= segs; i++) {
-      const jag = i === 0 || i === segs ? 0 : (i % 2 ? 3.2 : -1.8);
-      const [x, y] = G.at((i / segs) * sweep, jag);
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-    // the shard fan: icicles fired out of the arc, growing fast then hanging
-    const shards = 6, grow = Math.min(1, life / 0.28);
-    for (let i = 0; i < shards; i++) {
-      const u = (i + 0.5) / shards;
-      if (u > sweep) continue;
-      const len = (7 + 13 * Math.sin(u * Math.PI)) * grow * (0.8 + 0.4 * Math.sin(seed + i * 2.7));
-      const [bx, by, ang] = G.at(u, 1);
-      const tilt = ang + Math.sin(seed * 2 + i * 4.1) * 0.18;        // each shard slightly skewed
-      const ox = Math.cos(tilt), oy = Math.sin(tilt);
-      const w = 2.4;
-      ctx.fillStyle = `rgba(190,233,255,${0.55 * fade})`;
+    const { reach, life, sweep, seed } = G;
+    const fade = Math.pow(G.fade, 0.65);                   // the cold lingers
+    // 1) the cut: surgical, silver, brief
+    if (life < 0.35) {
+      const ca = 1 - life / 0.35;
+      ctx.strokeStyle = `rgba(235,250,255,${0.95 * ca})`; ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(bx - oy * w, by + ox * w);
-      ctx.lineTo(bx + ox * len, by + oy * len);
-      ctx.lineTo(bx + oy * w, by - ox * w);
-      ctx.closePath(); ctx.fill();
-      ctx.strokeStyle = `rgba(255,255,255,${0.8 * fade})`; ctx.lineWidth = 1;   // sun-catch edge
-      ctx.beginPath();
-      ctx.moveTo(bx - oy * w, by + ox * w);
-      ctx.lineTo(bx + ox * len, by + oy * len);
+      for (let i = 0; i <= 18; i++) { const [x, y] = G.at((i / 18) * sweep); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
       ctx.stroke();
-      // a glint star at the shard tip as it hangs
-      if (grow >= 1 && (i + Math.floor(this.time * 7)) % 3 === 0) {
-        const gx = bx + ox * len, gy = by + oy * len;
+    }
+    // 2) crystallization: faceted spikes erupt where the edge passed
+    const N = 7;
+    const pop = (t) => (t < 0.6 ? 1.15 * (t / 0.6) : 1.15 - 0.15 * ((t - 0.6) / 0.4));   // overshoot, settle
+    for (let i = 0; i < N; i++) {
+      const u = (i + 0.5) / N;
+      if (u > sweep) continue;
+      const born = u * 0.2 + 0.05;
+      const tl = Math.max(0, Math.min(1, (life - born) / 0.5));
+      if (tl <= 0) continue;
+      const grow = pop(tl);
+      const [bx, by, ang] = G.at(u, -1);
+      const sa = ang + Math.sin(seed * 2.1 + i * 3.9) * 0.3;     // each spike skewed
+      const ox = Math.cos(sa), oy = Math.sin(sa);
+      const tx = -oy, ty = ox;
+      const len = reach * (0.22 + 0.30 * Math.sin(u * Math.PI)) * grow
+        * (0.85 + 0.3 * ((Math.sin(seed + i * 7) + 1) / 2));
+      const w = (4.5 + (i % 3)) * grow;
+      const tipx = bx + ox * len, tipy = by + oy * len;
+      // two-tone facets + a white sun-catch edge: it reads as CUT ICE
+      ctx.fillStyle = `rgba(110,180,230,${0.50 * fade})`;
+      ctx.beginPath(); ctx.moveTo(bx - tx * w, by - ty * w); ctx.lineTo(tipx, tipy); ctx.lineTo(bx, by); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = `rgba(205,240,255,${0.65 * fade})`;
+      ctx.beginPath(); ctx.moveTo(bx + tx * w, by + ty * w); ctx.lineTo(tipx, tipy); ctx.lineTo(bx, by); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = `rgba(255,255,255,${0.85 * fade})`; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(bx + tx * w, by + ty * w); ctx.lineTo(tipx, tipy); ctx.stroke();
+      // a smaller flanking crystal at every other station
+      if (i % 2 === 0) {
+        const l2 = len * 0.4;
+        ctx.fillStyle = `rgba(170,220,250,${0.5 * fade})`;
+        ctx.beginPath();
+        ctx.moveTo(bx + tx * (w + 3), by + ty * (w + 3));
+        ctx.lineTo(bx + ox * l2 + tx * 4, by + oy * l2 + ty * 4);
+        ctx.lineTo(bx + tx, by + ty);
+        ctx.closePath(); ctx.fill();
+      }
+      // glint stars on the standing crystals
+      if (tl > 0.55 && (i + Math.floor(this.time * 6)) % 3 === 0) {
         ctx.strokeStyle = `rgba(255,255,255,${0.9 * fade})`; ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(gx - 2.5, gy); ctx.lineTo(gx + 2.5, gy);
-        ctx.moveTo(gx, gy - 2.5); ctx.lineTo(gx, gy + 2.5);
+        ctx.moveTo(tipx - 3, tipy); ctx.lineTo(tipx + 3, tipy);
+        ctx.moveTo(tipx, tipy - 3); ctx.lineTo(tipx, tipy + 3);
         ctx.stroke();
       }
     }
+    // 3) cold mist rolling off the cut
+    for (let i = 0; i < 4; i++) {
+      const u = ((Math.sin(seed * 5 + i * 3.1) + 1) / 2) * sweep;
+      const [mx, my] = G.at(u, 4);
+      const mr = 5 + life * 14 + i * 2;
+      const mg = ctx.createRadialGradient(mx, my, 0, mx, my, mr);
+      mg.addColorStop(0, `rgba(190,233,255,${0.12 * fade})`);
+      mg.addColorStop(1, 'rgba(190,233,255,0)');
+      ctx.fillStyle = mg; ctx.beginPath(); ctx.arc(mx, my, mr, 0, Math.PI * 2); ctx.fill();
+    }
   }
 
-  // ⚡ STORMEDGE — the cut IS lightning: a jagged arc whose jitter re-rolls at
-  // ~40Hz (a real crackle), with micro-forks snapping off the swept edge.
+  // ⚡ STORMEDGE — no band at all: the swing is 3 REAL bolts that leap from the
+  // hand to points across (and past) the arc, re-aimed every crackle tick, each
+  // ending in a strike-flash. Pure snap — it's gone almost before it lands.
   _swingStorm(ctx, G) {
-    const { life, sweep, seed } = G;
-    const fade = Math.pow(G.fade, 1.5);                    // lightning dies FAST
-    // a dim violet body only — the bolt is the show
-    this._swingCrescentBase(ctx, { ...G, fade }, '95,60,190', '170,140,255',
-      { bodyA: 0.22, coreA: 0, rim: false, tip: false, flash: life < 0.14 });
-    const tick = Math.floor(this.time * 40);               // crackle clock
-    const boltR = (i, segs) => {                           // jittered radial offset
-      const m = i === 0 || i === segs ? 0 : 1;
-      return Math.sin(seed * 7.3 + i * 3.07 + tick * 1.93) * G.outer * 0.26 * m;
-    };
-    // glow pass + white-hot core pass over the same jagged path
-    const segs = 24;
-    for (const [col, lw] of [[`rgba(150,110,255,${0.55 * fade})`, 6], [`rgba(245,238,255,${0.95 * fade})`, 1.8]]) {
-      ctx.strokeStyle = col; ctx.lineWidth = lw;
-      ctx.beginPath();
-      for (let i = 0; i <= segs; i++) {
-        const [x, y] = G.at((i / segs) * sweep, boltR(i, segs));
-        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    const { a0, arc, life, sweep, seed } = G;
+    const fade = Math.pow(G.fade, 1.6);
+    const tick = Math.floor(this.time * 36);               // chaos clock
+    const rnd = (k) => Math.sin(seed * 9.17 + k * 13.7 + tick * 7.31) * 0.5 + 0.5;
+    // the faintest violet wash gives the bolts a stage
+    ctx.fillStyle = `rgba(110,80,200,${0.10 * fade})`;
+    ctx.fill(this._crescentPath(a0, arc, G.rMid, G.outer * 0.8, 0, sweep));
+    for (let b = 0; b < 3; b++) {
+      const u = (0.15 + 0.7 * rnd(b * 3 + 1)) * sweep;
+      const over = 0.85 + rnd(b * 5 + 2) * 0.5;            // some bolts stab past the arc
+      const ang = a0 + u * arc;
+      const r = (G.rMid + Math.sin(u * Math.PI) * G.outer * 0.5) * over;
+      const ex = Math.cos(ang) * r, ey = Math.sin(ang) * r;
+      // jagged leap from the hand to the strike point (glow + white core)
+      for (const [col, lw] of [[`rgba(150,110,255,${0.5 * fade})`, 5], [`rgba(248,242,255,${0.95 * fade})`, 1.6]]) {
+        ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.lineJoin = 'round';
+        ctx.beginPath(); ctx.moveTo(0, 0);
+        for (let i = 1; i <= 6; i++) {
+          const f = i / 6;
+          const j = (i < 6) ? (rnd(b * 17 + i) - 0.5) * 22 * (1 - Math.abs(f - 0.5)) : 0;
+          ctx.lineTo(ex * f - Math.sin(ang) * j, ey * f + Math.cos(ang) * j);
+        }
+        ctx.stroke();
       }
-      ctx.stroke();
+      // strike flash where the bolt lands
+      const fr = 5 + rnd(b * 7 + 3) * 5;
+      const fg = ctx.createRadialGradient(ex, ey, 0, ex, ey, fr * 2.4);
+      fg.addColorStop(0, `rgba(240,232,255,${0.8 * fade})`);
+      fg.addColorStop(1, 'rgba(140,90,255,0)');
+      ctx.fillStyle = fg; ctx.beginPath(); ctx.arc(ex, ey, fr * 2.4, 0, Math.PI * 2); ctx.fill();
     }
-    // micro-forks: short two-segment bolts snapping outward off the edge
-    for (let i = 0; i < 3; i++) {
-      const u = ((Math.sin(seed * 5.1 + i * 7.7 + tick) + 1) / 2) * sweep;
-      const [bx, by, ang] = G.at(u, 2);
-      const f1 = 6 + ((tick + i) % 3) * 3, f2 = f1 * 0.7;
-      const va = ang + Math.sin(seed + i * 9 + tick) * 0.7;
-      const mx = bx + Math.cos(va) * f1, my = by + Math.sin(va) * f1;
-      const va2 = va + (i % 2 ? 0.6 : -0.6);
-      ctx.strokeStyle = `rgba(235,225,255,${0.85 * fade})`; ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.moveTo(bx, by); ctx.lineTo(mx, my);
-      ctx.lineTo(mx + Math.cos(va2) * f2, my + Math.sin(va2) * f2);
-      ctx.stroke();
+    // the hand crackles as the charge releases
+    if (life < 0.4) {
+      const f = 1 - life / 0.4;
+      const og = ctx.createRadialGradient(0, 0, 0, 0, 0, 18);
+      og.addColorStop(0, `rgba(240,232,255,${0.7 * f})`);
+      og.addColorStop(1, 'rgba(140,90,255,0)');
+      ctx.fillStyle = og; ctx.beginPath(); ctx.arc(0, 0, 18, 0, Math.PI * 2); ctx.fill();
     }
   }
 

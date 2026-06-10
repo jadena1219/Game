@@ -21,6 +21,8 @@
 
     <!-- Title -->
     <div class="screen" id="title-screen">
+      <div class="sconce l" aria-hidden="true"></div>
+      <div class="sconce r" aria-hidden="true"></div>
       <h1>Knight's<br />Last Stand</h1>
       <p class="tag">Twenty floors. One blade. No retreat.</p>
       <button class="btn" id="start-btn">Begin the Stand</button>
@@ -50,6 +52,8 @@
 
     <!-- The Living Blade: choose your sword at the start of a run -->
     <div class="screen hidden" id="blade-select">
+      <div class="sconce l" aria-hidden="true"></div>
+      <div class="sconce r" aria-hidden="true"></div>
       <h2 class="gold">Take Up a Blade</h2>
       <p class="rw-sub">Three swords wait in the dark. One will descend with you — and grow.</p>
       <div id="blade-cards"></div>
@@ -69,6 +73,7 @@
 
     <!-- The sorcerer's trade panel (opened by walking up to him) -->
     <div class="screen hidden" id="shop-modal">
+      <div class="sorcerer-stage" aria-hidden="true"><canvas id="shop-sorcerer" width="64" height="80"></canvas></div>
       <h2 id="camp-title">The Sorcerer</h2>
       <p class="rw-sub" id="camp-sub">"Spend your gold, knight. The dark is patient."</p>
       <div id="camp-gold"><span class="gdot"></span><span id="camp-gold-n">0</span> gold</div>
@@ -85,8 +90,10 @@
 
     <!-- Game over -->
     <div class="screen hidden" id="game-over">
+      <div class="ash" aria-hidden="true"></div>
       <h2 class="danger">You Fell</h2>
       <p id="go-sub">You reached Level 1</p>
+      <p id="go-whisper" class="lord-line"></p>
       <div id="go-stats"></div>
       <p id="go-souls" class="souls-banked hidden"></p>
       <button class="btn" id="retry-btn">Try Again</button>
@@ -96,6 +103,7 @@
 
     <!-- Victory -->
     <div class="screen hidden" id="victory">
+      <div class="ash gold" aria-hidden="true"></div>
       <img class="victory-crown" src="assets/icons/ember.png" alt="">
 
       <h2 class="gold">The Demon Lord Falls</h2>

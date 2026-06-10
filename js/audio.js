@@ -206,10 +206,10 @@ class GameAudio {
         this._tone({ type: 'square', f0: R(700, 900), f1: 200, exp: true, dur: 0.07, gain: 0.05 * v });
         break;
       }
-      case 'hit': {                     // meaty sword impact: thud + metallic crunch
-        this._tone({ type: 'sine', f0: 150, f1: 60, exp: true, dur: 0.14, gain: 0.32 * v });
-        this._noise({ filter: 'highpass', cutoff: 1800, q: 0.6, dur: 0.09, gain: 0.18 * v });
-        this._tone({ type: 'square', f0: R(280, 360), f1: 150, exp: true, dur: 0.08, gain: 0.07 * v, filter: 'lowpass', cutoff: 2200 });
+      case 'hit': {                     // a soft, meaty impact — a dull thud, no metallic shriek
+        this._tone({ type: 'sine', f0: 138, f1: 50, exp: true, dur: 0.13, gain: 0.28 * v });
+        this._tone({ type: 'triangle', f0: R(210, 260), f1: 90, exp: true, dur: 0.07, gain: 0.05 * v, filter: 'lowpass', cutoff: 1300 });
+        this._noise({ filter: 'lowpass', cutoff: 820, cutoff1: 280, dur: 0.05, gain: 0.06 * v });
         break;
       }
       case 'crit': {                    // brighter, with a ringing edge

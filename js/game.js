@@ -1075,79 +1075,70 @@ export class Game {
   }
 
   // ---- camp room props ----
-  // The way down: a black arched gateway smashed INTO the bottom wall, breathing
-  // a hot red glow from the depths. Simple, embedded in the wall, and menacing.
-  _drawDescentPit(ctx, d, t) {
-    const p = this.player || (this.state === 'title' ? this.titleKnight : null);
-    const near = p ? Math.max(0, 1 - Math.hypot(p.x - d.x, p.y - d.y) / 150) : 0;
-    const pulse = 0.5 + 0.5 * Math.sin(t * 2.6);
-    const cx = d.x, baseY = d.y + 44, topY = d.y - 58, hw = 52;
-    // trace the arched-doorway outline (rect sides + semicircle top), with inset
-    const arch = (inset) => {
-      const w = hw - inset, by = baseY - inset, acy = (topY + inset) + w;
-      ctx.beginPath();
-      ctx.moveTo(cx - w, by);
-      ctx.lineTo(cx - w, acy);
-      ctx.arc(cx, acy, w, Math.PI, Math.PI * 2);
-      ctx.lineTo(cx + w, by);
-      ctx.closePath();
-    };
+  // A deterministic torn-mouth rim (16 jagged points) for a pit centred at (cx,cy).
+  _pitRim(cx, cy) {
+    const rim = [];
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2;
+      const hsh = Math.sin(i * 12.9898 + 4.13) * 43758.5453;
+      const j = hsh - Math.floor(hsh);
+      rim.push([cx + Math.cos(a) * (80 + j * 18 - 9), cy + Math.sin(a) * (42 + ((j * 7) % 1) * 10 - 5)]);
+    }
+    return rim;
+  }
+
+  // THE PIT — one pit for the whole game: a torn mouth ripped in the stone (no
+  // doorway), a broken-soil lip with cracks radiating out, a black throat
+  // falling to a deep ember glow that swells as you near, and sparks rising.
+  // Drawn entirely at frame time so the camp and the title camp look identical.
+  _drawTornPit(ctx, cx, cy, t, near, rim) {
+    rim = rim || this._pitRim(cx, cy);
+    const trace = () => { ctx.beginPath(); rim.forEach(([x2, y2], i) => (i ? ctx.lineTo(x2, y2) : ctx.moveTo(x2, y2))); ctx.closePath(); };
     ctx.save();
     ctx.lineJoin = 'round';
-
-    // 1) a heavy carved stone arch reinforcing the opening in the wall
-    arch(-13);
-    ctx.fillStyle = '#231d2e'; ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 3; ctx.stroke();
-    // voussoir block lines + a keystone for that gateway look
-    ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1.5;
-    for (const a of [Math.PI * 1.15, Math.PI * 1.35, Math.PI * 1.5, Math.PI * 1.65, Math.PI * 1.85]) {
-      const acy = topY + hw;
-      ctx.beginPath();
-      ctx.moveTo(cx + Math.cos(a) * hw, acy + Math.sin(a) * hw);
-      ctx.lineTo(cx + Math.cos(a) * (hw + 13), acy + Math.sin(a) * (hw + 13));
+    // broken-soil lip
+    trace(); ctx.lineWidth = 16; ctx.strokeStyle = '#171221'; ctx.stroke();
+    ctx.lineWidth = 6; ctx.strokeStyle = '#241c30'; ctx.stroke();
+    // cracks radiating into the floor
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + 0.4;
+      const x0 = cx + Math.cos(a) * 86, y0 = cy + Math.sin(a) * 48;
+      ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(x0, y0);
+      ctx.lineTo(x0 + Math.cos(a) * 16 + 4, y0 + Math.sin(a) * 10 - 3);
+      ctx.lineTo(x0 + Math.cos(a) * 30 - 3, y0 + Math.sin(a) * 19 + 2);
       ctx.stroke();
     }
-
-    // 2) the pitch-black mouth
-    arch(0); ctx.fillStyle = '#040207'; ctx.fill();
-
-    // 3) the hot glow bleeding up from far below, clipped inside the mouth.
-    //    Hotter and brighter the closer you stand.
-    ctx.save();
-    arch(2); ctx.clip();
-    ctx.globalCompositeOperation = 'lighter';
-    const gA = 0.32 + 0.16 * pulse + 0.42 * near;
-    const gy = baseY - 4;
-    const rg = ctx.createRadialGradient(cx, gy, 2, cx, gy, 150);
-    rg.addColorStop(0, `rgba(255,110,40,${gA})`);
-    rg.addColorStop(0.4, `rgba(200,28,14,${gA * 0.7})`);
-    rg.addColorStop(1, 'rgba(40,0,0,0)');
-    ctx.fillStyle = rg; ctx.fillRect(cx - hw, topY - 4, hw * 2, baseY - topY + 8);
-    // embers rising out of the depths
-    for (let i = 0; i < 6; i++) {
-      const ph = (t * 0.4 + i * 0.17) % 1;
-      ctx.globalAlpha = (1 - ph) * (0.45 + 0.55 * near);
-      ctx.fillStyle = i % 2 ? '#ff8a2a' : '#ffd36b';
-      ctx.fillRect(cx - 24 + ((i * 17 + t * 22) % 48), gy - ph * (baseY - topY + 4), 2, 2);
+    // the black throat, falling to embers
+    trace();
+    const vg = ctx.createLinearGradient(0, cy - 48, 0, cy + 44);
+    vg.addColorStop(0, '#020108'); vg.addColorStop(0.55, '#0a0306'); vg.addColorStop(1, '#2e0c06');
+    ctx.fillStyle = vg; ctx.fill();
+    ctx.clip();
+    // a ledge of stone catching light just inside the rim — the depth read
+    ctx.strokeStyle = 'rgba(200,190,230,0.10)'; ctx.lineWidth = 2;
+    ctx.beginPath(); rim.forEach(([x2, y2], i) => (i ? ctx.lineTo(x2, y2 - 5) : ctx.moveTo(x2, y2 - 5))); ctx.closePath(); ctx.stroke();
+    // the ember glow far below, swelling as you draw near
+    const eg = ctx.createRadialGradient(cx, cy + 30, 2, cx, cy + 30, 66);
+    eg.addColorStop(0, `rgba(255,110,40,${0.26 + 0.22 * near + 0.07 * Math.sin(t * 2.4)})`);
+    eg.addColorStop(1, 'rgba(120,30,8,0)');
+    ctx.fillStyle = eg; ctx.fillRect(cx - 84, cy - 30, 168, 84);
+    // sparks rising out of the throat
+    for (let i = 0; i < 8; i++) {
+      const ph = (t * 0.4 + i * 0.125) % 1;
+      const ex = cx + Math.sin(t * 1.3 + i * 2.4) * (34 - ph * 12);
+      const ey = cy + 26 - ph * 60;
+      ctx.globalAlpha = (1 - ph) * (0.4 + 0.6 * near);
+      ctx.fillStyle = i % 2 ? '#ff9a4a' : '#ffd36b';
+      ctx.fillRect(ex, ey, 2, 2);
     }
-    ctx.restore();
+    ctx.restore(); ctx.globalAlpha = 1;
+  }
 
-    // 4) faint top-lit rim on the stone arch
-    arch(0);
-    ctx.strokeStyle = 'rgba(150,140,165,0.45)'; ctx.lineWidth = 2; ctx.stroke();
-
-    // 5) cold mist spilling out of the gate onto the floor
-    ctx.globalCompositeOperation = 'source-over';
-    for (let i = 0; i < 4; i++) {
-      const ph = (t * 0.3 + i * 0.25) % 1;
-      ctx.globalAlpha = (1 - ph) * 0.14;
-      ctx.fillStyle = 'rgba(190,200,215,1)';
-      ctx.beginPath();
-      ctx.ellipse(cx + Math.sin(t * 0.8 + i * 2) * 26, baseY + ph * 12, 32 - ph * 8, 7, 0, 0, Math.PI * 2); ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-    ctx.restore();
+  _drawDescentPit(ctx, d, t) {
+    const p = this.player || (this.state === 'title' ? this.titleKnight : null);
+    const near = p ? Math.max(0, 1 - Math.hypot(p.x - d.x, p.y - d.y) / 180) : 0;
+    this._drawTornPit(ctx, d.x, d.y, t, near);
   }
 
   _drawCampFloor(ctx) {
@@ -1363,31 +1354,9 @@ export class Game {
       g.fillStyle = '#6b5a3a'; g.fillRect(bnx - 4, bny - 88, 8, 5);             // finial
       this._bakeBanner(g, bnx, bny - 76, '#4e1d22');                            // crossbar + torn cloth
     }
-    // THE PIT — a torn mouth in the stone, not a doorway: jagged rim + cracks
-    const pitRim = [];
-    {
-      const px3 = pit.x - ox, py3 = pit.y - oy;
-      for (let i = 0; i < 16; i++) {
-        const a = (i / 16) * Math.PI * 2;
-        const hsh = Math.sin(i * 12.9898 + 4.13) * 43758.5453;
-        const j = hsh - Math.floor(hsh);
-        pitRim.push([px3 + Math.cos(a) * (80 + j * 18 - 9), py3 + Math.sin(a) * (42 + ((j * 7) % 1) * 10 - 5)]);
-      }
-      g.save(); g.lineJoin = 'round';
-      g.beginPath(); pitRim.forEach(([x2, y2], i) => (i ? g.lineTo(x2, y2) : g.moveTo(x2, y2))); g.closePath();
-      g.lineWidth = 16; g.strokeStyle = '#171221'; g.stroke();   // broken-soil lip
-      g.lineWidth = 6; g.strokeStyle = '#241c30'; g.stroke();
-      for (let i = 0; i < 8; i++) {                              // cracks radiating into the floor
-        const a = (i / 8) * Math.PI * 2 + 0.4;
-        const x0 = px3 + Math.cos(a) * 86, y0 = py3 + Math.sin(a) * 48;
-        g.strokeStyle = 'rgba(0,0,0,0.5)'; g.lineWidth = 2;
-        g.beginPath(); g.moveTo(x0, y0);
-        g.lineTo(x0 + Math.cos(a) * 16 + 4, y0 + Math.sin(a) * 10 - 3);
-        g.lineTo(x0 + Math.cos(a) * 30 - 3, y0 + Math.sin(a) * 19 + 2);
-        g.stroke();
-      }
-      g.restore();
-    }
+    // THE PIT rim is computed in WORLD coords (the torn mouth is drawn live in
+    // _drawTornPit so the camp and title pit are byte-identical).
+    const pitRim = this._pitRim(pit.x, pit.y);
     // vignette
     const v = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.62);
     v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.5)');
@@ -1397,7 +1366,7 @@ export class Game {
     this.titleCamp = {
       ox, oy, t: 0, sizeKey: this.vw + 'x' + this.vh, scale: SC,
       fire, pit, brazier, banner,
-      pitRim: pitRim.map(([x2, y2]) => [x2 + ox, y2 + oy]),
+      pitRim,                              // already world coords (see _pitRim)
       parts: [],                           // live fire embers
       prompt: null, jump: null, sink: 0, sunk: false,
       bounds: { minX: ox + 44, maxX: ox + W - 44, minY: oy + wallH + 30, maxY: oy + H - 42 },
@@ -1511,11 +1480,22 @@ export class Game {
     });
     for (const p2 of tc.parts) { p2.life += dt; p2.x += p2.vx * dt; p2.y += p2.vy * dt; }
     tc.parts = tc.parts.filter((p2) => p2.life < p2.dur);
-    // approach an object and the choice offers itself
+    // BEGIN is no button: you WALK INTO THE PIT. Standing at the rim and pushing
+    // toward the mouth makes the knight lean over the brink — a ring fills as he
+    // commits, and when it closes he tips in and the descent begins. (Brazier
+    // and banner keep their small side-prompts; they sit clear of the pit.)
     const d2 = (o) => Math.hypot(k.x - o.x, k.y - o.y);
+    const dpit = d2(tc.pit);
+    const toward = dpit > 1 ? ((tc.pit.x - k.x) * mv.x + (tc.pit.y - k.y) * mv.y) / dpit : 0;
+    tc.atBrink = dpit < 122;
+    if (tc.atBrink && toward > 0.3) {
+      tc.commit = Math.min(1, (tc.commit || 0) + dt / 0.55);   // ~0.55s of leaning in
+      if (tc.commit >= 1) { this.titleBegin(); return; }
+    } else {
+      tc.commit = Math.max(0, (tc.commit || 0) - dt * 2.4);    // step back and it eases off
+    }
     let prompt = null;
-    if (d2(tc.pit) < 122) prompt = 'begin';     // wide rim: the offer reaches the whole edge
-    else if (d2(tc.brazier) < 64) prompt = 'sanctum';
+    if (d2(tc.brazier) < 64) prompt = 'sanctum';
     else if (d2(tc.banner) < 64) prompt = 'prologue';
     if (prompt !== tc.prompt) { tc.prompt = prompt; this.ui.setTitlePrompt(prompt, this.meta.souls); }
   }
@@ -1631,7 +1611,20 @@ export class Game {
       ctx.restore();
     };
     if (!iv) {                             // names wait for the light
-      label('BEGIN ▾', tc.pit.x, tc.pit.y - 92, '#ffd86a', tc.prompt === 'begin');
+      // the brink ring: fills as the knight leans into the pit, gold → white-hot
+      const c = tc.commit || 0;
+      if (c > 0.01 && !tc.jump && !tc.sunk) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.translate(tc.pit.x, tc.pit.y);
+        ctx.lineWidth = 3 + 3 * c; ctx.lineCap = 'round';
+        ctx.strokeStyle = `rgba(255,${(210 - 90 * c) | 0},${(120 - 60 * c) | 0},${0.55 + 0.45 * c})`;
+        ctx.beginPath(); ctx.ellipse(0, 0, 96, 56, 0, -Math.PI / 2, -Math.PI / 2 + c * Math.PI * 2); ctx.stroke();
+        ctx.restore();
+      }
+      // the way down teaches itself: BEGIN at rest, STEP IN ▾ at the brink
+      const atBrink = tc.atBrink && !tc.jump && !tc.sunk;
+      label(atBrink ? 'STEP IN ▾' : 'BEGIN', tc.pit.x, tc.pit.y - 92, '#ffd86a', atBrink);
       label(`SANCTUM ◆${this.meta.souls || 0}`, tc.brazier.x, tc.brazier.y - 58, '#c89aff', tc.prompt === 'sanctum');
       label('THE BARGAIN', tc.banner.x, tc.banner.y - 102, '#e08a7a', tc.prompt === 'prologue');
     }
@@ -1736,41 +1729,11 @@ export class Game {
     }
   }
 
-  // The pit as a PIT: a jagged torn mouth (rim baked into the floor), a throat
-  // of black falling to a deep ember glow, and sparks drifting up out of it.
+  // The title pit is the same torn mouth as everywhere else.
   _drawPitMouth(ctx, tc, t) {
     const d = tc.pit, k = this.titleKnight;
     const near = k && !tc.sunk ? Math.max(0, 1 - Math.hypot(k.x - d.x, k.y - d.y) / 180) : 0.4;
-    ctx.save();
-    ctx.beginPath();
-    tc.pitRim.forEach(([x2, y2], i) => (i ? ctx.lineTo(x2, y2) : ctx.moveTo(x2, y2)));
-    ctx.closePath();
-    const vg = ctx.createLinearGradient(0, d.y - 48, 0, d.y + 44);
-    vg.addColorStop(0, '#020108');
-    vg.addColorStop(0.55, '#0a0306');
-    vg.addColorStop(1, '#2e0c06');
-    ctx.fillStyle = vg; ctx.fill();
-    ctx.clip();
-    // a ledge of stone catching light just inside the rim — the depth read
-    ctx.strokeStyle = 'rgba(200,190,230,0.10)'; ctx.lineWidth = 2;
-    ctx.beginPath();
-    tc.pitRim.forEach(([x2, y2], i) => (i ? ctx.lineTo(x2, y2 - 5) : ctx.moveTo(x2, y2 - 5)));
-    ctx.closePath(); ctx.stroke();
-    // the ember glow far below, swelling as the knight draws near
-    const eg = ctx.createRadialGradient(d.x, d.y + 30, 2, d.x, d.y + 30, 66);
-    eg.addColorStop(0, `rgba(255,110,40,${0.26 + 0.22 * near + 0.07 * Math.sin(t * 2.4)})`);
-    eg.addColorStop(1, 'rgba(120,30,8,0)');
-    ctx.fillStyle = eg; ctx.fillRect(d.x - 84, d.y - 30, 168, 84);
-    // sparks rising out of the throat
-    for (let i = 0; i < 8; i++) {
-      const ph = (t * 0.4 + i * 0.125) % 1;
-      const ex = d.x + Math.sin(t * 1.3 + i * 2.4) * (34 - ph * 12);
-      const ey = d.y + 26 - ph * 60;
-      ctx.globalAlpha = (1 - ph) * (0.4 + 0.6 * near);
-      ctx.fillStyle = i % 2 ? '#ff9a4a' : '#ffd36b';
-      ctx.fillRect(ex, ey, 2, 2);
-    }
-    ctx.restore(); ctx.globalAlpha = 1;
+    this._drawTornPit(ctx, d.x, d.y, t, near, tc.pitRim);
   }
 
   // The cold open: the title lifts away and the knight walks on down the
@@ -4233,7 +4196,7 @@ export class Game {
     p.update(dt, this.input, this);
     // the descent pit is solid — you can stand at its rim, but not on the mouth
     {
-      const d = this.camp.door, erx = 54, ery = 52, ecx = d.x, ecy = d.y - 6;
+      const d = this.camp.door, erx = 84, ery = 48, ecx = d.x, ecy = d.y;
       const nx = (p.x - ecx) / erx, ny = (p.y - ecy) / ery, dl = Math.hypot(nx, ny);
       if (dl < 1 && dl > 1e-4) { p.x = ecx + (nx / dl) * erx; p.y = ecy + (ny / dl) * ery; }
     }

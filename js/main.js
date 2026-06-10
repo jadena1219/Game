@@ -82,11 +82,8 @@ const ui = {
     const b = document.getElementById('camp-prompt');
     if (!kind) { b.classList.add('hidden'); b.onclick = null; return; }
     b.classList.remove('hidden');
-    if (kind === 'begin') {
-      b.innerHTML = '⚔&nbsp; Begin the Stand';
-      b.className = 'door big';
-      b.onclick = () => { Sound.unlock(); b.classList.add('hidden'); game.titleBegin(); };
-    } else if (kind === 'sanctum') {
+    // (BEGIN is no button — you walk into the pit. Only the side choices prompt.)
+    if (kind === 'sanctum') {
       b.innerHTML = `The Sanctum &middot; <span class="soul-dot small"></span><span class="num">${souls || 0}</span>`;
       b.className = 'sanctum';
       b.onclick = () => { Sound.unlock(); Sound.play('ui'); b.classList.add('hidden'); ui.showSanctum(game); };

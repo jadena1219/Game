@@ -37,19 +37,19 @@
       "scale": 1.12
     },
     "bomber": {
-      "file": "bomber.png",
+      "file": "bomber2.png",
       "scale": 0.92
     },
     "skeleton": {
-      "file": "skeleton.png",
+      "file": "skeleton2.png",
       "scale": 1
     },
     "imp": {
-      "file": "imp.png",
+      "file": "imp2.png",
       "scale": 0.72
     },
     "mage": {
-      "file": "mage.png",
+      "file": "mage2.png",
       "scale": 1
     },
     "sorcerer": {
@@ -57,7 +57,7 @@
       "scale": 1
     },
     "ogre": {
-      "file": "ogre.png",
+      "file": "ogre2.png",
       "scale": 1.5
     },
     "miniboss": {

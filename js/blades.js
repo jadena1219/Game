@@ -9,6 +9,7 @@ export const BLADE_MILESTONES = [5, 10, 15];
 export const BLADES = [
   {
     id: 'ember', name: 'Emberbrand', color: '#ff7a2a', element: 'FIRE',
+    tag: 'sets foes ABLAZE',
     style: 'AGGRESSION — light them up, watch them burn',
     pips: { fer: 5, ctl: 2, tmp: 3 },
     flavor: "Forged in a dragon's gullet; it never truly cools.",
@@ -24,6 +25,7 @@ export const BLADES = [
   },
   {
     id: 'frost', name: 'Frostfang', color: '#8fd6ff', element: 'FROST',
+    tag: 'FREEZE, then SHATTER',
     style: 'CONTROL — chill, freeze, then shatter',
     pips: { fer: 3, ctl: 5, tmp: 2 },
     flavor: 'Quenched in a lake that has never thawed.',
@@ -39,6 +41,7 @@ export const BLADES = [
   },
   {
     id: 'storm', name: 'Stormedge', color: '#b9a6ff', element: 'STORM',
+    tag: 'ARCS chain lightning',
     style: 'TEMPO — chains, crits, momentum',
     pips: { fer: 4, ctl: 2, tmp: 5 },
     flavor: 'A caged tempest, loosed with every swing.',

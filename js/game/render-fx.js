@@ -563,7 +563,7 @@ export const renderFxMethods = {
   _drawDamage(ctx, fx) {
     const p = fx.t / fx.dur, a = 1 - p * p;
     const pop = p < 0.16 ? p / 0.16 : 1;                 // snap up on appear, then settle
-    const scale = (fx.big ? 1.5 : 1) * (0.55 + 0.5 * pop) * (fx.big ? 1 + 0.12 * (1 - pop) : 1);
+    const scale = (fx.mag || 1) * (fx.big ? 1.5 : 1) * (0.55 + 0.5 * pop) * (fx.big ? 1 + 0.12 * (1 - pop) : 1);
     ctx.save();
     ctx.globalAlpha = Math.max(0, a);
     ctx.translate(fx.x, fx.y); ctx.scale(scale, scale);

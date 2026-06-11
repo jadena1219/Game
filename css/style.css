@@ -28,6 +28,9 @@ html, body {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   background: #15101f;
+  /* a gilded blade-point instead of the OS arrow — the desktop never breaks
+     the fiction. (Not a crosshair: attacks are not mouse-aimed.) */
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><path d="M2 1 L7 2 L15 10 L12 13 L4 5 Z" fill="%23e9c84a" stroke="%23241a06" stroke-width="1.4"/><path d="M11 14 L14 11 L16 13 L13 16 Z" fill="%238a6a28" stroke="%23241a06" stroke-width="1"/><path d="M14 14.5 L18 18.5" stroke="%23241a06" stroke-width="2.6" stroke-linecap="round"/><path d="M14 14.5 L18 18.5" stroke="%23b08a3a" stroke-width="1.2" stroke-linecap="round"/></svg>') 2 1, auto;
 }
 
 /* slash-wipe transition layer (sits above the menus) */

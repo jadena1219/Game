@@ -168,9 +168,9 @@ export const renderMethods = {
       const maxW = this.vw * 0.92, tw = ctx.measureText(fx.text).width;
       if (tw > maxW) { size = Math.floor(size * maxW / tw); ctx.font = `bold ${size}px "Silkscreen", sans-serif`; }
       ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,0.65)';
-      ctx.strokeText(fx.text, this.vw / 2, this.vh * 0.32);
+      ctx.strokeText(fx.text, this.vw / 2, this.vh * 0.22);
       ctx.fillStyle = '#ffdd6a';
-      ctx.fillText(fx.text, this.vw / 2, this.vh * 0.32);
+      ctx.fillText(fx.text, this.vw / 2, this.vh * 0.22);
       ctx.restore();
     }
 

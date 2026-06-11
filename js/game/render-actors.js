@@ -20,6 +20,23 @@ export const renderActorsMethods = {
       ctx.beginPath(); ctx.ellipse(p.x, p.y + 4, 13 * (p.dashTimer > 0 ? 1.15 : 1), 4.6, 0, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
     }
+    // THE ANCHOR: a quiet ring of bladelight at his feet, always — and it
+    // BRIGHTENS as the crowd closes in, so the one frame you most need to find
+    // him (buried in a swarm) is exactly the frame he glows hardest.
+    if (!p.dead && this.state === 'playing' && p.blade) {
+      const col = bladeById(p.blade).color;
+      const press = Math.min(1, this.enemiesInRadius(p.x, p.y, 130).length / 7);
+      const a = 0.11 + 0.16 * press + 0.03 * Math.sin(this.time * 2.6);
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      const ag = ctx.createRadialGradient(p.x, p.y + 2, 3, p.x, p.y + 2, 24 + press * 7);
+      ag.addColorStop(0, this._rgba(col, a)); ag.addColorStop(1, this._rgba(col, 0));
+      ctx.fillStyle = ag;
+      ctx.beginPath(); ctx.ellipse(p.x, p.y + 2, 24 + press * 7, (24 + press * 7) * 0.45, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 0.35 + 0.45 * press;
+      ctx.strokeStyle = this._rgba(col, 0.5); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.ellipse(p.x, p.y + 3, 16, 6.4, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore(); ctx.globalAlpha = 1;
+    }
     // Fury charged: the knight is BLESSED — a soft holy halo + a thin glowing
     // gold rim traced around the body (a real silhouette outline, not a square).
     if (this.furyReady && this.state === 'playing') {
@@ -376,7 +393,9 @@ export const renderActorsMethods = {
 
   _drawProjectile(ctx, pr) {
     ctx.save();
-    const col = pr.boss ? '#ff7a2a' : '#b06bff';
+    // OWNERSHIP RULE: hostile shots live in the red family (boss ember-orange,
+    // mage blood-rose); the player's storm keeps violet-white to itself
+    const col = pr.boss ? '#ff7a2a' : '#ff4d6e';
     const glow = ctx.createRadialGradient(pr.x, pr.y, 0, pr.x, pr.y, pr.r * 2.4);
     glow.addColorStop(0, col);
     glow.addColorStop(1, 'rgba(0,0,0,0)');

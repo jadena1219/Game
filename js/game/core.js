@@ -309,6 +309,8 @@ export class Game {
         if (p.parryT > 0 && !p.dead) { this._perfectDodge(e.x, e.y - e.r * 0.4); continue; }
         if (p.takeHit(e.cdmg || e.damage, this._foeName(e))) {
           this.shake = Math.max(this.shake, 6);
+          this.hitStop = Math.max(this.hitStop, 0.07);   // YOUR pain has weight too
+          this.flashScreen = Math.max(this.flashScreen, 0.07); this.flashCol = '#7a0e12';
           if (e.elite === 'icy' || e.husk === 'frost') p.slowT = 1.3;   // Frostbound chills you
           if (e.type === 'bomber') { e.dead = true; this._explodeEnemy(e); } // detonates on contact
         }
@@ -320,7 +322,11 @@ export class Game {
       const dx = p.x - pr.x, dy = p.y - pr.y;
       if (Math.hypot(dx, dy) < p.r + pr.r) {
         if (p.parryT > 0 && !p.dead) { pr.dead = true; this._spark(pr.x, pr.y); this._perfectDodge(pr.x, pr.y); continue; }
-        if (p.takeHit(pr.dmg * (p.mods.projDamageMult || 1), pr.srcName || 'a dark bolt')) this.shake = 5;
+        if (p.takeHit(pr.dmg * (p.mods.projDamageMult || 1), pr.srcName || 'a dark bolt')) {
+          this.shake = 5;
+          this.hitStop = Math.max(this.hitStop, 0.06);
+          this.flashScreen = Math.max(this.flashScreen, 0.06); this.flashCol = '#7a0e12';
+        }
         pr.dead = true;
       }
     }

@@ -152,6 +152,14 @@ export const shrineMethods = {
         ctx.font = `bold ${isNear ? 13 : 11}px "Silkscreen", sans-serif`;
         ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.85)';
         ctx.strokeText(bd.name, s.x, s.y + 64); ctx.fillStyle = bd.color; ctx.fillText(bd.name, s.x, s.y + 64);
+        // what it DOES, readable from the door — the full signature still
+        // unfurls at the bottom when you walk close
+        if (bd.tag) {
+          ctx.font = '8px "Silkscreen", sans-serif';
+          ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+          ctx.strokeText(bd.tag, s.x, s.y + 78);
+          ctx.fillStyle = 'rgba(215,205,228,0.92)'; ctx.fillText(bd.tag, s.x, s.y + 78);
+        }
       }
       const n = sh.near;
       if (n) {                                            // the near blade explains itself

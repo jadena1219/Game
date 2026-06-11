@@ -13,6 +13,7 @@ export const fxMethods = {
   // review footage caught three of them piled into the same pixels.
   addEffect(fx) {
     if (fx.kind === 'banner') {
+      fx.dur *= 0.85;            // banners announce, then get OUT of the way
       const q = this.bannerQ || (this.bannerQ = []);
       if ((this.activeBanner && this.activeBanner.text === fx.text) ||
           q.some((b) => b.text === fx.text)) return;
@@ -34,10 +35,38 @@ export const fxMethods = {
   },
 
 
+  // Damage numbers speak a COLOR LANGUAGE: white = steel, gold = crit/ult,
+  // orange = burn, ice-blue = frost, violet = storm, pale blue = other.
+  // Rapid hits on the same spot MERGE into one growing number, and the pool is
+  // capped so a packed swarm reads as punctuation, not porridge.
   spawnDamageNumber(x, y, amount, source) {
     const big = source === 'ultimate';   // crits & the ultimate land BIG and gold
-    const color = source === 'sword' ? '#ffffff' : source === 'ultimate' ? '#ffd36b' : '#bfe3ff';
-    this.effects.push({ kind: 'dmg', x: x + (Math.random() - 0.5) * 10, y, text: '' + amount,
+    const color = source === 'sword' ? '#ffffff' : source === 'ultimate' ? '#ffd36b'
+      : source === 'burn' ? '#ff9a4a' : source === 'frost' ? '#aee8ff'
+      : source === 'storm' ? '#c9b8ff' : '#bfe3ff';
+    // merge: a fresh number landing within 18px of a young same-colored one
+    // adds into it instead of stacking text on text
+    for (let i = this.effects.length - 1, seen = 0; i >= 0 && seen < 12; i--) {
+      const fx = this.effects[i];
+      if (fx.kind !== 'dmg') continue;
+      seen++;
+      if (fx.color === color && fx.big === big && fx.t < 0.22 &&
+          Math.abs(fx.x - x) < 18 && Math.abs(fx.y - y) < 16) {
+        const sum = (fx.val || parseInt(fx.text, 10) || 0) + amount;
+        fx.val = sum; fx.text = '' + sum; fx.t = Math.min(fx.t, 0.1);
+        fx.mag = Math.min(1.6, 0.85 + sum / 130);
+        return;
+      }
+    }
+    // cap: past 26 live numbers, the oldest small one yields the stage
+    let live = 0, oldest = -1;
+    for (let i = 0; i < this.effects.length; i++) {
+      const fx = this.effects[i];
+      if (fx.kind === 'dmg') { live++; if (oldest < 0 && !fx.big) oldest = i; }
+    }
+    if (live >= 26 && oldest >= 0) this.effects.splice(oldest, 1);
+    this.effects.push({ kind: 'dmg', x: x + (Math.random() - 0.5) * 12, y: y + (Math.random() - 0.5) * 5,
+      text: '' + amount, val: amount, mag: Math.min(1.6, 0.85 + amount / 130),
       vy: big ? -56 : -42, color, big, t: 0, dur: big ? 0.8 : 0.6 });
   },
 

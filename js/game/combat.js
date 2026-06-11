@@ -28,7 +28,7 @@ export const combatMethods = {
       const t = this.nearestEnemy(e.x, e.y, 150, new Set([e]));
       if (t) {
         this.addEffect({ kind: 'bolt', pts: [{ x: e.x, y: e.y }, { x: t.x, y: t.y }], t: 0, dur: 0.16 });
-        this.hitEnemy(t, dmg * 0.5, 0, 0, 'ability');   // 'ability' source won't re-proc
+        this.hitEnemy(t, dmg * 0.5, 0, 0, 'storm');   // non-'sword' source won't re-proc
       }
     }
   },
@@ -81,7 +81,7 @@ export const combatMethods = {
         this.addEffect({ kind: 'bolt', pts: [{ x: from.x, y: from.y }, { x: t.x, y: t.y }], t: 0, dur: 0.16 });
         let cd = dmg * 0.5; if (up.has('storm_crit') && Math.random() < 0.22) cd *= 3;
         if (up.has('storm_stun') && !t.boss) t.frozenT = Math.max(t.frozenT, 0.5);
-        this.hitEnemy(t, cd, 0, 0, 'ability'); from = t;
+        this.hitEnemy(t, cd, 0, 0, 'storm'); from = t;
       }
       if (up.has('storm_build')) { p.bladeCharge++; if (p.bladeCharge >= 12) { p.bladeCharge = 0; this._stormNova(); } }
     }
@@ -94,10 +94,10 @@ export const combatMethods = {
     this.addEffect({ kind: 'boom', x: e.x, y: e.y, r: e.r + 18, color: '#bfe9ff', t: 0, dur: 0.3 });
     this._gib(e.x, e.y - e.r * 0.5, '#cdeeff', 6, 120, { size: 2 });
     Sound.play('crit', { vol: 0.5 });
-    this.hitEnemy(e, bonus, 0, 0, 'ability');
+    this.hitEnemy(e, bonus, 0, 0, 'frost');
     if (p.bladeUp.has('frost_spread')) for (const o of this.enemiesInRadius(e.x, e.y, 72)) { if (o !== e && !o.boss) o.applySlow(1.4); }
     if (p.bladeUp.has('frost_chain')) for (const o of this.enemiesInRadius(e.x, e.y, 90)) {
-      if (o !== e && o.frozenT > 0) { o.frozenT = 0; this.addEffect({ kind: 'boom', x: o.x, y: o.y, r: o.r + 12, color: '#bfe9ff', t: 0, dur: 0.25 }); this.hitEnemy(o, bonus * 0.7, 0, 0, 'ability'); }
+      if (o !== e && o.frozenT > 0) { o.frozenT = 0; this.addEffect({ kind: 'boom', x: o.x, y: o.y, r: o.r + 12, color: '#bfe9ff', t: 0, dur: 0.25 }); this.hitEnemy(o, bonus * 0.7, 0, 0, 'frost'); }
     }
   },
 
@@ -106,7 +106,7 @@ export const combatMethods = {
     const p = this.player, R = 120, dmg = 40 * p.mods.abilityDmgMult;
     this.addEffect({ kind: 'boom', x: p.x, y: p.y, r: R, color: '#b9a6ff', t: 0, dur: 0.34 });
     Sound.play('crit', { vol: 0.6 }); this.shake = Math.max(this.shake, 5);
-    for (const o of this.enemiesInRadius(p.x, p.y, R)) { const a = Math.atan2(o.y - p.y, o.x - p.x); this.hitEnemy(o, dmg, Math.cos(a) * 120, Math.sin(a) * 120, 'ability'); }
+    for (const o of this.enemiesInRadius(p.x, p.y, R)) { const a = Math.atan2(o.y - p.y, o.x - p.x); this.hitEnemy(o, dmg, Math.cos(a) * 120, Math.sin(a) * 120, 'storm'); }
   },
 
 
@@ -124,7 +124,7 @@ export const combatMethods = {
         let tick = e.burnDmg;
         if (p.bladeUp.has('ember_exec') && !e.boss && e.hp < e.maxHP * 0.4) tick = e.hp + 1;   // Immolation
         if (p.bladeUp.has('ember_soul')) p.fury = Math.min(p.furyMax, p.fury + 1.0);   // Kindled Fury
-        this.hitEnemy(e, tick, 0, 0, 'ability');
+        this.hitEnemy(e, tick, 0, 0, 'burn');
       }
     }
   },
@@ -171,7 +171,7 @@ export const combatMethods = {
       for (const o of this.enemiesInRadius(e.x, e.y, R)) {
         if (o === e) continue;
         const a = Math.atan2(o.y - e.y, o.x - e.x);
-        this.hitEnemy(o, dmg, Math.cos(a) * 80, Math.sin(a) * 80, 'ability');
+        this.hitEnemy(o, dmg, Math.cos(a) * 80, Math.sin(a) * 80, 'burn');
       }
       this.addEffect({ kind: 'boom', x: e.x, y: e.y, r: R, t: 0, dur: 0.3 });
       this._inEmber = false;
@@ -181,7 +181,7 @@ export const combatMethods = {
       if (p.bladeUp.has('ember_pyre') && !this._inPyre) {
         this._inPyre = true;
         const R = 70, dmg = 22 * p.mods.abilityDmgMult;
-        for (const o of this.enemiesInRadius(e.x, e.y, R)) { if (o === e) continue; const a = Math.atan2(o.y - e.y, o.x - e.x); this.hitEnemy(o, dmg, Math.cos(a) * 90, Math.sin(a) * 90, 'ability'); }
+        for (const o of this.enemiesInRadius(e.x, e.y, R)) { if (o === e) continue; const a = Math.atan2(o.y - e.y, o.x - e.x); this.hitEnemy(o, dmg, Math.cos(a) * 90, Math.sin(a) * 90, 'burn'); }
         this.addEffect({ kind: 'boom', x: e.x, y: e.y, r: R, t: 0, dur: 0.32 }); Sound.play('explode', { vol: 0.5 });
         this._inPyre = false;
       }

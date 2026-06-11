@@ -100,7 +100,7 @@ export class Enemy {
   takeHit(dmg, kx, ky) {
     if (this.invuln) { this.flash = 0.1; return; }   // mid phase-shift: blade glances off
     this.hp -= dmg * (1 - this.armor);
-    this.flash = 0.12;
+    this.flash = 0.09;
     this.kbx += kx; this.kby += ky;
     if (this.hp <= 0) { this.hp = 0; this.dead = true; }
   }

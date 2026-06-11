@@ -58,6 +58,9 @@ export const spawnMethods = {
       const type = this.spawnQueue.shift();
       const pos = this._spawnPos();   // bosses also stride in from off-screen
       const e = new Enemy(type, pos[0], pos[1], this.level);
+      // queue-spawned revenants (the Bleeding court) are SHADES: dark-tinted so
+      // a knight-sprite duelist can never be mistaken for the player
+      if (type === 'revenant') e.shade = true;
       // empowered "elite" foe — forced by an event ambush, else rare & depth-scaled
       if (!e.boss) {
         if (this.forceElite > 0) { this.forceElite--; this._eliteify(e); }

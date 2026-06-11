@@ -166,7 +166,7 @@ class GameAudio {
     if (!this.ready || this.muted) return;
     // throttle the spammy combat sounds so swarm-kills / coin piles don't machine-gun
     const TH = { hit: 28, crit: 28, die_chaser: 45, die_swarmer: 45, die_caster: 45, die_tank: 60, die: 45, gold: 45, hurt: 80,
-      hit_ember: 60, hit_frost: 60, hit_storm: 60 };
+      hit_ember: 60, hit_frost: 60, hit_storm: 60, cleave: 110 };
     if (TH[name]) {
       const now = performance.now(); this._t = this._t || {};
       if (now - (this._t[name] || 0) < TH[name]) return;
@@ -213,6 +213,12 @@ class GameAudio {
       case 'hit_storm': {               // a snapping jolt
         this._noise({ filter: 'bandpass', cutoff: R(2800, 3600), q: 4, dur: 0.06, gain: 0.12 * v });
         this._tone({ type: 'square', f0: R(700, 900), f1: 200, exp: true, dur: 0.07, gain: 0.05 * v });
+        break;
+      }
+      case 'cleave': {                  // three+ bodies on one cut: a deep, rolling thud
+        this._tone({ type: 'sine', f0: R(130, 150), f1: 52, exp: true, dur: 0.22, gain: 0.30 * v });
+        this._noise({ filter: 'lowpass', cutoff: 420, dur: 0.16, gain: 0.16 * v });
+        this._tone({ type: 'triangle', f0: R(70, 85), f1: 40, exp: true, dur: 0.3, gain: 0.12 * v });
         break;
       }
       case 'hit': {                     // a soft, meaty impact — a dull thud, no metallic shriek

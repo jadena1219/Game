@@ -140,14 +140,14 @@ export const LEVELS = [
   { swarmer: 18, caster: 5, tank: 4, bomber: 6 },             // 8
   { chaser: 16, swarmer: 14, caster: 6, tank: 4, bomber: 6 }, // 9
   { miniboss: 1, chaser: 10, swarmer: 8 },                    // 10 — mini-boss + escort
-  { chaser: 16, swarmer: 14, caster: 6, bomber: 6 },          // 11
+  { caster: 12, swarmer: 12, bomber: 4 },                     // 11 — the Vault's warlocks: a firing line
   { swarmer: 14, caster: 7, tank: 9, bomber: 7 },             // 12 — the Vault's wardens: a tank gauntlet
   { chaser: 18, caster: 7, tank: 5, bomber: 7 },              // 13
   { swarmer: 22, caster: 8, tank: 6, bomber: 8 },             // 14
-  { chaser: 18, swarmer: 18, caster: 8, tank: 6, bomber: 8 }, // 15
+  { bomber: 16, swarmer: 16, tank: 4 },                       // 15 — the Drowned powder-hall: everything explodes
   { swarmer: 28, caster: 10, tank: 7, bomber: 9 },            // 16 — the flood: pure swarm pressure
   { chaser: 20, swarmer: 18, caster: 9, tank: 7, bomber: 9 }, // 17
-  { swarmer: 30, caster: 10, tank: 8, bomber: 10 },           // 18
+  { revenant: 3, chaser: 16, caster: 8, tank: 4 },            // 18 — the Bleeding court: three raised duelists
   { chaser: 22, swarmer: 22, caster: 10, tank: 9, bomber: 11 }, // 19 — everything the dark has left
   { boss: 1, caster: 5, tank: 4, bomber: 5 },                 // 20 — final boss
 ];

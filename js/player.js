@@ -112,6 +112,12 @@ export class Player {
         this.faceLeft = this.fx < 0;
       }
     }
+    // swing momentum: the cut carries him forward a step (set in onSwing)
+    if (this.lungeT > 0) {
+      this.lungeT -= dt;
+      this.x += this.lungeVx * dt; this.y += this.lungeVy * dt;
+      this.lungeVx *= 0.86; this.lungeVy *= 0.86;
+    }
     // clamp to arena
     this.x = Math.max(game.bounds.minX, Math.min(game.bounds.maxX, this.x));
     this.y = Math.max(game.bounds.minY, Math.min(game.bounds.maxY, this.y));

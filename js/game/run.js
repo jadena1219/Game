@@ -107,7 +107,11 @@ export const runMethods = {
     this._buildQueue(level);
     // roll for a named elite "herald" on normal floors (never on boss floors)
     const isBoss = !!(LEVELS[level - 1].boss || LEVELS[level - 1].miniboss);
-    this._namedDef = (!isBoss && level >= 3 && Math.random() < 0.55) ? NAMED_FOES[(Math.random() * NAMED_FOES.length) | 0] : null;
+    // floors 13 / 16 / 18 are AUTHORED: a named herald always holds the floor,
+    // so the long back half has faces, not just bigger numbers
+    const setPiece = level === 13 || level === 16 || level === 18;
+    this._namedDef = (!isBoss && (setPiece || (level >= 3 && Math.random() < 0.55)))
+      ? NAMED_FOES[(Math.random() * NAMED_FOES.length) | 0] : null;
     this._namedTimer = 5 + Math.random() * 7;
     this.namedToast = null;
     // your previous self waits where you fell — the Lord raised what you left

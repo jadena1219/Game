@@ -147,6 +147,14 @@ export const combatMethods = {
     for (let i = COMBO_TIERS.length - 1; i >= 0; i--) {
       if (this.combo >= COMBO_TIERS[i].at && this._comboTier < i + 1) {
         this._comboTier = i + 1;
+        this._lightSurgeT = 0.9;                        // the tier DETONATES light
+        // teach the bargain exactly once, the first time it pays out
+        if (i === 0 && !this._lightTaught) {
+          this._lightTaught = true;
+          let seen = false;
+          try { seen = localStorage.getItem('kls_taught_light') === '1'; localStorage.setItem('kls_taught_light', '1'); } catch (e) { /* ignore */ }
+          if (!seen) this.addEffect({ kind: 'banner', text: 'THE STREAK FEEDS THE LIGHT', t: 0, dur: 1.7 });
+        }
         this.addEffect({ kind: 'banner', text: COMBO_TIERS[i].name + '!', t: 0, dur: 1.1 });
         Sound.play('combo', { tier: i + 1 });
         this.zoom = Math.max(this.zoom, 0.7);
@@ -373,6 +381,13 @@ export const combatMethods = {
   // ---------- swing ----------
   onSwing(player) {
     this.shake = Math.max(this.shake, 3.5);
+    // the cut CARRIES him: a ~24px lunge along the swing so every strike
+    // commits the body instead of planting the feet (decays in player.update)
+    if (player.dashTimer <= 0) {
+      player.lungeT = 0.12;
+      player.lungeVx = Math.cos(player.facingAngle) * 230;
+      player.lungeVy = Math.sin(player.facingAngle) * 230;
+    }
     // each blade sounds like its element (fire roars, ice shings, storm rips)
     Sound.play(player.blade ? 'swing_' + player.blade : 'swing');
     const style = (player.hero && player.hero.swingStyle) || 'sweep';
@@ -407,6 +422,7 @@ export const combatMethods = {
 
   _applySwingDamage() {
     const p = this.player;
+    const struckBefore = p.hitThisSwing.size;
     if (p.swingTimer <= 0) return;
     const kbStrength = p.hero.knockback;
     const missing = 1 - p.hp / p.maxHP;
@@ -471,6 +487,8 @@ export const combatMethods = {
         }
       }
     }
+    // a swing that bites THREE or more bodies lands as a CLEAVE — one heavy thud
+    if (struckBefore < 3 && p.hitThisSwing.size >= 3) Sound.play('cleave', { vol: 0.9 });
     // deflect projectiles caught in the arc
     for (const pr of this.projectiles) {
       const dx = pr.x - p.x, dy = pr.y - p.y;

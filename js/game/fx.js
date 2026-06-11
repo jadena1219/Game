@@ -421,7 +421,10 @@ export const fxMethods = {
       if (this._hpWas != null && hp < this._hpWas - 0.01) {
         this.hpHitT = 0.32; Sound.play('hurt'); this._buzz(60);
         // pain breaks the rhythm: taking a hit ends the kill-streak
-        if (this.state === 'playing' && this.combo > 0) { this.combo = 0; this.comboT = 0; this._comboTier = 0; }
+        if (this.state === 'playing' && this.combo > 0) {
+          if (this.combo >= 8) this._lightDipT = 0.8;   // the dark takes its bite back
+          this.combo = 0; this.comboT = 0; this._comboTier = 0;
+        }
       }
       this._hpWas = hp;
       this.hpDisplay += (hp - this.hpDisplay) * Math.min(1, dt * 14);
@@ -432,7 +435,16 @@ export const fxMethods = {
     if (this.hpHitT > 0) this.hpHitT -= dt;
     if (this.goldPop > 0) this.goldPop -= dt * 4;
     if (this.comboPop > 0) this.comboPop -= dt * 4;
-    if (this.comboT > 0) { this.comboT -= dt; if (this.comboT <= 0) { this.combo = 0; this._comboTier = 0; } }
+    if (this.comboT > 0) { this.comboT -= dt; if (this.comboT <= 0) {
+      if (this.combo >= 8) this._lightDipT = 0.8;       // a lapsed streak dims the world too
+      this.combo = 0; this._comboTier = 0;
+    } }
+    // light surge / dip decay + the camera's combo breathing (smoothed so a
+    // broken streak exhales instead of popping)
+    if (this._lightSurgeT > 0) this._lightSurgeT -= dt;
+    if (this._lightDipT > 0) this._lightDipT -= dt;
+    const czTarget = this.state === 'playing' ? Math.min(0.05, (this.combo || 0) * 0.003) : 0;
+    this._comboZoomS = (this._comboZoomS || 0) + (czTarget - (this._comboZoomS || 0)) * Math.min(1, dt * 3.5);
     if (this.zoom > 0) this.zoom = Math.max(0, this.zoom - dt * 3.2);   // zoom-punch eases back out
     // floating embers (used for death fx, title & victory celebration) — spawned
     // in world space around the current view

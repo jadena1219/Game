@@ -31,7 +31,7 @@ export const renderMethods = {
     ctx.clearRect(0, 0, this.vw, this.vh);
     // zoom-punch: big kills/crits/perfect dodges shove the camera in for a beat.
     // Wraps the world AND the lighting overlays so they stay registered.
-    const zp = 1 + 0.05 * Math.min(1, this.zoom || 0);
+    const zp = 1 + 0.05 * Math.min(1, this.zoom || 0) + (this._comboZoomS || 0);
     const zoomed = zp > 1.001;
     if (zoomed) {
       ctx.save();
@@ -259,7 +259,13 @@ export const renderMethods = {
         col = '#c9b8ff';
         r *= 1 + 0.07 * Math.sin(t * 4.4);
       }
-      r += Math.min(70, (this.combo || 0) * 2.5);            // the streak feeds the light
+      // THE STREAK FEEDS THE LIGHT — this is the game's core bargain, writ in
+      // photons: every kill on the chain pushes the darkness back further…
+      r += Math.min(110, (this.combo || 0) * 4);
+      // …each combo TIER detonates a surge of light…
+      if (this._lightSurgeT > 0) r *= 1 + 0.38 * (this._lightSurgeT / 0.9);
+      // …and a broken streak lets the dark RUSH BACK IN for a beat
+      if (this._lightDipT > 0) r *= 1 - 0.28 * (this._lightDipT / 0.8);
       if (p.swingTimer > 0) r *= 1.12;                       // the swing flares
       if (p.hp < p.maxHP * 0.3 && !p.dead) {                 // near death, it gutters
         r *= 0.72 + 0.06 * Math.sin(t * 9) + 0.03 * Math.sin(t * 23);

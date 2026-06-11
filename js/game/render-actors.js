@@ -324,7 +324,7 @@ export const renderActorsMethods = {
       : e.frozenT > 0 ? { color: '#9fd8ff', a: 0.5 }
       : e.burnT > 0 ? { color: '#ff7a2a', a: 0.32 + 0.12 * Math.sin(this.time * 18) }
       : (e.state === 'windup' || e.state === 'special' ? { color: '#ff4040', a: 0.5 }
-      : (e.husk ? { color: '#16102a', a: 0.5 }            // the Revenant: a shade of what you were
+      : ((e.husk || e.shade) ? { color: '#16102a', a: 0.5 } // the Revenant / raised duelists: shades, never mistaken for YOU
       : (e.ravenous ? { color: '#ff4040', a: 0.16 + 0.1 * Math.sin(this.time * 9) }   // stragglers run hot
       : (e.elite ? { color: e.affix.color, a: 0.16 } : null))));
     // BLADELIGHT: outside the light, foes live as silhouettes with burning eyes.

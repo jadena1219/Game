@@ -1,3 +1,5 @@
+import { rngFrom } from './utils.js';
+
 // Dark dungeon biomes — the descent. BLADELIGHT: the world renders genuinely
 // dark (`dark` is the shadow strength), and what you see is carved out by light
 // — your blade first, then the braziers. Each act shifts the tint & hazards,
@@ -5,9 +7,6 @@
 // Boss halls invert the rule (clamped bright in game.js) — the Lord keeps the
 // light the realm lost. Painters draw flagstone floors + grime.
 
-function rngFrom(seed) {
-  return () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
-}
 
 // Shared flagstone floor: tiled stone with seams, shading, cracks, then extras.
 function flagstones(g, W, H, seed, seam, extra) {

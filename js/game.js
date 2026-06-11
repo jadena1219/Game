@@ -429,6 +429,7 @@ export class Game {
     // ripple rings expanding where the water was touched
     if (this.ripples) {
       for (const r2 of this.ripples) {
+        if (r2.t < 0) continue;               // staggered ripple not born yet
         const k = r2.t / r2.dur, rr = 2 + r2.max * k;
         ctx.globalAlpha = (1 - k) * 0.5;
         ctx.strokeStyle = '#bdf0e0'; ctx.lineWidth = 1.5;
@@ -638,8 +639,34 @@ export class Game {
     // block courses on the wall
     g.strokeStyle = 'rgba(0,0,0,0.4)'; g.lineWidth = 2;
     for (let x = 0; x < W; x += 46) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, t); g.moveTo(x + 23, H - t); g.lineTo(x + 23, H); g.stroke(); }
+    // per-stone tonal variation + the dungeon weeping through its masonry
+    // (crypt walls sweat green, the keep bleeds rust, catacombs leach pale lime)
+    {
+      let seed = 9090 + W;
+      const R = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+      for (let x = 0; x < W; x += 46) {
+        const shade = (R() - 0.5) * 0.14;
+        g.fillStyle = shade > 0 ? `rgba(255,255,255,${shade})` : `rgba(0,0,0,${-shade})`;
+        g.fillRect(x + 1, 0, 44, t - 5);
+        const sh2 = (R() - 0.5) * 0.14;
+        g.fillStyle = sh2 > 0 ? `rgba(255,255,255,${sh2})` : `rgba(0,0,0,${-sh2})`;
+        g.fillRect(x + 24, H - t + 5, 44, t - 5);
+      }
+      const weep = biome.id === 'crypt' ? 'rgba(70,130,100,0.4)'
+        : biome.id === 'keep' ? 'rgba(120,50,30,0.4)' : 'rgba(170,165,150,0.28)';
+      g.fillStyle = weep;
+      for (let i = 0; i < W / 300; i++) {
+        const x = 40 + R() * (W - 80), len = 6 + R() * 14;
+        g.fillRect(x, t - 5 - len, 2, len);                       // streaking down the top wall
+        g.fillRect(40 + R() * (W - 80), H - t + 5, 2, 5 + R() * 12);
+      }
+    }
     g.fillStyle = cap;
     g.fillRect(0, t - 5, W, 5); g.fillRect(0, H - t, W, 5); g.fillRect(t - 5, 0, 5, H); g.fillRect(W - t, 0, 5, H);
+    // the cap catches the hall's light along its floor-facing edge
+    g.fillStyle = 'rgba(255,240,210,0.10)';
+    g.fillRect(0, t - 1, W, 1); g.fillRect(t - 1, 0, 1, H);
+    g.fillRect(0, H - t + 4, W, 1); g.fillRect(W - t + 4, 0, 1, H);
     // layered ambient occlusion so the floor reads as sunken below the walls —
     // a tight dark seam, then a wide soft falloff (sells depth under Bladelight)
     g.fillStyle = 'rgba(0,0,0,0.35)';
@@ -835,9 +862,11 @@ export class Game {
         ctx.globalAlpha = amb * 0.4; ctx.fillStyle = '#3a2a24'; ctx.fillRect(x | 0, y | 0, 2, 2);
       }
     } else if (sh.ambId === 'frost') {                           // BLIZZARD
-      ctx.fillStyle = `rgba(170,215,255,${0.17 * amb})`; ctx.fillRect(0, 0, W, H);
+      // a blizzard at NIGHT: a thin cold cast and dark frozen edges — the room
+      // stays a dungeon, and the white lives in the driving snow itself
+      ctx.fillStyle = `rgba(140,190,235,${0.09 * amb})`; ctx.fillRect(0, 0, W, H);
       const v = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.15, W / 2, H / 2, Math.max(W, H) * 0.7);
-      v.addColorStop(0, 'rgba(255,255,255,0)'); v.addColorStop(1, `rgba(228,243,255,${0.5 * amb})`);
+      v.addColorStop(0, 'rgba(10,20,40,0)'); v.addColorStop(1, `rgba(12,26,52,${0.5 * amb})`);
       ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
       // drifting fog bands
       for (let i = 0; i < 3; i++) {
@@ -1184,6 +1213,10 @@ export class Game {
   _drawPickup(ctx, pk) {
     const x = pk.x, y = pk.y + Math.sin((this.titleT + pk.x * 0.05) * 4) * 2;
     ctx.save();
+    // a small ground shadow that breathes opposite the hover-bob
+    const lift = pk.y - y;   // +ve when the piece floats high
+    ctx.fillStyle = `rgba(0,0,0,${(0.2 - lift * 0.02).toFixed(3)})`;
+    ctx.beginPath(); ctx.ellipse(x, pk.y + 7, Math.max(3, 4.6 - lift * 0.4), 1.8, 0, 0, Math.PI * 2); ctx.fill();
     if (pk.type === 'relic') {
       // a hovering relic gem with a halo + sparkle — unmistakably loot
       const pulse = 0.6 + 0.4 * Math.sin(this.time * 4);
@@ -1198,12 +1231,29 @@ export class Game {
       return;
     }
     if (pk.type === 'gold') {
+      // rushing toward the hero (loot vacuum): a short golden comet-tail
+      const spd = Math.hypot(pk.vx || 0, pk.vy || 0);
+      if (spd > 230) {
+        ctx.strokeStyle = 'rgba(255,222,110,0.5)'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(x, y);
+        ctx.lineTo(x - (pk.vx / spd) * 11, y - (pk.vy / spd) * 11); ctx.stroke();
+      }
       const g = ctx.createRadialGradient(x, y, 0, x, y, 11);
       g.addColorStop(0, 'rgba(255,220,90,0.5)'); g.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 11, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#caa52a'; ctx.beginPath(); ctx.arc(x, y, 4.5, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#ffe27a'; ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#fff7d0'; ctx.fillRect(x - 2, y - 2, 1, 2);
+      // a passing twinkle, so piles of coin GLINT in the dark
+      const tw = (this.time * 1.3 + pk.x * 0.37 + pk.y * 0.11) % 3;
+      if (tw < 0.3) {
+        const k = 1 - Math.abs(tw - 0.15) / 0.15;
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = `rgba(255,250,220,${(k * 0.9).toFixed(3)})`;
+        ctx.fillRect(x - 0.75, y - 2 - 4 * k, 1.5, 4 + 8 * k);
+        ctx.fillRect(x - 2 - 4 * k, y - 0.75, 4 + 8 * k, 1.5);
+        ctx.restore();
+      }
     } else { // health
       const g = ctx.createRadialGradient(x, y, 0, x, y, 13);
       g.addColorStop(0, 'rgba(90,200,96,0.5)'); g.addColorStop(1, 'rgba(0,0,0,0)');
@@ -1379,6 +1429,9 @@ export class Game {
 
   _drawSorcerer(ctx, s) {
     const t = this.camp.t;
+    // grounded like everyone else (he hovers in spirit, not in fact)
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath(); ctx.ellipse(s.x, s.y + 5, 14, 4.8, 0, 0, Math.PI * 2); ctx.fill();
     // arcane aura
     ctx.save();
     const aur = ctx.createRadialGradient(s.x, s.y - 14, 2, s.x, s.y - 14, 40);
@@ -2785,6 +2838,7 @@ export class Game {
 
     this.enemies = []; this.projectiles = []; this.allyProjectiles = []; this.effects = [];
     this.pickups = [];
+    this.decals = [];                          // a fresh floor bears no scars yet
     this.bounds = this.worldBounds;                  // restore arena bounds (camp shrinks them)
     this.cam.x = this.player.x - this.vw / 2; this.cam.y = this.player.y - this.vh / 2;
     this.spawnTimer = 0;
@@ -3213,6 +3267,88 @@ export class Game {
   }
 
   // Per-archetype death: each foe dies in its own characterful way.
+  // ---- battle decals: the floor REMEMBERS the fight ----
+  // Each kill stamps a long-lived mark (bones, scorch, rubble, a fading sigil)
+  // that slowly sinks back into the stone. Pieces are pre-rolled at stamp time
+  // so drawing is dumb-cheap; the list is capped so massacres stay light.
+  _stampDecal(x, y, kind, color) {
+    const d = this.decals || (this.decals = []);
+    const R = Math.random;
+    const pieces = [];
+    if (kind === 'bones') {
+      for (let i = 0; i < 4 + (R() * 3 | 0); i++) {
+        const a = R() * Math.PI * 2, dd = 3 + R() * 11;
+        pieces.push({ x: Math.cos(a) * dd, y: Math.sin(a) * dd * 0.55, w: 3 + R() * 4, h: 1.5, rot: R() * Math.PI, col: R() < 0.7 ? '#b9b29c' : '#8f8a78' });
+      }
+      pieces.push({ x: 0, y: 0, skull: true, col: '#b9b29c' });
+    } else if (kind === 'scorch') {
+      pieces.push({ x: 0, y: 0, ring: 9 + R() * 5, col: 'rgba(0,0,0,0.5)' });
+      for (let i = 0; i < 4; i++) { const a = R() * Math.PI * 2, dd = 5 + R() * 8;
+        pieces.push({ x: Math.cos(a) * dd, y: Math.sin(a) * dd * 0.5, w: 2, h: 1.5, rot: 0, col: '#100a08' }); }
+    } else if (kind === 'rubble') {
+      pieces.push({ x: 0, y: 1, ring: 13 + R() * 5, col: 'rgba(0,0,0,0.32)' });
+      for (let i = 0; i < 6; i++) { const a = R() * Math.PI * 2, dd = 4 + R() * 13;
+        pieces.push({ x: Math.cos(a) * dd, y: Math.sin(a) * dd * 0.5, w: 2.5 + R() * 3.5, h: 2 + R() * 2, rot: R() * Math.PI, col: R() < 0.5 ? '#544a42' : '#3c342e' }); }
+    } else if (kind === 'sigil') {
+      pieces.push({ x: 0, y: 0, sigil: 8 + R() * 3, col: color || '#7fb8e0' });
+    } else { // 'stain' — dark spatter
+      for (let i = 0; i < 3 + (R() * 3 | 0); i++) { const a = R() * Math.PI * 2, dd = R() * 9;
+        pieces.push({ x: Math.cos(a) * dd, y: Math.sin(a) * dd * 0.5, blot: 2 + R() * 3.5, col: color || '#1c0d12' }); }
+    }
+    d.push({ x, y, born: this.time, dur: 22 + Math.random() * 6, pieces });
+    if (d.length > 48) d.shift();
+  }
+
+  _drawDecals(ctx) {
+    const d = this.decals; if (!d || !d.length) return;
+    const now = this.time;
+    let w = 0;
+    for (let i = 0; i < d.length; i++) {
+      const dc = d[i];
+      const age = now - dc.born;
+      if (age >= dc.dur) continue;          // expired — compact away below
+      d[w++] = dc;
+      if (!this._inView(dc.x, dc.y, 60)) continue;
+      // full strength for the first half-life, then a slow sink into the stone
+      const k = age / dc.dur;
+      const a = k < 0.5 ? 1 : 1 - (k - 0.5) / 0.5;
+      ctx.save();
+      ctx.translate(dc.x, dc.y);
+      ctx.globalAlpha = a * 0.85;
+      for (const pc of dc.pieces) {
+        if (pc.ring) {                       // soft dark patch
+          ctx.fillStyle = pc.col;
+          ctx.beginPath(); ctx.ellipse(pc.x, pc.y, pc.ring, pc.ring * 0.45, 0, 0, Math.PI * 2); ctx.fill();
+        } else if (pc.sigil) {               // arcane ring: glows young, dies dark
+          const glow = Math.max(0, 1 - age / 3);
+          ctx.strokeStyle = pc.col; ctx.lineWidth = 1.2;
+          ctx.globalAlpha = a * (0.25 + glow * 0.6);
+          ctx.beginPath(); ctx.ellipse(pc.x, pc.y, pc.sigil, pc.sigil * 0.45, 0, 0, Math.PI * 2); ctx.stroke();
+          for (let j = 0; j < 4; j++) {
+            const aj = j * Math.PI / 2 + 0.6;
+            ctx.fillStyle = pc.col;
+            ctx.fillRect(pc.x + Math.cos(aj) * pc.sigil * 0.62 - 1, pc.y + Math.sin(aj) * pc.sigil * 0.28 - 1, 2, 2);
+          }
+          ctx.globalAlpha = a * 0.85;
+        } else if (pc.blot) {
+          ctx.fillStyle = pc.col;
+          ctx.beginPath(); ctx.ellipse(pc.x, pc.y, pc.blot, pc.blot * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+        } else if (pc.skull) {
+          ctx.fillStyle = pc.col;
+          ctx.beginPath(); ctx.arc(pc.x, pc.y - 1, 2.6, 0, Math.PI * 2); ctx.fill();
+          ctx.fillRect(pc.x - 2.6, pc.y, 5.2, 1.8);
+        } else {
+          ctx.save(); ctx.translate(pc.x, pc.y); ctx.rotate(pc.rot);
+          ctx.fillStyle = pc.col; ctx.fillRect(-pc.w / 2, -pc.h / 2, pc.w, pc.h);
+          ctx.restore();
+        }
+      }
+      ctx.restore();
+    }
+    d.length = w;
+    ctx.globalAlpha = 1;
+  }
+
   _spawnDeathFx(e) {
     const x = e.x, y = e.y, r = e.r, type = e.type;
     let style = 'collapse', dur = 0.4, tintCol = null;
@@ -3281,6 +3417,22 @@ export class Game {
         r: 1 + Math.random() * 2, life: 0, dur: 0.5 + Math.random() * 0.7,
         hue: e.boss ? '#ff5a3a' : '#cfe0ff' });
     }
+
+    // …and the floor keeps the mark. Deaths in standing water ripple instead.
+    const pd = this._puddleAt ? this._puddleAt(x, y) : null;
+    if (pd) {
+      const rip = this.ripples || (this.ripples = []);
+      for (let i = 0; i < 3 && rip.length < 26; i++) {
+        rip.push({ x: x + (Math.random() - 0.5) * 8, y: y + 3 + (Math.random() - 0.5) * 5,
+          t: -i * 0.08, dur: 0.9, max: 13 + i * 5, pd });
+      }
+    } else if (e.boss) this._stampDecal(x, y, 'rubble');
+    else if (type === 'chaser') this._stampDecal(x, y, 'bones');
+    else if (type === 'swarmer') this._stampDecal(x, y, 'stain', '#220a10');
+    else if (type === 'tank') this._stampDecal(x, y, 'rubble');
+    else if (type === 'caster') this._stampDecal(x, y, 'sigil', '#7fb8e0');
+    else if (type === 'bomber') this._stampDecal(x, y, 'scorch');
+    else this._stampDecal(x, y, 'stain');
   }
 
   _spawnEmberBurst() {
@@ -4250,6 +4402,22 @@ export class Game {
       this.input.furyTapped = false; p.fury = 0; this.furyReady = false; this._ultimate();
     } else if (this.input.furyTapped) { this.input.furyTapped = false; }
     this._dashTrail(p, sdt);
+    // footstep dust: walking kicks tiny scuffs off the dry stone (water makes
+    // its own wakes); ravenous sprinters kick harder — you SEE the surge
+    this._stepT = (this._stepT || 0) - sdt;
+    if (this._stepT <= 0) {
+      this._stepT = 0.21;
+      const dustCol = this.biome && this.biome.id === 'keep' ? '#3a2c28' : '#322c40';
+      if (p.moving && p.dashTimer <= 0 && !(this._puddleAt && this._puddleAt(p.x, p.y))) {
+        this._puff(p.x - (p.faceLeft ? -5 : 5), p.y + 2, dustCol, 1, 3, { r0: 2, r1: 6.5, dur: 0.32 });
+      }
+      for (let i = 0; i < Math.min(6, this.enemies.length); i++) {
+        const e = this.enemies[i];
+        if (e.ravenous && e.moving && !e.dead && Math.random() < 0.6 && !(this._puddleAt && this._puddleAt(e.x, e.y))) {
+          this._puff(e.x, e.y + 2, dustCol, 1, 4, { r0: 2, r1: 7, dur: 0.3 });
+        }
+      }
+    }
     this._spawn(sdt);
     // the last stragglers turn RAVENOUS — they smell you and surge, so the end
     // of a floor never decays into hide-and-seek with two slow skeletons
@@ -4693,6 +4861,7 @@ export class Game {
     this.shopOpen = false;
     this.enemies = []; this.projectiles = []; this.allyProjectiles = []; this.pickups = [];
     this.effects = [];                      // clear leftover swing arcs / damage numbers / death fx
+    this.decals = [];                       // the camp floor is swept clean
     this.hitStop = 0; this.timeScale = 1;
     this.descentJump = null; this.plunge = null; this.camDrop = 0; this.descentSink = 0;
     this.watchers = []; this.campWhisper = null;
@@ -4989,6 +5158,7 @@ export class Game {
     // baked arena, or the small camp room — one blit
     if (this.state === 'camp' && this.campBg) ctx.drawImage(this.campBg, this.cam.x, this.cam.y);
     else if (this.bg) ctx.drawImage(this.bg, 0, 0);
+    this._drawDecals(ctx);                // the floor remembers the fight
     this._drawWater(ctx);                 // the Crypt's standing water LIVES
     this._drawBrazierFlames(ctx);
     for (const pk of this.pickups) this._drawPickup(ctx, pk);
@@ -5070,6 +5240,25 @@ export class Game {
       ctx.fillStyle = this.flashCol || '#fff7d6';
       ctx.fillRect(0, 0, this.vw, this.vh);
       ctx.restore();
+    }
+
+    // LOW HP: the world itself bleeds at the edges, throbbing like a heart —
+    // a double-thump (lub-dub) that quickens as the bar empties
+    if (this.state === 'playing' && this.player && !this.player.dead) {
+      const hpf = this.player.hp / this.player.maxHP;
+      if (hpf <= 0.32) {
+        const sev = 1 - hpf / 0.32;                       // 0 at 32% … 1 at empty
+        const bpm = 3.6 + sev * 2.6, ph = this.time * bpm;
+        const thump = Math.pow(Math.max(0, Math.sin(ph)), 8) + 0.6 * Math.pow(Math.max(0, Math.sin(ph - 0.55)), 8);
+        const a = (0.2 + sev * 0.24) * (0.55 + 0.45 * thump);
+        const W = this.vw, H = this.vh;
+        ctx.save();
+        const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * (0.34 - 0.05 * thump), W / 2, H / 2, Math.max(W, H) * 0.66);
+        vg.addColorStop(0, 'rgba(120,8,10,0)');
+        vg.addColorStop(1, `rgba(150,10,12,${a.toFixed(3)})`);
+        ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+        ctx.restore();
+      }
     }
 
     // the one active banner (screen-space; the queue feeds it one at a time)
@@ -6272,6 +6461,16 @@ export class Game {
   _drawPlayer(ctx) {
     const p = this.player;
     const frame = pickFrame(p, this.time);
+    // contact shadow — the knight stands ON the stone, not over it. It thins
+    // while he dashes (skimming) and fades as he sinks into a descent.
+    if (!p.dead) {
+      const dashK = p.dashTimer > 0 ? 0.55 : 1;
+      const sink = this.descentSink > 0 ? Math.max(0, 1 - this.descentSink * 1.15) : 1;
+      ctx.save();
+      ctx.fillStyle = `rgba(0,0,0,${(0.32 * dashK * sink).toFixed(3)})`;
+      ctx.beginPath(); ctx.ellipse(p.x, p.y + 4, 13 * (p.dashTimer > 0 ? 1.15 : 1), 4.6, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
     // Fury charged: the knight is BLESSED — a soft holy halo + a thin glowing
     // gold rim traced around the body (a real silhouette outline, not a square).
     if (this.furyReady && this.state === 'playing') {
@@ -6406,6 +6605,14 @@ export class Game {
   _drawEnemy(ctx, e) {
     if (e.rising != null && e.rising < 1) { this._drawBossRise(ctx, e); return; }   // emerging from the altar
     const frame = pickFrame(e, this.time + e.x * 0.01);
+    // contact shadow FIRST, under everything — every foe stands ON the stone
+    // (bosses cast their own heavier one below). It grows in as the foe emerges.
+    if (!e.boss) {
+      const em = e.emergeT > 0 && e.emergeDur ? 1 - e.emergeT / e.emergeDur : 1;
+      const k = 0.4 + 0.6 * em;
+      ctx.fillStyle = `rgba(0,0,0,${(0.3 * em + 0.06).toFixed(3)})`;
+      ctx.beginPath(); ctx.ellipse(e.x, e.y + 4, e.r * 0.95 * k, e.r * 0.34 * k, 0, 0, Math.PI * 2); ctx.fill();
+    }
     // CHARGE telegraph: a tapering danger lane with chevrons rushing outward and a
     // charge-glow gathering on the boss — reads clearly as "I'm about to dash here".
     if (e.state === 'windup' && e.spec.charge && this.player) {

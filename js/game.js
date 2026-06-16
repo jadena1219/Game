@@ -1562,11 +1562,11 @@ export class Game {
 
   enemiesInRadius(x, y, r) {
     const out = [];
-    const rr = r * r;
     for (const e of this.enemies) {
       if (e.dead) continue;
       const d = (e.x - x) * (e.x - x) + (e.y - y) * (e.y - y);
-      if (d <= rr + e.r * e.r) out.push(e);
+      const reach = r + e.r;                       // true circle-overlap test
+      if (d <= reach * reach) out.push(e);
     }
     return out;
   }
@@ -2190,7 +2190,13 @@ export class Game {
 
   // lava-field damage ticks + thunderstorm strikes, run each combat frame
   _updateUltFx(sdt) {
-    for (const fx of [...this.effects]) {
+    // Iterate by snapshot length, not a clone: this loop pushes new effects
+    // (megabolt/bolt) and we must not re-process them, but cloning the whole
+    // effects array every combat frame is pure GC churn. Effects are never
+    // removed mid-loop, so a fixed upper bound is safe and allocation-free.
+    const n = this.effects.length;
+    for (let i = 0; i < n; i++) {
+      const fx = this.effects[i];
       if (fx.kind === 'lavafield') {
         fx.dmgT -= sdt;
         if (fx.dmgT <= 0) { fx.dmgT = 0.35; for (const e of this.enemiesInRadius(fx.x, fx.y, fx.r)) { this._ultHit(e, fx.dmg, 0, 0); if (!e.dead) { e.burnDmg = Math.max(e.burnDmg, fx.dmg * 0.5); e.burnT = Math.max(e.burnT, 1.4); } } }
@@ -2695,12 +2701,15 @@ export class Game {
 
     // collisions: enemy contact
     for (const e of this.enemies) {
+      if (e.dead) continue;                                     // a foe slain this frame can't still bodyslam you
       const dx = p.x - e.x, dy = p.y - e.y;
       if (Math.hypot(dx, dy) < p.r + e.r) {
         if (p.takeHit(e.cdmg || e.damage, this._foeName(e))) {
           this.shake = Math.max(this.shake, 6);
           if (e.elite === 'icy') p.slowT = 1.3;                 // Frostbound chills you
-          if (e.type === 'bomber') { e.dead = true; this._explodeEnemy(e); } // detonates on contact
+          // bomber detonates on contact — route through the normal kill so it
+          // still drops loot / feeds fury+combo (onEnemyKilled fires the blast)
+          if (e.type === 'bomber') { e.dead = true; this.onEnemyKilled(e, 'contact'); }
         }
       }
     }
@@ -3284,6 +3293,7 @@ export class Game {
   _frame(t) {
     const dt = Math.min(0.05, (t - this._last) / 1000);
     this._last = t;
+    this.dt = dt;                 // exposed for frame-rate-independent UI animation
     this._update(dt);
     this._render();
     requestAnimationFrame((t2) => this._frame(t2));
@@ -3326,14 +3336,22 @@ export class Game {
     this._drawBrazierFlames(ctx);
     for (const pk of this.pickups) this._drawPickup(ctx, pk);
 
-    for (const fx of this.effects) if (fx.kind === 'ghost') this._drawGhost(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'dashstreak') this._drawDashStreak(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'swing') this._drawSwing(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'lavafield') this._drawLavaField(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'fissure') this._drawFissure(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'firetrail') this._drawFireTrail(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'puff') this._drawPuff(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'death') this._drawDeathFx(ctx, fx);
+    // Bucket effects by kind ONCE (reusing arrays across frames) instead of
+    // sweeping the whole list ~18 times for the per-kind draw passes below.
+    const byKind = this._fxBuckets || (this._fxBuckets = {});
+    for (const k in byKind) byKind[k].length = 0;
+    for (const fx of this.effects) (byKind[fx.kind] || (byKind[fx.kind] = [])).push(fx);
+    const EMPTY = this._fxEmpty || (this._fxEmpty = []);
+    const fxk = (k) => byKind[k] || EMPTY;
+
+    for (const fx of fxk('ghost')) this._drawGhost(ctx, fx);
+    for (const fx of fxk('dashstreak')) this._drawDashStreak(ctx, fx);
+    for (const fx of fxk('swing')) this._drawSwing(ctx, fx);
+    for (const fx of fxk('lavafield')) this._drawLavaField(ctx, fx);
+    for (const fx of fxk('fissure')) this._drawFissure(ctx, fx);
+    for (const fx of fxk('firetrail')) this._drawFireTrail(ctx, fx);
+    for (const fx of fxk('puff')) this._drawPuff(ctx, fx);
+    for (const fx of fxk('death')) this._drawDeathFx(ctx, fx);
 
     if (this.state === 'camp') this._drawCampFloor(ctx);   // door + table (on the floor)
 
@@ -3363,17 +3381,17 @@ export class Game {
 
     for (const pr of this.projectiles) this._drawProjectile(ctx, pr);
     for (const fb of this.allyProjectiles) this._drawFireball(ctx, fb);
-    for (const fx of this.effects) this._drawAbilityFx(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'erupt') this._drawErupt(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'frostnova') this._drawFrostNova(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'thunderstorm') this._drawStormOverlay(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'megabolt') this._drawMegabolt(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'gib') this._drawGib(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'mote') this._drawMote(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'slash') this._drawSlashMark(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'hitring') this._drawHitRing(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'spark') this._drawSpark(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'dmg') this._drawDamage(ctx, fx);
+    for (const fx of this.effects) this._drawAbilityFx(ctx, fx);   // dispatches many kinds internally
+    for (const fx of fxk('erupt')) this._drawErupt(ctx, fx);
+    for (const fx of fxk('frostnova')) this._drawFrostNova(ctx, fx);
+    for (const fx of fxk('thunderstorm')) this._drawStormOverlay(ctx, fx);
+    for (const fx of fxk('megabolt')) this._drawMegabolt(ctx, fx);
+    for (const fx of fxk('gib')) this._drawGib(ctx, fx);
+    for (const fx of fxk('mote')) this._drawMote(ctx, fx);
+    for (const fx of fxk('slash')) this._drawSlashMark(ctx, fx);
+    for (const fx of fxk('hitring')) this._drawHitRing(ctx, fx);
+    for (const fx of fxk('spark')) this._drawSpark(ctx, fx);
+    for (const fx of fxk('dmg')) this._drawDamage(ctx, fx);
 
     this._drawEmbers(ctx);          // death/title/victory embers (world space)
     ctx.restore();                  // ===== end world space =====
@@ -4857,7 +4875,7 @@ export class Game {
     const by = Math.round(Math.min(H - 168, H * 0.78));
     const hpf = Math.max(0, boss.hp / boss.maxHP);
     if (boss._hpShown == null) boss._hpShown = hpf;
-    boss._hpShown += (hpf - boss._hpShown) * Math.min(1, 0.016 * 8);   // smooth drain
+    boss._hpShown += (hpf - boss._hpShown) * Math.min(1, (this.dt || 0.016) * 8);   // smooth drain (frame-rate independent)
     const name = (BOSS_NAMES[boss.type] || 'BOSS').toUpperCase();
     const fillCol = ['#d8231a', '#ff5a2a', '#ffb12a'][boss.phase] || '#ffb12a';   // hotter each phase
     ctx.save();

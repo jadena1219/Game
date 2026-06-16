@@ -23,9 +23,12 @@ export function pickFrame(entity, time) {
   return 'idle';
 }
 
-// A scratch canvas so sprite tints colour only the silhouette, not the whole
-// bounding box (source-atop on the live canvas would tint everything behind it).
-let _tintCv = null, _tintCx = null;
+// Tinted frames (silhouette / hit-flash / burn shading) are baked once into a
+// cache and blitted whole. Re-compositing every tinted foe each frame (in the
+// dark that's nearly ALL of them) with a source-atop pass stalls the GPU; one
+// cached drawImage doesn't. Keyed by sprite|frame|colour|alpha-bucket, with
+// alpha quantized to 0.05 steps so the cache stays small and reuse stays high.
+const _tintCache = new Map();
 
 // Draw a sprite centred at world (x, y), anchored at the feet.
 // `smooth` skips the pixel-snap: scenes that SCALE the canvas (the title camp)
@@ -48,19 +51,23 @@ export function drawSprite(ctx, name, frameLabel, x, y, faceLeft, extraScale = 1
   ctx.imageSmoothingEnabled = false;
 
   if (tint) {
-    // tint on a scratch buffer where only the sprite's pixels exist, then blit —
-    // so the colour lands on the silhouette, never a rectangle behind it.
-    if (!_tintCv) { _tintCv = document.createElement('canvas'); _tintCx = _tintCv.getContext('2d'); }
-    if (_tintCv.width !== fw || _tintCv.height !== fh) { _tintCv.width = fw; _tintCv.height = fh; }
-    _tintCx.clearRect(0, 0, fw, fh);
-    _tintCx.imageSmoothingEnabled = false;
-    _tintCx.globalCompositeOperation = 'source-over'; _tintCx.globalAlpha = 1;
-    _tintCx.drawImage(img, col * fw, 0, fw, fh, 0, 0, fw, fh);
-    _tintCx.globalCompositeOperation = 'source-atop';
-    _tintCx.globalAlpha = tint.a; _tintCx.fillStyle = tint.color;
-    _tintCx.fillRect(0, 0, fw, fh);
-    _tintCx.globalCompositeOperation = 'source-over'; _tintCx.globalAlpha = 1;
-    ctx.drawImage(_tintCv, 0, 0, fw, fh, dx, dy, dw, dh);
+    // Bake the tinted frame once (colour lands only on the silhouette, never a
+    // rectangle behind it) and reuse it. Alpha is bucketed to 0.05 so pulsing
+    // tints still hit the cache instead of compositing fresh every frame.
+    const ab = Math.round(Math.max(0, Math.min(1, tint.a)) * 20);
+    const key = name + '|' + frameLabel + '|' + tint.color + '|' + ab;
+    let buf = _tintCache.get(key);
+    if (!buf) {
+      buf = document.createElement('canvas'); buf.width = fw; buf.height = fh;
+      const bx = buf.getContext('2d');
+      bx.imageSmoothingEnabled = false;
+      bx.drawImage(img, col * fw, 0, fw, fh, 0, 0, fw, fh);
+      bx.globalCompositeOperation = 'source-atop';
+      bx.globalAlpha = ab / 20; bx.fillStyle = tint.color;
+      bx.fillRect(0, 0, fw, fh);
+      _tintCache.set(key, buf);
+    }
+    ctx.drawImage(buf, 0, 0, fw, fh, dx, dy, dw, dh);
   } else {
     ctx.drawImage(img, col * fw, 0, fw, fh, dx, dy, dw, dh);
   }

@@ -599,7 +599,13 @@ export const combatMethods = {
 
   // lava-field damage ticks + thunderstorm strikes, run each combat frame
   _updateUltFx(sdt) {
-    for (const fx of [...this.effects]) {
+    // Iterate by snapshot length, not a clone: this loop can push new effects
+    // (megabolt/bolt) and we must not re-process them, but cloning the whole
+    // effects array every combat frame is pure GC churn. Effects are never
+    // removed mid-loop, so a fixed upper bound is safe and allocation-free.
+    const n = this.effects.length;
+    for (let i = 0; i < n; i++) {
+      const fx = this.effects[i];
       if (fx.kind === 'lavafield') {
         fx.dmgT -= sdt;
         if (fx.dmgT <= 0) { fx.dmgT = 0.35; for (const e of this.enemiesInRadius(fx.x, fx.y, fx.r)) { this._ultHit(e, fx.dmg, 0, 0); if (!e.dead) { e.burnDmg = Math.max(e.burnDmg, fx.dmg * 0.5); e.burnT = Math.max(e.burnT, 1.4); } } }

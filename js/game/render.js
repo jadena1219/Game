@@ -57,15 +57,23 @@ export const renderMethods = {
     this._drawBrazierFlames(ctx);
     for (const pk of this.pickups) this._drawPickup(ctx, pk);
 
-    for (const fx of this.effects) if (fx.kind === 'ghost') this._drawGhost(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'dashstreak') this._drawDashStreak(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'swing') this._drawSwing(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'lavafield') this._drawLavaField(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'fissure') this._drawFissure(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'firetrail') this._drawFireTrail(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'spawnmark') this._drawSpawnMark(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'puff') this._drawPuff(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'death') this._drawDeathFx(ctx, fx);
+    // Bucket effects by kind ONCE (reusing arrays across frames) instead of
+    // sweeping the whole list ~20 times for the per-kind draw passes below.
+    const byKind = this._fxBuckets || (this._fxBuckets = {});
+    for (const k in byKind) byKind[k].length = 0;
+    for (const fx of this.effects) (byKind[fx.kind] || (byKind[fx.kind] = [])).push(fx);
+    const EMPTY = this._fxEmpty || (this._fxEmpty = []);
+    const fxk = (k) => byKind[k] || EMPTY;
+
+    for (const fx of fxk('ghost')) this._drawGhost(ctx, fx);
+    for (const fx of fxk('dashstreak')) this._drawDashStreak(ctx, fx);
+    for (const fx of fxk('swing')) this._drawSwing(ctx, fx);
+    for (const fx of fxk('lavafield')) this._drawLavaField(ctx, fx);
+    for (const fx of fxk('fissure')) this._drawFissure(ctx, fx);
+    for (const fx of fxk('firetrail')) this._drawFireTrail(ctx, fx);
+    for (const fx of fxk('spawnmark')) this._drawSpawnMark(ctx, fx);
+    for (const fx of fxk('puff')) this._drawPuff(ctx, fx);
+    for (const fx of fxk('death')) this._drawDeathFx(ctx, fx);
 
     if (this.state === 'camp') this._drawCampFloor(ctx);   // door + table (on the floor)
 
@@ -95,19 +103,19 @@ export const renderMethods = {
 
     for (const pr of this.projectiles) this._drawProjectile(ctx, pr);
     for (const fb of this.allyProjectiles) this._drawFireball(ctx, fb);
-    for (const fx of this.effects) this._drawAbilityFx(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'erupt') this._drawErupt(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'firewave') this._drawFireWave(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'firepillar') this._drawFirePillar(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'frostnova') this._drawFrostNova(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'thunderstorm') this._drawStormOverlay(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'megabolt') this._drawMegabolt(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'gib') this._drawGib(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'mote') this._drawMote(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'slash') this._drawSlashMark(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'hitring') this._drawHitRing(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'spark') this._drawSpark(ctx, fx);
-    for (const fx of this.effects) if (fx.kind === 'dmg') this._drawDamage(ctx, fx);
+    for (const fx of this.effects) this._drawAbilityFx(ctx, fx);   // dispatches many kinds internally
+    for (const fx of fxk('erupt')) this._drawErupt(ctx, fx);
+    for (const fx of fxk('firewave')) this._drawFireWave(ctx, fx);
+    for (const fx of fxk('firepillar')) this._drawFirePillar(ctx, fx);
+    for (const fx of fxk('frostnova')) this._drawFrostNova(ctx, fx);
+    for (const fx of fxk('thunderstorm')) this._drawStormOverlay(ctx, fx);
+    for (const fx of fxk('megabolt')) this._drawMegabolt(ctx, fx);
+    for (const fx of fxk('gib')) this._drawGib(ctx, fx);
+    for (const fx of fxk('mote')) this._drawMote(ctx, fx);
+    for (const fx of fxk('slash')) this._drawSlashMark(ctx, fx);
+    for (const fx of fxk('hitring')) this._drawHitRing(ctx, fx);
+    for (const fx of fxk('spark')) this._drawSpark(ctx, fx);
+    for (const fx of fxk('dmg')) this._drawDamage(ctx, fx);
 
     this._drawEmbers(ctx);          // death/title/victory embers (world space)
     ctx.restore();                  // ===== end world space =====

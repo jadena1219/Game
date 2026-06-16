@@ -196,7 +196,7 @@ export const renderUiMethods = {
     const by = Math.round(Math.min(H - 168, H * 0.78));
     const hpf = Math.max(0, boss.hp / boss.maxHP);
     if (boss._hpShown == null) boss._hpShown = hpf;
-    boss._hpShown += (hpf - boss._hpShown) * Math.min(1, 0.016 * 8);   // smooth drain
+    boss._hpShown += (hpf - boss._hpShown) * Math.min(1, (this.dt || 0.016) * 8);   // smooth drain (frame-rate independent)
     const name = (BOSS_NAMES[boss.type] || 'BOSS').toUpperCase();
     const fillCol = ['#d8231a', '#ff5a2a', '#ffb12a'][boss.phase] || '#ffb12a';   // hotter each phase
     ctx.save();

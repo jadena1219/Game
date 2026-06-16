@@ -160,6 +160,7 @@ export class Game {
   _frame(t) {
     const dt = Math.min(0.05, (t - this._last) / 1000);
     this._last = t;
+    this.dt = dt;                 // exposed for frame-rate-independent UI animation
     // The loop is UNKILLABLE: a thrown frame logs loudly and the next frame
     // still runs. (A single first-frame exception once froze the whole game
     // as a half-drawn screen — never again.)
@@ -303,6 +304,7 @@ export class Game {
 
     // collisions: enemy contact (threading one mid-dash = a PERFECT dodge)
     for (const e of this.enemies) {
+      if (e.dead) continue;                      // a foe slain earlier this frame can't still bodyslam you
       if (e.emergeT > 0) continue;               // still rising — no teeth yet
       const dx = p.x - e.x, dy = p.y - e.y;
       if (Math.hypot(dx, dy) < p.r + e.r) {
@@ -312,7 +314,9 @@ export class Game {
           this.hitStop = Math.max(this.hitStop, 0.07);   // YOUR pain has weight too
           this.flashScreen = Math.max(this.flashScreen, 0.07); this.flashCol = '#7a0e12';
           if (e.elite === 'icy' || e.husk === 'frost') p.slowT = 1.3;   // Frostbound chills you
-          if (e.type === 'bomber') { e.dead = true; this._explodeEnemy(e); } // detonates on contact
+          // bomber detonates on contact — route through the normal kill so it
+          // still drops loot / feeds fury+combo (onEnemyKilled fires the blast)
+          if (e.type === 'bomber') { e.dead = true; this.onEnemyKilled(e, 'contact'); }
         }
       }
     }
@@ -390,11 +394,11 @@ export class Game {
 
   enemiesInRadius(x, y, r) {
     const out = [];
-    const rr = r * r;
     for (const e of this.enemies) {
       if (e.dead) continue;
       const d = (e.x - x) * (e.x - x) + (e.y - y) * (e.y - y);
-      if (d <= rr + e.r * e.r) out.push(e);
+      const reach = r + e.r;                       // true circle-overlap test
+      if (d <= reach * reach) out.push(e);
     }
     return out;
   }
